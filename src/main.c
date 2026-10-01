@@ -10,7 +10,9 @@
 #include <string.h>
 #include <ucontext.h>
 
+#if defined(__arm__)
 static uintptr_t g_loaded_base;
+#endif
 static const char g_empty_string[8] __attribute__((aligned(8))) = "";
 static uint32_t g_bucket_allocator_table[33] __attribute__((aligned(8)));
 
@@ -32,6 +34,7 @@ static void prepare_bucket_allocator_table(uint32_t object) {
     memset(g_bucket_allocator_table, 0, sizeof(g_bucket_allocator_table));
 }
 
+#if defined(__arm__)
 static bool recover_bucket_allocator_fault(ucontext_t *uc) {
     uintptr_t pc = uc->uc_mcontext.arm_pc;
     if (pc != g_loaded_base + 0x374be8u && pc != g_loaded_base + 0x374bf4u) {
@@ -102,6 +105,8 @@ static bool recover_null_buffer_slot(ucontext_t *uc) {
     return true;
 }
 
+#endif
+
 static void usage(const char *argv0) {
     fprintf(stderr,
             "usage: %s [--run] [--root DIR] [--display-size WIDTHxHEIGHT] "
@@ -127,16 +132,11 @@ static bool parse_display_size(const char *value, uint32_t *width, uint32_t *hei
 }
 
 static void crash_handler(int sig, siginfo_t *info, void *context) {
+#if defined(__arm__)
     ucontext_t *uc = (ucontext_t *)context;
-    if (sig == SIGSEGV && recover_bucket_allocator_fault(uc)) {
-        return;
-    }
-    if (sig == SIGSEGV && recover_null_buffer_write(uc)) {
-        return;
-    }
-    if (sig == SIGSEGV && recover_null_buffer_slot(uc)) {
-        return;
-    }
+    if (sig == SIGSEGV && recover_bucket_allocator_fault(uc)) return;
+    if (sig == SIGSEGV && recover_null_buffer_write(uc)) return;
+    if (sig == SIGSEGV && recover_null_buffer_slot(uc)) return;
     if (sig == SIGSEGV && uc->uc_mcontext.arm_pc == g_loaded_base + 0x368ddcu &&
         uc->uc_mcontext.arm_r1 == 0) {
         uc->uc_mcontext.arm_r1 = (unsigned long)(uintptr_t)g_empty_string;
@@ -171,10 +171,13 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
             (unsigned long)uc->uc_mcontext.arm_r2, (unsigned long)uc->uc_mcontext.arm_r3);
     uint32_t *sp = (uint32_t *)(uintptr_t)uc->uc_mcontext.arm_sp;
     fprintf(stderr, "stack:");
-    for (int i = 0; i < 32; ++i) {
-        fprintf(stderr, " %08x", sp[i]);
-    }
+    for (int i = 0; i < 32; ++i) fprintf(stderr, " %08x", sp[i]);
     fprintf(stderr, "\n");
+#else
+    (void)info;
+    (void)context;
+    fprintf(stderr, "signal %d (host architecture crash)\n", sig);
+#endif
     _Exit(128 + sig);
 }
 
