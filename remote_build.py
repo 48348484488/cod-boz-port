@@ -245,6 +245,16 @@ def main() -> int:
         flush=True,
     )
 
+    # Render expects the configured start command to remain alive and listen on
+    # PORT. Keep the artifact server process attached so runner-report.json and
+    # boz_gl_upload_trace.log remain reachable after the diagnostic finishes.
+    print("[RUNNER] diagnostic complete; keeping artifact server alive", flush=True)
+    server_rc = server.wait()
+    if server_rc != 0:
+        print(f"[RUNNER] artifact HTTP server exited rc={server_rc}", flush=True)
+        if rc == 0:
+            rc = server_rc
+
     return rc
 
 
