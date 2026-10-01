@@ -111,7 +111,7 @@ static bool recover_null_buffer_slot(ucontext_t *uc) {
 
 static void usage(const char *argv0) {
     fprintf(stderr,
-            "usage: %s [--run] [--root DIR] [--display-size WIDTHxHEIGHT] "
+            "usage: %s [--run] [--diagnostic-skip-frame-interpolation] [--root DIR] [--display-size WIDTHxHEIGHT] "
             "IMAGE.s3e.unpacked\n",
             argv0);
 }
@@ -212,6 +212,7 @@ static void install_terminate_handlers(void) {
 
 int main(int argc, char **argv) {
     bool run = false;
+    bool diagnostic_skip_frame_interpolation = false;
     const char *root = NULL;
     const char *image_path = NULL;
     uint32_t display_width = 640;
@@ -220,6 +221,8 @@ int main(int argc, char **argv) {
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--run") == 0) {
             run = true;
+        } else if (strcmp(argv[i], "--diagnostic-skip-frame-interpolation") == 0) {
+            diagnostic_skip_frame_interpolation = true;
         } else if (strcmp(argv[i], "--root") == 0) {
             if (i + 1 >= argc) {
                 usage(argv[0]);
@@ -285,7 +288,10 @@ int main(int argc, char **argv) {
         s3e_image_free(&image);
         return 1;
     }
-    if (!codboz_install_frame_interpolation(&loaded)) {
+    if (diagnostic_skip_frame_interpolation) {
+        fprintf(stderr,
+                "[DIAGNOSTIC] frame interpolation hook skipped; this run is for host diagnostics\\n");
+    } else if (!codboz_install_frame_interpolation(&loaded)) {
         fprintf(stderr, "unsupported game executable: unable to install frame interpolation\n");
         s3e_loaded_image_unmap(&loaded);
         s3e_host_shutdown();
