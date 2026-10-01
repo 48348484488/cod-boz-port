@@ -91,12 +91,12 @@ bool s3e_host_set_display_size(uint32_t width, uint32_t height) {
         surface_width = maximum_width;
     }
 
-    if (surface_width > SIZE_MAX / surface_height ||
-        surface_width * surface_height > SIZE_MAX / sizeof(*g_surface_pixels)) {
+    size_t pixel_count = (size_t)surface_width * (size_t)surface_height;
+    if (pixel_count > SIZE_MAX / sizeof(*g_surface_pixels)) {
         return false;
     }
 
-    uint32_t *pixels = calloc((size_t)surface_width * surface_height, sizeof(*pixels));
+    uint32_t *pixels = calloc(pixel_count, sizeof(*pixels));
     if (!pixels) {
         return false;
     }
