@@ -215,11 +215,17 @@ def run_boz_diagnostic(report: dict) -> int:
 
     env = os.environ.copy()
     env["GL_UPLOAD_TRACE"] = "1"
-    env.setdefault("SDL_VIDEODRIVER", "dummy")
+    env.setdefault("SDL_VIDEODRIVER", "x11")
+    env["LIBGL_ALWAYS_SOFTWARE"] = "1"
+    env["LD_LIBRARY_PATH"] = "/usr/lib/arm-linux-gnueabihf:/lib/arm-linux-gnueabihf"
     env["BOZ_TRACE_ARTIFACT"] = str(trace)
     display_size = os.environ.get("BOZ_DISPLAY_SIZE", "640x480")
-    cmd = [str(loader), "--run", "--diagnostic-skip-frame-interpolation",
-           "--root", str(image.parent.parent),
+    qemu_arm = shutil.which(os.environ.get("QEMU_ARM", "qemu-arm"))
+    if not qemu_arm:
+        print("[RUNNER] qemu-arm missing; cannot execute ARM S3E on Render host", flush=True)
+        return 127
+    cmd = [qemu_arm, "-L", os.environ.get("BOZ_ARM_SYSROOT", "/"),
+           str(loader), "--run", "--root", str(image.parent.parent),
            "--display-size", display_size, str(image)]
     if not env.get("DISPLAY"):
         xvfb_run = shutil.which("xvfb-run")
@@ -316,7 +322,7 @@ def main() -> int:
     rc = 0
 
     if (ROOT / "Makefile").exists():
-        rc = run(["make", "all"], timeout=900)
+        rc = run(["make", "CC=arm-linux-gnueabihf-gcc", "all"], timeout=900)
         report["make_all_rc"] = rc
         # test-host was already verified before this diagnostic pass. It contains
         # a long-running integration test in the Render runtime, so do not let it
