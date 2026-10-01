@@ -12,6 +12,8 @@ import subprocess
 import sys
 import time
 import shutil
+import lzma
+import urllib.request
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import threading
 
@@ -196,10 +198,48 @@ def discover_game_image() -> pathlib.Path | None:
     return None
 
 
+def stage_public_reference_s3e(report: dict) -> pathlib.Path | None:
+    """Fetch the public preservation copy without committing game bytes to this fork."""
+    url = os.environ.get(
+        "BOZ_REFERENCE_S3E_URL",
+        "https://raw.githubusercontent.com/eugene373/COD-BOZ-Partially-Decompiled/master/app/src/main/assets/boz.s3e",
+    )
+    expected_sha256 = "f458c15a7111779ad320af377d0bb751294119788ba06d430bee0cc977539fee"
+    compressed = pathlib.Path("/tmp/boz-assets/boz.s3e")
+    unpacked = pathlib.Path("/tmp/boz-assets/boz.s3e.unpacked")
+    try:
+        compressed.parent.mkdir(parents=True, exist_ok=True)
+        print(f"[RUNNER] fetching public reference S3E from {url}", flush=True)
+        with urllib.request.urlopen(url, timeout=60) as response:
+            payload = response.read(MAX_UPLOAD_BYTES + 1)
+        digest = hashlib.sha256(payload).hexdigest()
+        report["reference_s3e_size"] = len(payload)
+        report["reference_s3e_sha256"] = digest
+        if len(payload) > MAX_UPLOAD_BYTES or digest != expected_sha256:
+            print(f"[RUNNER] reference S3E rejected size={len(payload)} sha256={digest}", flush=True)
+            return None
+        compressed.write_bytes(payload)
+        decoded = lzma.decompress(payload, format=lzma.FORMAT_ALONE)
+        if not decoded.startswith(b"XE3U"):
+            print("[RUNNER] reference S3E unpacked payload lacks XE3U header", flush=True)
+            return None
+        unpacked.write_bytes(decoded)
+        report["reference_s3e_unpacked_size"] = len(decoded)
+        report["reference_s3e_unpacked_sha256"] = hashlib.sha256(decoded).hexdigest()
+        print(f"[RUNNER] staged reference S3E unpacked_size={len(decoded)}", flush=True)
+        return unpacked
+    except Exception as exc:
+        report["reference_s3e_error"] = repr(exc)
+        print(f"[RUNNER] reference S3E fetch/decompress failed: {exc!r}", flush=True)
+        return None
+
+
 def run_boz_diagnostic(report: dict) -> int:
     trace = pathlib.Path("/tmp/boz_gl_upload_trace.log")
     trace.unlink(missing_ok=True)
     image = discover_game_image()
+    if not image and os.environ.get("BOZ_FETCH_REFERENCE_S3E", "1") == "1":
+        image = stage_public_reference_s3e(report)
     report["game_image"] = str(image) if image else None
     report["game_image_size"] = image.stat().st_size if image else None
     report["gl_upload_trace"] = str(trace)
