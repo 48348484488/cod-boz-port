@@ -19,7 +19,7 @@ ROOT = pathlib.Path(__file__).resolve().parent
 PUBLIC = ROOT / "public"
 PUBLIC.mkdir(exist_ok=True)
 UPLOAD_ENDPOINT = "/__codboz_upload"
-MAX_UPLOAD_BYTES = 4 * 1024 * 1024
+MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 UPLOAD_LOCK = threading.Lock()
 UPLOAD_CONSUMED = False
 ACTIVE_REPORT: dict | None = None
@@ -81,8 +81,8 @@ class ArtifactRequestHandler(SimpleHTTPRequestHandler):
             except ValueError:
                 self._reply_json(411, {"error": "Content-Length required"})
                 return
-            if content_length <= 0 or content_length > MAX_UPLOAD_BYTES:
-                self._reply_json(413, {"error": "payload size must be between 1 byte and 4 MiB"})
+            if content_length < 68 or content_length > MAX_UPLOAD_BYTES:
+                self._reply_json(413, {"error": "payload size must be between 68 bytes and 8 MiB"})
                 return
             if self.headers.get_content_type() != "application/octet-stream":
                 self._reply_json(415, {"error": "application/octet-stream required"})
@@ -92,6 +92,9 @@ class ArtifactRequestHandler(SimpleHTTPRequestHandler):
             if len(payload) != content_length:
                 self._reply_json(400, {"error": "incomplete upload"})
                 return
+            if payload[:4] != b"XE3U":
+                self._reply_json(422, {"error": "upload must be an uncompressed S3E image"})
+                return
             if ACTIVE_REPORT is None or ACTIVE_REPORT.get("make_all_rc") != 0:
                 self._reply_json(503, {"error": "runner build is not ready"})
                 return
@@ -99,6 +102,7 @@ class ArtifactRequestHandler(SimpleHTTPRequestHandler):
             asset.parent.mkdir(parents=True, exist_ok=True)
             asset.write_bytes(payload)
             UPLOAD_CONSUMED = True
+            os.environ["BOZ_UPLOAD_EXPIRES_AT"] = "0"
             os.environ["BOZ_IMAGE_PATH"] = str(asset)
             started = time.time()
             try:
