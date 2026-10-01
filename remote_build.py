@@ -89,6 +89,23 @@ def main() -> int:
         "duration_seconds": None,
     }
 
+    port = int(os.environ.get("PORT", "10000"))
+    server = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "http.server",
+            str(port),
+            "--bind",
+            "0.0.0.0",
+            "--directory",
+            str(PUBLIC),
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.STDOUT,
+    )
+    print(f"[RUNNER] HTTP server started pid={server.pid} port={port}", flush=True)
+
     rc = 0
 
     if (ROOT / "Makefile").exists():
@@ -106,6 +123,7 @@ def main() -> int:
     )
 
     report["exit_code"] = rc
+    report["status"] = "passed" if rc == 0 else "failed"
 
     out = PUBLIC / "runner-report.json"
 
