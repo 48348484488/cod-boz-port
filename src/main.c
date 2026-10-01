@@ -290,7 +290,7 @@ int main(int argc, char **argv) {
     }
     if (diagnostic_skip_frame_interpolation) {
         fprintf(stderr,
-                "[DIAGNOSTIC] frame interpolation hook skipped; this run is for host diagnostics\\n");
+                "[DIAGNOSTIC] frame interpolation hook skipped; this run is for host diagnostics\n");
     } else if (!codboz_install_frame_interpolation(&loaded)) {
         fprintf(stderr, "unsupported game executable: unable to install frame interpolation\n");
         s3e_loaded_image_unmap(&loaded);
