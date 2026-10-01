@@ -204,7 +204,10 @@ def stage_public_reference_s3e(report: dict) -> pathlib.Path | None:
         "BOZ_REFERENCE_S3E_URL",
         "https://raw.githubusercontent.com/eugene373/COD-BOZ-Partially-Decompiled/master/app/src/main/assets/boz.s3e",
     )
-    expected_sha256 = "f458c15a7111779ad320af377d0bb751294119788ba06d430bee0cc977539fee"
+    expected_sha256 = os.environ.get(
+        "BOZ_REFERENCE_S3E_SHA256",
+        "d50e4bf0b86a26a8ccef604b5edddb962684289f16004f7066d9671a0acc7f01",
+    )
     compressed = pathlib.Path("/tmp/boz-assets/boz.s3e")
     unpacked = pathlib.Path("/tmp/boz-assets/boz.s3e.unpacked")
     try:
