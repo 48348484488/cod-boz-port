@@ -12,6 +12,7 @@ RUN dpkg --add-architecture armhf \
         build-essential \
         ca-certificates \
         gcc-arm-linux-gnueabihf \
+        libc6-dev:armhf \
         qemu-user \
         libegl1:armhf \
         libgbm1:armhf \
