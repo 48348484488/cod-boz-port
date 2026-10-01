@@ -13,10 +13,14 @@ static int path_exists(const char *path) {
 }
 
 static int use_existing_path(char *out, size_t out_size, const char *path) {
-    if (!path_exists(path)) {
+    if (!path_exists(path) || !out || out_size == 0 || !path) {
         return 0;
     }
-    snprintf(out, out_size, "%s", path);
+    size_t len = strlen(path);
+    if (len >= out_size) {
+        return 0;
+    }
+    memcpy(out, path, len + 1);
     return 1;
 }
 
