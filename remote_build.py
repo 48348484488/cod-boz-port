@@ -92,8 +92,8 @@ def main() -> int:
     rc = 0
 
     if (ROOT / "Makefile").exists():
-        rc = run(["make", "check"], timeout=900)
-        report["make_check_rc"] = rc
+        rc = run(["make", "test-host"], timeout=900)
+        report["make_test_host_rc"] = rc
     else:
         print(
             "[RUNNER] no Makefile; nothing to build",
