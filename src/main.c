@@ -164,13 +164,24 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
         return;
     }
 
+    uintptr_t crash_pc = (uintptr_t)uc->uc_mcontext.arm_pc;
+    uintptr_t crash_lr = (uintptr_t)uc->uc_mcontext.arm_lr;
+    uintptr_t pc_offset = crash_pc >= g_loaded_base ? crash_pc - g_loaded_base : UINTPTR_MAX;
+    uintptr_t lr_code = crash_lr & ~(uintptr_t)1u;
+    uintptr_t lr_offset = lr_code >= g_loaded_base ? lr_code - g_loaded_base : UINTPTR_MAX;
+    unsigned char *pc_bytes = (unsigned char *)(crash_pc & ~(uintptr_t)1u);
     fprintf(stderr,
-            "signal %d addr=%p pc=0x%08lx lr=0x%08lx sp=0x%08lx r0=0x%08lx r1=0x%08lx r2=0x%08lx "
-            "r3=0x%08lx\n",
-            sig, info ? info->si_addr : NULL, (unsigned long)uc->uc_mcontext.arm_pc,
-            (unsigned long)uc->uc_mcontext.arm_lr, (unsigned long)uc->uc_mcontext.arm_sp,
+            "signal %d addr=%p pc=0x%08lx pc_off=0x%08lx lr=0x%08lx lr_off=0x%08lx "
+            "sp=0x%08lx cpsr=0x%08lx thumb=%lu r0=0x%08lx r1=0x%08lx r2=0x%08lx r3=0x%08lx\n",
+            sig, info ? info->si_addr : NULL, (unsigned long)crash_pc,
+            (unsigned long)pc_offset, (unsigned long)crash_lr, (unsigned long)lr_offset,
+            (unsigned long)uc->uc_mcontext.arm_sp, (unsigned long)uc->uc_mcontext.arm_cpsr,
+            (unsigned long)((uc->uc_mcontext.arm_cpsr >> 5) & 1u),
             (unsigned long)uc->uc_mcontext.arm_r0, (unsigned long)uc->uc_mcontext.arm_r1,
             (unsigned long)uc->uc_mcontext.arm_r2, (unsigned long)uc->uc_mcontext.arm_r3);
+    fprintf(stderr, "pc-bytes:");
+    for (int i = -8; i < 16; ++i) fprintf(stderr, " %02x", pc_bytes[i]);
+    fprintf(stderr, "\n");
     uint32_t *sp = (uint32_t *)(uintptr_t)uc->uc_mcontext.arm_sp;
     fprintf(stderr, "stack:");
     for (int i = 0; i < 32; ++i) fprintf(stderr, " %08x", sp[i]);
