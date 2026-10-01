@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "project": "BOZ/ReviveOS",
+  "input": {
+    "known_package": "COD_BOZ_OpenBOZ_v0.2.4_first_open_method_signed.apk",
+    "known_package_size": 49791447,
+    "apk_member": "assets/boz.s3e",
+    "s3e_size": 1902539,
+    "s3e_sha256": "f458c15a7111779ad320af377d0bb751294119788ba06d430bee0cc977539fee",
+    "unpacked_size": 4550559,
+    "unpacked_magic": "XE3U"
+  },
+  "runtime": {
+    "architecture": "armhf",
+    "emulator": "qemu-arm",
+    "render_service_id": "srv-daqv1a0473hc73978pv0",
+    "gl_trace_env": "GL_UPLOAD_TRACE=1",
+    "trace_path": "/tmp/boz_gl_upload_trace.log"
+  },
+  "checkpoint": {
+    "armhf_build": "PASS",
+    "make_rc": 0,
+    "qemu_execution": "WAITING_FOR_INPUT",
+    "armhf_fix_commit": "299182d8a109d0d247d5bc643235e793b14d0bd6",
+    "checkpoint_commit": "f939f0c6f96c2c64f2d8513cbbf60a2c0862da53"
+  },
+  "next_goal": "Run the recovered BOZ S3E under qemu-arm with GL_UPLOAD_TRACE enabled and identify the checkerboard upload origin."
+}
