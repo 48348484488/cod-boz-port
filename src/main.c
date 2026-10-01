@@ -139,6 +139,25 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
     if (sig == SIGSEGV && recover_bucket_allocator_fault(uc)) return;
     if (sig == SIGSEGV && recover_null_buffer_write(uc)) return;
     if (sig == SIGSEGV && recover_null_buffer_slot(uc)) return;
+    /*
+     * BOZ +0x0db31e (Thumb): ldr r3, [r0]
+     * The immediately preceding BLX returns a nullable host object.  The
+     * original Marmalade environment supplies it, while the current host can
+     * return NULL.  Do not dereference a missing object; return to the caller
+     * so startup can continue and expose the next missing host dependency.
+     */
+    if (sig == SIGSEGV && uc->uc_mcontext.arm_pc == g_loaded_base + 0x0db31eu &&
+        uc->uc_mcontext.arm_r0 == 0) {
+        fprintf(stderr,
+                "[RECOVER] nullable host object at BOZ+0x0db31e; returning to lr=0x%08lx\n",
+                (unsigned long)uc->uc_mcontext.arm_lr);
+        uc->uc_mcontext.arm_r0 = 0;
+        uc->uc_mcontext.arm_pc = uc->uc_mcontext.arm_lr & ~1u;
+        uc->uc_mcontext.arm_cpsr =
+            (uc->uc_mcontext.arm_cpsr & ~(1u << 5)) |
+            ((uc->uc_mcontext.arm_lr & 1u) ? (1u << 5) : 0u);
+        return;
+    }
     if (sig == SIGSEGV && uc->uc_mcontext.arm_pc == g_loaded_base + 0x368ddcu &&
         uc->uc_mcontext.arm_r1 == 0) {
         uc->uc_mcontext.arm_r1 = (unsigned long)(uintptr_t)g_empty_string;
