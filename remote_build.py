@@ -220,6 +220,10 @@ def run_boz_diagnostic(report: dict) -> int:
     display_size = os.environ.get("BOZ_DISPLAY_SIZE", "640x480")
     cmd = [str(loader), "--run", "--root", str(image.parent.parent),
            "--display-size", display_size, str(image)]
+    if not env.get("DISPLAY"):
+        xvfb_run = shutil.which("xvfb-run")
+        if xvfb_run:
+            cmd = [xvfb_run, "-a", "-s", f"-screen 0 {display_size}x24", "--", *cmd]
     print("[RUNNER] launching BOZ:", " ".join(cmd), flush=True)
     try:
         p = subprocess.run(cmd, cwd=ROOT, env=env, text=True,
