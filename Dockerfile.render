@@ -1,0 +1,32 @@
+FROM python:3.13-slim-bookworm
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    SDL_VIDEODRIVER=x11 \
+    LIBGL_ALWAYS_SOFTWARE=1 \
+    EGL_PLATFORM=x11
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        ca-certificates \
+        libegl1 \
+        libgbm1 \
+        libgl1-mesa-dri \
+        libgles1 \
+        libgles2 \
+        libsdl2-2.0-0 \
+        xauth \
+        xvfb \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY . .
+
+RUN python -m pip install --no-cache-dir numpy unicorn
+
+EXPOSE 10000
+
+ENTRYPOINT ["xvfb-run", "-a", "-s", "-screen 0 640x480x24"]
+CMD ["python3", "remote_build.py"]
