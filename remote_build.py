@@ -218,7 +218,8 @@ def run_boz_diagnostic(report: dict) -> int:
     env.setdefault("SDL_VIDEODRIVER", "dummy")
     env["BOZ_TRACE_ARTIFACT"] = str(trace)
     display_size = os.environ.get("BOZ_DISPLAY_SIZE", "640x480")
-    cmd = [str(loader), "--run", "--root", str(image.parent.parent),
+    cmd = [str(loader), "--run", "--diagnostic-skip-frame-interpolation",
+           "--root", str(image.parent.parent),
            "--display-size", display_size, str(image)]
     if not env.get("DISPLAY"):
         xvfb_run = shutil.which("xvfb-run")
