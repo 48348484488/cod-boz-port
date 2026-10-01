@@ -6,16 +6,19 @@ ENV DEBIAN_FRONTEND=noninteractive \
     LIBGL_ALWAYS_SOFTWARE=1 \
     EGL_PLATFORM=x11
 
-RUN apt-get update \
+RUN dpkg --add-architecture armhf \
+    && apt-get update \
     && apt-get install -y --no-install-recommends \
         build-essential \
         ca-certificates \
-        libegl1 \
-        libgbm1 \
-        libgl1-mesa-dri \
-        libgles1 \
-        libgles2 \
-        libsdl2-2.0-0 \
+        gcc-arm-linux-gnueabihf \
+        qemu-user \
+        libegl1:armhf \
+        libgbm1:armhf \
+        libgl1-mesa-dri:armhf \
+        libgles1:armhf \
+        libgles2:armhf \
+        libsdl2-2.0-0:armhf \
         xauth \
         xvfb \
     && rm -rf /var/lib/apt/lists/*
