@@ -238,6 +238,82 @@ static S3E_SOFTFP void host_glReadPixels(GLint x, GLint y, GLsizei width, GLsize
     }
 }
 
+static unsigned long long trace_gl_hash64(const void *data, size_t len) {
+    const unsigned char *p = (const unsigned char *)data;
+    unsigned long long h = 1469598103934665603ULL;
+    for (size_t i = 0; i < len; ++i) {
+        h ^= p[i];
+        h *= 1099511628211ULL;
+    }
+    return h;
+}
+
+static size_t trace_gl_bpp(GLenum format, GLenum type) {
+    if (type == 0x8033 || type == 0x8034 || type == 0x8363 || type == 0x8362) return 2;
+    if (type == 0x1401 && format == 0x1907) return 3;
+    if (type == 0x1401 && format == 0x1908) return 4;
+    if (type == 0x1401 && (format == 0x1909 || format == 0x190A)) return 1;
+    return 0;
+}
+
+static void trace_gl_upload_diag(const char *name, GLenum target, GLint level, GLenum internal_format,
+                                 GLsizei width, GLsizei height, GLint border, GLenum format,
+                                 GLenum type, const void *pixels) {
+    const char *enabled = getenv("GL_UPLOAD_TRACE");
+    if (!enabled || !*enabled || !pixels || width <= 0 || height <= 0) return;
+
+    size_t bpp = trace_gl_bpp(format, type);
+    size_t bytes = bpp ? (size_t)width * (size_t)height * bpp : 0;
+    size_t sample = bytes < 4096 ? bytes : 4096;
+    unsigned long long hash = sample ? trace_gl_hash64(pixels, sample) : 0;
+    size_t ff83 = 0, zero = 0;
+
+    if (bpp == 2) {
+        const unsigned short *p = (const unsigned short *)pixels;
+        size_t count = (size_t)width * (size_t)height;
+        for (size_t i = 0; i < count; ++i) {
+            if (p[i] == 0xF83Fu) ++ff83;
+            if (p[i] == 0x0000u) ++zero;
+        }
+    }
+
+    FILE *fp = fopen("/tmp/boz_gl_upload_trace.log", "a");
+    if (!fp) return;
+
+    fprintf(fp,
+            "[GLUPLOAD] %s target=0x%04x level=%d internal=0x%04x size=%dx%d "
+            "border=%d format=0x%04x type=0x%04x ptr=%p bpp=%zu bytes=%zu "
+            "sample=%zu hash64=%016llx ff83=%zu zero=%zu first=",
+            name, (unsigned)target, level, (unsigned)internal_format,
+            (int)width, (int)height, border, (unsigned)format, (unsigned)type,
+            pixels, bpp, bytes, sample, hash, ff83, zero);
+
+    const unsigned char *raw = (const unsigned char *)pixels;
+    size_t first = sample < 32 ? sample : 32;
+    for (size_t i = 0; i < first; ++i) fprintf(fp, "%02x", raw[i]);
+    fputc('\n', fp);
+    fclose(fp);
+}
+
+static S3E_SOFTFP void host_glTexImage2D(GLenum target, GLint level, GLint internal_format,
+                                          GLsizei width, GLsizei height, GLint border,
+                                          GLenum format, GLenum type, const void *pixels) {
+    void (*real)(GLenum, GLint, GLint, GLsizei, GLsizei, GLint, GLenum, GLenum, const void *) =
+        lookup_gl("glTexImage2D");
+    trace_gl_upload_diag("glTexImage2D", target, level, (GLenum)internal_format, width, height,
+                         border, format, type, pixels);
+    if (real) real(target, level, internal_format, width, height, border, format, type, pixels);
+}
+
+static S3E_SOFTFP void host_glTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffset,
+                                             GLsizei width, GLsizei height, GLenum format,
+                                             GLenum type, const void *pixels) {
+    void (*real)(GLenum, GLint, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum,
+                 const void *) = lookup_gl("glTexSubImage2D");
+    trace_gl_upload_diag("glTexSubImage2D", target, level, 0, width, height, 0, format, type, pixels);
+    if (real) real(target, level, xoffset, yoffset, width, height, format, type, pixels);
+}
+
 static S3E_SOFTFP void host_glCopyTexImage2D(GLenum target, GLint level, GLenum internal_format,
                                              GLint x, GLint y, GLsizei width, GLsizei height,
                                              GLint border) {
@@ -618,6 +694,8 @@ static const struct host_symbol WRAPPED_SYMBOLS[] = {
     WRAPPED(glScalef),
     WRAPPED(glScissor),
     WRAPPED(glTexEnvf),
+    WRAPPED(glTexImage2D),
+    WRAPPED(glTexSubImage2D),
     WRAPPED(glTexGenfOES),
     WRAPPED(glTranslatef),
     WRAPPED(glUniform1f),
