@@ -4,16 +4,135 @@
 from __future__ import annotations
 
 import json
+import hashlib
+import hmac
 import os
 import pathlib
 import subprocess
 import sys
 import time
 import shutil
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+import threading
 
 ROOT = pathlib.Path(__file__).resolve().parent
 PUBLIC = ROOT / "public"
 PUBLIC.mkdir(exist_ok=True)
+UPLOAD_ENDPOINT = "/__codboz_upload"
+MAX_UPLOAD_BYTES = 4 * 1024 * 1024
+UPLOAD_LOCK = threading.Lock()
+UPLOAD_CONSUMED = False
+ACTIVE_REPORT: dict | None = None
+
+
+def write_report(report: dict) -> None:
+    out = PUBLIC / "runner-report.json"
+    temporary = out.with_suffix(".json.tmp")
+    temporary.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    temporary.replace(out)
+
+
+class ArtifactRequestHandler(SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory=str(PUBLIC), **kwargs)
+
+    def log_message(self, fmt: str, *args) -> None:
+        # Avoid writing request details or credentials into public service logs.
+        print("[HTTP] " + fmt % args, flush=True)
+
+    def _reply_json(self, status: int, payload: dict) -> None:
+        body = json.dumps(payload).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_POST(self) -> None:
+        global UPLOAD_CONSUMED
+
+        if self.path != UPLOAD_ENDPOINT:
+            self._reply_json(404, {"error": "not found"})
+            return
+
+        token = os.environ.get("BOZ_UPLOAD_TOKEN", "").strip()
+        try:
+            expires_at = int(os.environ.get("BOZ_UPLOAD_EXPIRES_AT", "0"))
+        except ValueError:
+            expires_at = 0
+        if not token or expires_at <= int(time.time()):
+            self._reply_json(404, {"error": "upload unavailable"})
+            return
+        if not hmac.compare_digest(self.headers.get("Authorization", ""), f"Bearer {token}"):
+            self._reply_json(401, {"error": "unauthorized"})
+            return
+        if UPLOAD_CONSUMED or not UPLOAD_LOCK.acquire(blocking=False):
+            self._reply_json(409, {"error": "upload already used or in progress"})
+            return
+
+        asset = pathlib.Path("/tmp/boz-assets/boz.s3e")
+        try:
+            if self.headers.get("Transfer-Encoding"):
+                self._reply_json(411, {"error": "Content-Length required"})
+                return
+            try:
+                content_length = int(self.headers.get("Content-Length", ""))
+            except ValueError:
+                self._reply_json(411, {"error": "Content-Length required"})
+                return
+            if content_length <= 0 or content_length > MAX_UPLOAD_BYTES:
+                self._reply_json(413, {"error": "payload size must be between 1 byte and 4 MiB"})
+                return
+            if self.headers.get_content_type() != "application/octet-stream":
+                self._reply_json(415, {"error": "application/octet-stream required"})
+                return
+
+            payload = self.rfile.read(content_length)
+            if len(payload) != content_length:
+                self._reply_json(400, {"error": "incomplete upload"})
+                return
+            if ACTIVE_REPORT is None or ACTIVE_REPORT.get("make_all_rc") != 0:
+                self._reply_json(503, {"error": "runner build is not ready"})
+                return
+
+            asset.parent.mkdir(parents=True, exist_ok=True)
+            asset.write_bytes(payload)
+            UPLOAD_CONSUMED = True
+            os.environ["BOZ_IMAGE_PATH"] = str(asset)
+            started = time.time()
+            try:
+                game_rc = run_boz_diagnostic(ACTIVE_REPORT)
+                ACTIVE_REPORT["uploaded_asset_size"] = len(payload)
+                ACTIVE_REPORT["uploaded_asset_sha256"] = hashlib.sha256(payload).hexdigest()
+                ACTIVE_REPORT["game_run_rc"] = game_rc
+                ACTIVE_REPORT["exit_code"] = game_rc
+                ACTIVE_REPORT["status"] = "passed" if game_rc == 0 else "failed"
+                ACTIVE_REPORT["duration_seconds"] = round(
+                    float(ACTIVE_REPORT.get("duration_seconds") or 0) + time.time() - started,
+                    3,
+                )
+                write_report(ACTIVE_REPORT)
+                self._reply_json(200, {
+                    "status": ACTIVE_REPORT["status"],
+                    "game_run_rc": game_rc,
+                    "uploaded_asset_size": len(payload),
+                    "uploaded_asset_sha256": ACTIVE_REPORT["uploaded_asset_sha256"],
+                    "trace_lines": ACTIVE_REPORT.get("trace_lines", 0),
+                    "trace_has_uploads": ACTIVE_REPORT.get("trace_has_uploads", False),
+                    "report_url": "/runner-report.json",
+                    "trace_url": "/boz_gl_upload_trace.log" if ACTIVE_REPORT.get("trace_artifact") else None,
+                })
+            except Exception as exc:
+                ACTIVE_REPORT["upload_diagnostic_error"] = repr(exc)
+                ACTIVE_REPORT["status"] = "failed"
+                write_report(ACTIVE_REPORT)
+                self._reply_json(500, {"error": "diagnostic failed; see runner report"})
+            finally:
+                os.environ.pop("BOZ_IMAGE_PATH", None)
+                asset.unlink(missing_ok=True)
+        finally:
+            UPLOAD_LOCK.release()
 
 
 def run(cmd: list[str], timeout: int = 900) -> int:
@@ -139,6 +258,8 @@ def run_boz_diagnostic(report: dict) -> int:
 
 
 def main() -> int:
+    global ACTIVE_REPORT
+
     started = time.time()
 
     print("[RUNNER] starting", flush=True)
@@ -183,22 +304,6 @@ def main() -> int:
     }
 
     port = int(os.environ.get("PORT", "10000"))
-    server = subprocess.Popen(
-        [
-            sys.executable,
-            "-m",
-            "http.server",
-            str(port),
-            "--bind",
-            "0.0.0.0",
-            "--directory",
-            str(PUBLIC),
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.STDOUT,
-    )
-    print(f"[RUNNER] HTTP server started pid={server.pid} port={port}", flush=True)
-
     rc = 0
 
     if (ROOT / "Makefile").exists():
@@ -233,27 +338,27 @@ def main() -> int:
     report["exit_code"] = rc
     report["status"] = "passed" if rc == 0 else "failed"
 
-    out = PUBLIC / "runner-report.json"
-
-    out.write_text(
-        json.dumps(report, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    write_report(report)
 
     print(
-        f"[RUNNER] wrote {out}",
+        f"[RUNNER] wrote {PUBLIC / 'runner-report.json'}",
         flush=True,
     )
 
+    ACTIVE_REPORT = report
     # Render expects the configured start command to remain alive and listen on
-    # PORT. Keep the artifact server process attached so runner-report.json and
-    # boz_gl_upload_trace.log remain reachable after the diagnostic finishes.
-    print("[RUNNER] diagnostic complete; keeping artifact server alive", flush=True)
-    server_rc = server.wait()
-    if server_rc != 0:
-        print(f"[RUNNER] artifact HTTP server exited rc={server_rc}", flush=True)
-        if rc == 0:
-            rc = server_rc
+    # PORT. The protected upload route accepts one user-owned BOZ .s3e payload,
+    # runs the diagnostic, and deletes the temporary input after execution.
+    server = ThreadingHTTPServer(("0.0.0.0", port), ArtifactRequestHandler)
+    server.daemon_threads = True
+    print(f"[RUNNER] artifact HTTP server started port={port}", flush=True)
+    print("[RUNNER] diagnostic complete; serving report and waiting for one authorized upload", flush=True)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()
 
     return rc
 
