@@ -21,7 +21,7 @@ static int use_existing_path(char *out, size_t out_size, const char *path) {
 }
 
 static int try_asset_path(char *out, size_t out_size, const char *prefix, const char *name) {
-    char path[1200];
+    char path[2048];
     snprintf(path, sizeof(path), "%s/%s/%s", g_root, prefix, name);
     return use_existing_path(out, out_size, path);
 }
