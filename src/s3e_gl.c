@@ -308,7 +308,7 @@ static S3E_SOFTFP void host_glTexImage2D(GLenum target, GLint level, GLint inter
 static S3E_SOFTFP void host_glTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffset,
                                              GLsizei width, GLsizei height, GLenum format,
                                              GLenum type, const void *pixels) {
-    void (*real)(GLenum, GLint, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum,
+    void (*real)(GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum,
                  const void *) = lookup_gl("glTexSubImage2D");
     trace_gl_upload_diag("glTexSubImage2D", target, level, 0, width, height, 0, format, type, pixels);
     if (real) real(target, level, xoffset, yoffset, width, height, format, type, pixels);
