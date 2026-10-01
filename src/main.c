@@ -16,6 +16,7 @@ static const char g_empty_string[8] __attribute__((aligned(8))) = "";
 static uint32_t g_bucket_allocator_table[33] __attribute__((aligned(8)));
 #endif
 
+#if defined(__arm__)
 enum {
     BUCKET_ALLOCATOR_TABLE_SLOT = 0x4cu,
 };
@@ -33,6 +34,7 @@ static void prepare_bucket_allocator_table(uint32_t object) {
     attach_bucket_allocator_table(object);
     memset(g_bucket_allocator_table, 0, sizeof(g_bucket_allocator_table));
 }
+#endif
 
 #if defined(__arm__)
 static bool recover_bucket_allocator_fault(ucontext_t *uc) {
