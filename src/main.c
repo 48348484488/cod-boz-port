@@ -151,11 +151,17 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
         fprintf(stderr,
                 "[RECOVER] nullable host object at BOZ+0x0db31e; returning to lr=0x%08lx\n",
                 (unsigned long)uc->uc_mcontext.arm_lr);
+        /*
+         * LR is the caller return address, not a valid continuation inside
+         * this callee.  Returning there leaves the caller expecting a normal
+         * function epilogue and can branch through NULL.  At this site the
+         * failed virtual dispatch sequence is:
+         *   ldr r3,[r0]; ldr r3,[r3,#0x18]; blx r3; b <loop>
+         * Skip the dispatch and its back-edge, continuing at BOZ+0x0db32a.
+         */
         uc->uc_mcontext.arm_r0 = 0;
-        uc->uc_mcontext.arm_pc = uc->uc_mcontext.arm_lr & ~1u;
-        uc->uc_mcontext.arm_cpsr =
-            (uc->uc_mcontext.arm_cpsr & ~(1u << 5)) |
-            ((uc->uc_mcontext.arm_lr & 1u) ? (1u << 5) : 0u);
+        uc->uc_mcontext.arm_pc = g_loaded_base + 0x0db32au;
+        uc->uc_mcontext.arm_cpsr |= (1u << 5);
         return;
     }
     if (sig == SIGSEGV && uc->uc_mcontext.arm_pc == g_loaded_base + 0x368ddcu &&
