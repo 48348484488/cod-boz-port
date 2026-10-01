@@ -12,9 +12,9 @@
 
 #if defined(__arm__)
 static uintptr_t g_loaded_base;
-#endif
 static const char g_empty_string[8] __attribute__((aligned(8))) = "";
 static uint32_t g_bucket_allocator_table[33] __attribute__((aligned(8)));
+#endif
 
 enum {
     BUCKET_ALLOCATOR_TABLE_SLOT = 0x4cu,
@@ -299,7 +299,9 @@ int main(int argc, char **argv) {
 
     fprintf(stderr, "mapped S3E at %p, entry=%p\n", (void *)loaded.base,
             (void *)(loaded.base + loaded.entry_offset));
+#if defined(__arm__)
     g_loaded_base = (uintptr_t)loaded.base;
+#endif
     if (run) {
         int (*entry)(void) = (int (*)(void))(uintptr_t)(loaded.base + loaded.entry_offset);
         int rc = entry();
