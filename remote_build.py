@@ -9,6 +9,7 @@ import pathlib
 import subprocess
 import sys
 import time
+import shutil
 
 ROOT = pathlib.Path(__file__).resolve().parent
 PUBLIC = ROOT / "public"
@@ -42,6 +43,98 @@ def run(cmd: list[str], timeout: int = 900) -> int:
         )
 
     print(f"[RUNNER] rc={p.returncode}", flush=True)
+    return p.returncode
+
+
+def discover_game_image() -> pathlib.Path | None:
+    configured = os.environ.get("BOZ_IMAGE_PATH", "").strip()
+    candidates: list[pathlib.Path] = []
+    if configured:
+        candidates.append(pathlib.Path(configured))
+    roots = [
+        ROOT / "assets",
+        ROOT / "build" / "package" / "ports" / "codboz" / "assets",
+        pathlib.Path("/tmp/boz-assets"),
+        pathlib.Path("/opt/boz-assets"),
+        pathlib.Path("/data/boz-assets"),
+    ]
+    candidates.extend(root / "boz.s3e.unpacked" for root in roots)
+    candidates.extend(root / "boz.s3e" for root in roots)
+    for candidate in candidates:
+        if candidate.is_file() and candidate.stat().st_size > 0:
+            return candidate
+    for root in roots:
+        if not root.is_dir():
+            continue
+        for pattern in ("*.s3e.unpacked", "*.s3e"):
+            for candidate in root.glob(pattern):
+                if candidate.is_file() and candidate.stat().st_size > 0:
+                    return candidate
+    return None
+
+
+def run_boz_diagnostic(report: dict) -> int:
+    trace = pathlib.Path("/tmp/boz_gl_upload_trace.log")
+    trace.unlink(missing_ok=True)
+    image = discover_game_image()
+    report["game_image"] = str(image) if image else None
+    report["game_image_size"] = image.stat().st_size if image else None
+    report["gl_upload_trace"] = str(trace)
+    report["game_run_attempted"] = bool(image)
+    if not image:
+        print("[RUNNER] no BOZ .s3e/.s3e.unpacked asset supplied; game execution not attempted", flush=True)
+        return 0
+
+    loader = ROOT / "build" / "codboz_s3e_loader"
+    if not loader.is_file():
+        print("[RUNNER] loader missing; cannot execute BOZ", flush=True)
+        return 127
+
+    env = os.environ.copy()
+    env["GL_UPLOAD_TRACE"] = "1"
+    env.setdefault("SDL_VIDEODRIVER", "dummy")
+    env["BOZ_TRACE_ARTIFACT"] = str(trace)
+    display_size = os.environ.get("BOZ_DISPLAY_SIZE", "640x480")
+    cmd = [str(loader), "--run", "--root", str(image.parent.parent),
+           "--display-size", display_size, str(image)]
+    print("[RUNNER] launching BOZ:", " ".join(cmd), flush=True)
+    try:
+        p = subprocess.run(cmd, cwd=ROOT, env=env, text=True,
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                           timeout=int(os.environ.get("BOZ_RUN_TIMEOUT", "60")))
+    except subprocess.TimeoutExpired as exc:
+        print("[RUNNER] BOZ timed out", flush=True)
+        if exc.stdout:
+            print(exc.stdout, flush=True)
+        report["game_run_rc"] = 124
+        return 124
+    except Exception as exc:
+        print(f"[RUNNER] BOZ failed to start: {exc!r}", flush=True)
+        report["game_run_rc"] = 125
+        return 125
+
+    if p.stdout:
+        print(p.stdout, end="" if p.stdout.endswith("\n") else "\n", flush=True)
+    print(f"[RUNNER] BOZ rc={p.returncode}", flush=True)
+    report["game_run_rc"] = p.returncode
+
+    public_trace = PUBLIC / "boz_gl_upload_trace.log"
+    if trace.is_file():
+        shutil.copyfile(trace, public_trace)
+        text_trace = trace.read_text(encoding="utf-8", errors="replace")
+        report["trace_artifact"] = str(public_trace)
+        report["trace_lines"] = len([line for line in text_trace.splitlines() if line.strip()])
+        report["trace_has_uploads"] = "[GLUPLOAD]" in text_trace
+        report["trace_has_ff83_samples"] = any(
+            "ff83=" in line and int(line.split("ff83=", 1)[1].split()[0]) > 0
+            for line in text_trace.splitlines() if "ff83=" in line
+        )
+    else:
+        report["trace_artifact"] = None
+        report["trace_lines"] = 0
+        report["trace_has_uploads"] = False
+        report["trace_has_ff83_samples"] = False
+        print("[RUNNER] BOZ produced no GL upload trace", flush=True)
     return p.returncode
 
 
@@ -114,6 +207,11 @@ def main() -> int:
         if rc == 0:
             rc = run(["make", "test-host"], timeout=900)
             report["make_test_host_rc"] = rc
+        if rc == 0:
+            game_rc = run_boz_diagnostic(report)
+            report["game_run_rc"] = game_rc
+            if game_rc != 0:
+                rc = game_rc
     else:
         print(
             "[RUNNER] no Makefile; nothing to build",
