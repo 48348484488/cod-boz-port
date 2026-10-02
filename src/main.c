@@ -338,6 +338,20 @@ int main(int argc, char **argv) {
             for (int j = 0; j < 64; ++j) fprintf(stderr, " %02x", q[j]);
             fprintf(stderr, "\n");
         }
+        {
+            FILE *fp = fopen("/tmp/boz-mapped-da680.bin", "wb");
+            if (fp) {
+                fwrite(loaded.base + 0x000da680u, 1, 0x180, fp);
+                fclose(fp);
+                fprintf(stderr, "[MAPPED_DUMP] /tmp/boz-mapped-da680.bin base=0x000da680 size=0x180\n");
+            }
+            fp = fopen("/tmp/boz-mapped-db2e0.bin", "wb");
+            if (fp) {
+                fwrite(loaded.base + 0x000db2e0u, 1, 0x120, fp);
+                fclose(fp);
+                fprintf(stderr, "[MAPPED_DUMP] /tmp/boz-mapped-db2e0.bin base=0x000db2e0 size=0x120\n");
+            }
+        }
     }
 #endif
 #if defined(__arm__)
