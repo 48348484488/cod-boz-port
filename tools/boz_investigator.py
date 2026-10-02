@@ -18,7 +18,7 @@ def main():
     p.add_argument("--json-out")
     p.add_argument("--text-out")
     p.add_argument("--probe-plan")
-    p.add_argument("--probe-limit", type=int, default=64)
+    p.add_argument("--probe-limit", type=int, default=128)
     a = p.parse_args()
 
     lines = Path(a.disassembly).read_text(errors="replace").splitlines()
@@ -50,14 +50,14 @@ def main():
         seen.add(off)
         ranked.append({"off": off, "mode": "thumb16", "reason": "store_plus4",
                        "function": s["function"], "line": s["line"]})
-    ranked = ranked[:max(0, min(a.probe_limit, 64))]
+    ranked = ranked[:max(0, min(a.probe_limit, 512))]
 
     result = {"functions": len(funcs), "calls": len(calls),
               "store_plus4_sites": stores, "probe_candidates": ranked,
               "target_xrefs": xrefs}
     if a.probe_plan:
         Path(a.probe_plan).write_text(json.dumps(
-            {"version": 2, "capacity": 64, "count": len(ranked), "probes": ranked}, indent=2) + "\n")
+            {"version": 2, "capacity": 512, "count": len(ranked), "probes": ranked}, indent=2) + "\n")
     data = json.dumps(result, indent=2)
     if a.json_out:
         Path(a.json_out).write_text(data + "\n")
