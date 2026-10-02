@@ -153,7 +153,7 @@ static void load_mass_probe_env(void) {
     const char *s=getenv("BOZ_MASS_PROBES");
     if (!s || !*s) return;
     while (*s && g_tree_probe_count<BOZ_MAX_MASS_PROBES) {
-        char *end=NULL; unsigned long off=strtoul(s,&end,0);
+        char *end=NULL; unsigned long off=strtoul(s,&end,16);
         if (end==s) { while (*s && *s!=',') ++s; if (*s==',') ++s; continue; }
         if (off<0x41d970u && !(off&1u)) {
             bool dup=false;
