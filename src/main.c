@@ -145,7 +145,7 @@ static int g_d8984_trace_armed;
 static uint32_t g_d8ff0_manager;
 typedef struct { uint32_t off; uint16_t saved; int armed; } boz_probe_t;
 static boz_probe_t g_tree_probes[] = {
-    {0x000da228u,0,0},{0x000da50au,0,0},{0x000da50cu,0,0},{0x000da50eu,0,0},{0x000da510u,0,0},{0x000da816u,0,0},{0x000daef2u,0,0},{0x00254f44u,0,0}
+    {0x000da228u,0,0},{0x000da50au,0,0},{0x000da50cu,0,0},{0x000da50eu,0,0},{0x000da510u,0,0},{0x000da816u,0,0},{0x000daef2u,0,0}
 };
 static void arm_tree_probes(void) {
     for (unsigned i=0;i<sizeof(g_tree_probes)/sizeof(g_tree_probes[0]);++i) {
