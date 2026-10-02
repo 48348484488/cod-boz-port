@@ -358,7 +358,8 @@ def run_boz_diagnostic(report: dict) -> int:
     print(f"[RUNNER] BOZ rc={p.returncode}", flush=True)
     objdump = shutil.which("arm-linux-gnueabihf-objdump")
     if objdump:
-        for raw, off in ((pathlib.Path("/tmp/boz-mapped-d8e80.bin"), 0xD8800),
+        for raw, off in ((pathlib.Path("/tmp/boz-mapped-d6000.bin"), 0xD6000),
+                         (pathlib.Path("/tmp/boz-mapped-d8e80.bin"), 0xD8800),
                          (pathlib.Path("/tmp/boz-mapped-da680.bin"), 0xDA680),
                          (pathlib.Path("/tmp/boz-mapped-db2e0.bin"), 0xDB2E0)):
             if raw.is_file():
@@ -368,6 +369,26 @@ def run_boz_diagnostic(report: dict) -> int:
                     text=True, capture_output=True, check=False)
                 print(f"[MAPPED_DISASM] BOZ+0x{off:06x} rc={dis.returncode}", flush=True)
                 print(dis.stdout, flush=True)
+                if off == 0xD6000 and dis.returncode == 0:
+                    auto_dis = pathlib.Path("/tmp/boz-investigator.disasm")
+                    auto_dis.write_text(dis.stdout, encoding="utf-8")
+                    auto_json = PUBLIC / "boz-investigation.json"
+                    auto_txt = PUBLIC / "boz-investigation.txt"
+                    investigator = ROOT / "tools" / "boz_investigator.py"
+                    inv = subprocess.run(
+                        [sys.executable, str(investigator), str(auto_dis),
+                         "--target", "0xDA1A0", "--target", "0xDA46C", "--target", "0xDAE62",
+                         "--json-out", str(auto_json), "--text-out", str(auto_txt)],
+                        text=True, capture_output=True, check=False)
+                    report["boz_investigator_rc"] = inv.returncode
+                    report["boz_investigation_json"] = str(auto_json)
+                    report["boz_investigation_text"] = str(auto_txt)
+                    print(f"[AUTO_INVESTIGATOR] rc={inv.returncode} json={auto_json} text={auto_txt}", flush=True)
+                    if auto_txt.is_file():
+                        for inv_line in auto_txt.read_text(encoding="utf-8", errors="replace").splitlines():
+                            print("[AUTO_INVESTIGATOR] " + inv_line, flush=True)
+                    if inv.stderr:
+                        print("[AUTO_INVESTIGATOR_ERR] " + inv.stderr.strip(), flush=True)
                 if off == 0xD8800:
                     lines = dis.stdout.splitlines()
                     interesting = []
