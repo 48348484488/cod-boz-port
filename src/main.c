@@ -166,7 +166,7 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
         *site = g_da6c6_saved;
         __builtin___clear_cache((char *)site, (char *)(site + 1));
         g_da6c6_trace_armed = 0;
-        fprintf(stderr, "[DA6C6_ENTER] r0=%08lx r1=%08lx r2=%08lx r3=%08lx r4=%08lx r5=%08lx r6=%08lx r7=%08lx r8=%08lx lr=%08lx\\n",
+        fprintf(stderr, "[DA6C6_ENTER] r0=%08lx r1=%08lx r2=%08lx r3=%08lx r4=%08lx r5=%08lx r6=%08lx r7=%08lx r8=%08lx lr=%08lx\n",
                 (unsigned long)uc->uc_mcontext.arm_r0,(unsigned long)uc->uc_mcontext.arm_r1,
                 (unsigned long)uc->uc_mcontext.arm_r2,(unsigned long)uc->uc_mcontext.arm_r3,
                 (unsigned long)uc->uc_mcontext.arm_r4,(unsigned long)uc->uc_mcontext.arm_r5,
