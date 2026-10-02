@@ -791,8 +791,7 @@ def run_boz_diagnostic(report: dict) -> int:
                     # Approximate Thumb function boundaries around each strong store using
                     # PUSH as entry and POP/BX LR as exit, then search calls to the entry.
                     functions = []
-                    import re
-                    for site in strong_sites:
+                                        for site in strong_sites:
                         site_idx = next((i for i, ln in enumerate(lines) if ln.lstrip().lower().startswith(site + ":")), None)
                         if site_idx is None:
                             continue
