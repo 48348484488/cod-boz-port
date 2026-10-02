@@ -479,7 +479,20 @@ def run_boz_diagnostic(report: dict) -> int:
                     report["manager_tree_candidate_count"] = len(ranked)
                     report["manager_tree_shortlist_count"] = len(shortlist)
                     print(f"[DEEP_RANK] tree candidates={len(ranked)} shortlist={len(shortlist)} artifact={shortlist_path}", flush=True)
-                    for line in shortlist_lines[:260]:
+                    # Surface the decisive graph information first so Render log limits
+                    # cannot hide it behind verbose candidate disassembly.
+                    print("[DEEP_GRAPH] FUNCTION_FAMILIES", flush=True)
+                    for fn in functions:
+                        print(f"[DEEP_GRAPH] site={fn['site']} entry={fn['entry']} start={fn['start']} end={fn['end']}", flush=True)
+                    print("[DEEP_GRAPH] DIRECT_XREFS", flush=True)
+                    if xrefs:
+                        for x in xrefs:
+                            print(f"[DEEP_GRAPH] site={x.get('site','')} target={x['target']} caller={x['caller']}", flush=True)
+                    else:
+                        print("[DEEP_GRAPH] none_in_mapped_region", flush=True)
+                    # Keep only a small preview in service logs; the complete shortlist
+                    # remains in the public artifact.
+                    for line in shortlist_lines[:55]:
                         print("[DEEP_RANK] " + line, flush=True)
 
                     analysis_path = PUBLIC / "manager-registration-analysis.txt"
