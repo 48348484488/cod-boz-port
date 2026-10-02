@@ -379,11 +379,23 @@ def run_boz_diagnostic(report: dict) -> int:
                     inv = subprocess.run(
                         [sys.executable, str(investigator), str(auto_dis),
                          "--target", "0xDA1A0", "--target", "0xDA46C", "--target", "0xDAE62",
-                         "--json-out", str(auto_json), "--text-out", str(auto_txt)],
+                         "--json-out", str(auto_json), "--text-out", str(auto_txt),
+                         "--probe-plan", str(PUBLIC / "boz-probe-plan.json"), "--probe-limit", "64"],
                         text=True, capture_output=True, check=False)
                     report["boz_investigator_rc"] = inv.returncode
                     report["boz_investigation_json"] = str(auto_json)
                     report["boz_investigation_text"] = str(auto_txt)
+                    probe_plan = PUBLIC / "boz-probe-plan.json"
+                    if probe_plan.is_file():
+                        try:
+                            plan = json.loads(probe_plan.read_text(encoding="utf-8"))
+                            probes = plan.get("probes", [])
+                            report["boz_mass_probe_count"] = len(probes)
+                            report["boz_mass_probe_env"] = ",".join(f"{int(p['off']):x}" for p in probes)
+                            print(f"[MASS_PROBE_PLAN] count={len(probes)} artifact={probe_plan}", flush=True)
+                            print("[MASS_PROBE_PLAN] " + report["boz_mass_probe_env"], flush=True)
+                        except Exception as exc:
+                            report["boz_mass_probe_plan_error"] = repr(exc)
                     print(f"[AUTO_INVESTIGATOR] rc={inv.returncode} json={auto_json} text={auto_txt}", flush=True)
                     if auto_txt.is_file():
                         for inv_line in auto_txt.read_text(encoding="utf-8", errors="replace").splitlines():
