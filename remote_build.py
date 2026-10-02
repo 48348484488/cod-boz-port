@@ -27,6 +27,18 @@ UPLOAD_LOCK = threading.Lock()
 UPLOAD_CONSUMED = False
 ACTIVE_REPORT: dict | None = None
 
+CONFIRMED_THUMB_RANGES = (
+    (0x000D6000, 0x000DB800),
+)
+CONFIRMED_ARM_RANGES = (
+    (0x00250000, 0x00260000),
+    (0x0034B000, 0x0034F000),
+)
+
+def address_in_ranges(off: int, ranges: tuple[tuple[int, int], ...]) -> bool:
+    return any(lo <= off < hi for lo, hi in ranges)
+
+
 
 def analyze_boz_output(output: str) -> dict:
     events = []
@@ -109,11 +121,9 @@ def probe_is_arch_safe(item: dict) -> bool:
         return False
     mode = item.get("mode")
     if mode == "thumb16":
-        return not (off & 1) and 0xD6000 <= off < 0xDB800
+        return not (off & 1) and address_in_ranges(off, CONFIRMED_THUMB_RANGES)
     if mode == "arm32":
-        return not (off & 3) and (
-            0x250000 <= off < 0x260000 or 0x34B000 <= off < 0x34F000
-        )
+        return not (off & 3) and address_in_ranges(off, CONFIRMED_ARM_RANGES)
     return False
 
 
@@ -853,18 +863,21 @@ def run_boz_diagnostic(report: dict) -> int:
                         print("[DA46_PREFIX] " + item["line"], flush=True)
                     auto_json = PUBLIC / "boz-investigation.json"
                     auto_txt = PUBLIC / "boz-investigation.txt"
+                    probe_plan = PUBLIC / "boz-probe-plan.json"
+                    probe_plan.unlink(missing_ok=True)
                     investigator = ROOT / "tools" / "boz_investigator.py"
                     inv = subprocess.run(
                         [sys.executable, str(investigator), str(auto_dis),
                          "--target", "0xDA1A0", "--target", "0xDA46C", "--target", "0xDAE62",
                          "--json-out", str(auto_json), "--text-out", str(auto_txt),
-                         "--probe-plan", str(PUBLIC / "boz-probe-plan.json"), "--probe-limit", "64"],
+                         "--probe-plan", str(probe_plan), "--probe-limit", "64"],
                         text=True, capture_output=True, check=False)
                     report["boz_investigator_rc"] = inv.returncode
                     report["boz_investigation_json"] = str(auto_json)
                     report["boz_investigation_text"] = str(auto_txt)
-                    probe_plan = PUBLIC / "boz-probe-plan.json"
-                    if probe_plan.is_file():
+                    if inv.returncode != 0:
+                        report["boz_investigator_error"] = (inv.stderr or "").strip()
+                    if inv.returncode == 0 and probe_plan.is_file():
                         try:
                             plan = json.loads(probe_plan.read_text(encoding="utf-8"))
                             probes = plan.get("probes", [])
