@@ -1853,7 +1853,22 @@ def run_boz_diagnostic(report: dict) -> int:
                                                     caller_lr_value = int(
                                                         late_writer_entry["caller_lr"], 16
                                                     )
-                                                    caller_return = caller_lr_value & ~1
+                                                    caller_return_abs = caller_lr_value & ~1
+                                                    mapped_base_match = re.search(
+                                                        r"mapped S3E at 0x([0-9a-fA-F]+)",
+                                                        focus_out,
+                                                        re.I,
+                                                    )
+                                                    caller_image_base = (
+                                                        int(mapped_base_match.group(1), 16)
+                                                        if mapped_base_match else 0
+                                                    )
+                                                    caller_return = (
+                                                        caller_return_abs - caller_image_base
+                                                        if caller_image_base
+                                                        and caller_return_abs >= caller_image_base
+                                                        else caller_return_abs
+                                                    )
                                                     caller_candidates = []
                                                     for caller_index, (
                                                         caller_off,
@@ -1928,6 +1943,13 @@ def run_boz_diagnostic(report: dict) -> int:
                                                         late_writer_caller = {
                                                             "callee": f"0x{focus_function_start:x}",
                                                             "runtime_lr": f"0x{caller_lr_value:08x}",
+                                                            "image_base": (
+                                                                f"0x{caller_image_base:08x}"
+                                                                if caller_image_base else None
+                                                            ),
+                                                            "return_address_absolute": (
+                                                                f"0x{caller_return_abs:08x}"
+                                                            ),
                                                             "return_address": f"0x{caller_return:x}",
                                                             "callsite": f"0x{caller_callsite:x}",
                                                             "call_instruction": caller_call_line,
