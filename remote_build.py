@@ -8,6 +8,7 @@ import hashlib
 import hmac
 import os
 import pathlib
+import re
 import subprocess
 import sys
 import time
