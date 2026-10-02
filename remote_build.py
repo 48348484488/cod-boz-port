@@ -591,6 +591,22 @@ def run_boz_diagnostic(report: dict) -> int:
             )
             arm34_txt = PUBLIC / "boz-arm34-caller.txt"
             arm34_txt.write_text(arm34_dis.stdout, encoding="utf-8")
+
+            arm34_window = subprocess.run(
+                [objdump, "-D", "-b", "binary", "-m", "arm",
+                 "--adjust-vma", hex(0x34B000),
+                 "--start-address", hex(0x34C180),
+                 "--stop-address", hex(0x34C220),
+                 str(arm34_raw)],
+                text=True, capture_output=True, check=False,
+            )
+            arm34_window_txt = PUBLIC / "boz-arm34-window.txt"
+            arm34_window_txt.write_text(arm34_window.stdout, encoding="utf-8")
+            report["boz_arm34_window"] = str(arm34_window_txt)
+            for raw_line in arm34_window.stdout.splitlines():
+                if raw_line.strip():
+                    print("[ARM34_RAW] " + raw_line, flush=True)
+
             arm34_parsed = []
             for line in arm34_dis.stdout.splitlines():
                 m = re.match(r"^\\s*([0-9a-fA-F]+):\\s*(.*)$", line)
@@ -675,6 +691,22 @@ def run_boz_diagnostic(report: dict) -> int:
                                 "off": f"0x{off:x}",
                                 "line": raw_line,
                             })
+
+            if arm34_info["callsite"] is None:
+                # Runtime entered 0x254f04 in ARM state with LR=0x34c1c0.
+                # ARM instructions are 4 bytes wide, so the originating
+                # callsite is deterministically LR-4.
+                inferred_callsite = return_off - 4
+                arm34_info["callsite"] = f"0x{inferred_callsite:x}"
+                arm34_info["callsite_inferred_from_lr"] = True
+                for raw_line in arm34_window.stdout.splitlines():
+                    if re.match(
+                        rf"^\\s*{inferred_callsite:x}:",
+                        raw_line,
+                        re.IGNORECASE,
+                    ):
+                        arm34_info["call_instruction"] = raw_line.strip()
+                        break
 
             arm34_json = PUBLIC / "boz-arm34-caller.json"
             arm34_json.write_text(
