@@ -349,7 +349,7 @@ def run_boz_diagnostic(report: dict) -> int:
     print(f"[RUNNER] BOZ rc={p.returncode}", flush=True)
     objdump = shutil.which("arm-linux-gnueabihf-objdump")
     if objdump:
-        for raw, off in ((pathlib.Path("/tmp/boz-mapped-d8e80.bin"), 0xD8E80),
+        for raw, off in ((pathlib.Path("/tmp/boz-mapped-d8e80.bin"), 0xD8800),
                          (pathlib.Path("/tmp/boz-mapped-da680.bin"), 0xDA680),
                          (pathlib.Path("/tmp/boz-mapped-db2e0.bin"), 0xDB2E0)):
             if raw.is_file():
