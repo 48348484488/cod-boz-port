@@ -554,7 +554,7 @@ def run_boz_diagnostic(report: dict) -> int:
                                         encoding="utf-8", errors="replace"
                                     ).splitlines()
                                     parsed_disasm = []
-                                    addr_re = re.compile(r"^\\s*([0-9a-fA-F]+):\\s+(.+)$")
+                                    addr_re = re.compile(r"^\s*([0-9a-fA-F]+):\s+(.+)$")
                                     for static_line in disasm_lines:
                                         static_match = addr_re.match(static_line)
                                         if static_match:
@@ -593,12 +593,12 @@ def run_boz_diagnostic(report: dict) -> int:
                                             if (
                                                 entry["off"] == group["hot"]
                                                 or " str" in low
-                                                or "\\tstr" in low
+                                                or "\tstr" in low
                                                 or " ldr" in low
-                                                or "\\tldr" in low
-                                                or "\\tbl" in low
+                                                or "\tldr" in low
+                                                or "\tbl" in low
                                                 or " cmp" in low
-                                                or "\\tcmp" in low
+                                                or "\tcmp" in low
                                             ):
                                                 print(
                                                     "[FOCUS_STATIC] " + entry["line"],
