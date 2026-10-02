@@ -138,6 +138,8 @@ static uint16_t g_d8ff0_saved;
 static uint16_t g_da6c6_saved;
 static uint16_t g_d8ffa_saved;
 static uint16_t g_d8984_saved;
+static uint32_t g_arm_dispatch_saved;
+static int g_arm_dispatch_trace_armed;
 static int g_d8ff0_trace_armed;
 static int g_da6c6_trace_armed;
 static int g_d8ffa_trace_armed;
@@ -172,6 +174,14 @@ static void arm_tree_probes(void) {
         g_tree_probes[i].saved=*site; *site=0xbe00u;
         __builtin___clear_cache((char *)site,(char *)(site+1)); g_tree_probes[i].armed=1;
     }
+}
+
+static void arm_dispatch_trace(void) {
+    uint32_t *site = (uint32_t *)(uintptr_t)(g_loaded_base + 0x00254f04u);
+    g_arm_dispatch_saved = *site;
+    *site = 0xe1200070u; /* ARM-state BKPT #0 */
+    __builtin___clear_cache((char *)site, (char *)site + sizeof(*site));
+    g_arm_dispatch_trace_armed = 1;
 }
 
 static void arm_d8ff0_trace(void) {
@@ -210,6 +220,30 @@ static void arm_da6c6_trace(void) {
 static void crash_handler(int sig, siginfo_t *info, void *context) {
 #if defined(__arm__)
     ucontext_t *uc = (ucontext_t *)context;
+    if ((sig == SIGTRAP || sig == SIGILL) && g_arm_dispatch_trace_armed &&
+        (uc->uc_mcontext.arm_pc == g_loaded_base + 0x00254f04u ||
+         uc->uc_mcontext.arm_pc == g_loaded_base + 0x00254f08u)) {
+        uint32_t *site = (uint32_t *)(uintptr_t)(g_loaded_base + 0x00254f04u);
+        *site = g_arm_dispatch_saved;
+        __builtin___clear_cache((char *)site, (char *)site + sizeof(*site));
+        g_arm_dispatch_trace_armed = 0;
+        fprintf(stderr,
+                "[ARM_DISPATCH_ENTER] r0=%08lx r1=%08lx r2=%08lx r3=%08lx "
+                "r4=%08lx r5=%08lx r6=%08lx r7=%08lx r8=%08lx lr=%08lx cpsr=%08lx\n",
+                (unsigned long)uc->uc_mcontext.arm_r0,
+                (unsigned long)uc->uc_mcontext.arm_r1,
+                (unsigned long)uc->uc_mcontext.arm_r2,
+                (unsigned long)uc->uc_mcontext.arm_r3,
+                (unsigned long)uc->uc_mcontext.arm_r4,
+                (unsigned long)uc->uc_mcontext.arm_r5,
+                (unsigned long)uc->uc_mcontext.arm_r6,
+                (unsigned long)uc->uc_mcontext.arm_r7,
+                (unsigned long)uc->uc_mcontext.arm_r8,
+                (unsigned long)uc->uc_mcontext.arm_lr,
+                (unsigned long)uc->uc_mcontext.arm_cpsr);
+        uc->uc_mcontext.arm_pc = g_loaded_base + 0x00254f04u;
+        return;
+    }
     if (sig == SIGTRAP) {
         for (unsigned i=0;i<sizeof(g_tree_probes)/sizeof(g_tree_probes[0]);++i) {
             boz_probe_t *p=&g_tree_probes[i];
@@ -588,6 +622,7 @@ int main(int argc, char **argv) {
         arm_d8ff0_trace();
         arm_da6c6_trace();
         arm_d8984_trace();
+        if (getenv("BOZ_ARM_DISPATCH_TRACE")) arm_dispatch_trace();
         arm_tree_probes();
     }
 #endif
