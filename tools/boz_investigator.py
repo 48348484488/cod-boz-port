@@ -45,10 +45,12 @@ def main():
     seen = set()
     for store in stores:
         off = store["site"]
-        if off is None or off & 1 or off in seen:
+        if off is None or off & 1 or off in seen or not confirmed_thumb(off):
             continue
         seen.add(off)
-        ranked.append({"off": off, "mode": "thumb16", "reason": "store_plus4",
+        ranked.append({"off": off, "mode": "thumb16",
+                       "mode_source": "runtime_confirmed_thumb_window",
+                       "reason": "store_plus4",
                        "function": store["function"], "line": store["line"]})
 
     # Also probe the instruction immediately after calls in the manager
@@ -69,15 +71,18 @@ def main():
                 next_site = candidate
                 next_line = lines[j].strip()
                 break
-        if next_site is None or next_site & 1 or next_site in seen:
+        if (next_site is None or next_site & 1 or next_site in seen
+                or not confirmed_thumb(next_site)):
             continue
         seen.add(next_site)
         ranked.append({"off": next_site, "mode": "thumb16",
+                       "mode_source": "runtime_confirmed_thumb_window",
                        "reason": "post_call_manager_init",
                        "function": 0xDA9B6, "line": next_line})
     ranked = ranked[:max(0, min(a.probe_limit, 512))]
 
     result = {"functions": len(funcs), "calls": len(calls),
+              "confirmed_thumb_ranges": [[hex(lo), hex(hi)] for lo, hi in CONFIRMED_THUMB_RANGES],
               "store_plus4_sites": stores, "probe_candidates": ranked,
               "target_xrefs": xrefs}
     if a.probe_plan:
