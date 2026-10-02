@@ -240,6 +240,20 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
         *ret_site = g_arm_return_saved;
         __builtin___clear_cache((char *)ret_site, (char *)ret_site + sizeof(*ret_site));
         g_arm_return_trace_armed = 0;
+        fprintf(stderr,
+                "[ARM_DISPATCH_RETURN] seq=%u r0=%08lx r1=%08lx r2=%08lx r3=%08lx "
+                "r4=%08lx r5=%08lx r6=%08lx r7=%08lx lr=%08lx cpsr=%08lx\n",
+                g_arm_dispatch_call_seq,
+                (unsigned long)uc->uc_mcontext.arm_r0,
+                (unsigned long)uc->uc_mcontext.arm_r1,
+                (unsigned long)uc->uc_mcontext.arm_r2,
+                (unsigned long)uc->uc_mcontext.arm_r3,
+                (unsigned long)uc->uc_mcontext.arm_r4,
+                (unsigned long)uc->uc_mcontext.arm_r5,
+                (unsigned long)uc->uc_mcontext.arm_r6,
+                (unsigned long)uc->uc_mcontext.arm_r7,
+                (unsigned long)uc->uc_mcontext.arm_lr,
+                (unsigned long)uc->uc_mcontext.arm_cpsr);
         if (g_arm_dispatch_call_seq < 24u) {
             uint32_t *call_site = (uint32_t *)(uintptr_t)(g_loaded_base + 0x00254f40u);
             g_arm_callsite_saved = *call_site;
