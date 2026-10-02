@@ -27,6 +27,49 @@ UPLOAD_CONSUMED = False
 ACTIVE_REPORT: dict | None = None
 
 
+def analyze_boz_output(output: str) -> dict:
+    events = []
+    for line in output.splitlines():
+        line = line.strip()
+        if line.startswith("[D8FF0_ENTER]"):
+            events.append({"type": "lookup", "line": line})
+        elif line.startswith("[DA6C6_ENTER]"):
+            events.append({"type": "da6ac_path", "line": line})
+        elif line.startswith("[NULL_OBJECT]"):
+            events.append({"type": "null_object", "line": line})
+        elif line.startswith("[NULL_FLOW]"):
+            events.append({"type": "registers", "line": line})
+
+    lookups = [e for e in events if e["type"] == "lookup"]
+    nulls = [e for e in events if e["type"] == "null_object"]
+    da6 = [e for e in events if e["type"] == "da6ac_path"]
+    diagnosis = {
+        "version": 1,
+        "events": events,
+        "root_cause_candidate": None,
+        "confidence": "insufficient",
+        "next_action": None,
+    }
+    if nulls:
+        diagnosis["root_cause_candidate"] = "BOZ+0xDB31E dereferenced a NULL object returned by the DA6AC dispatch path"
+        diagnosis["confidence"] = "high"
+        if da6:
+            diagnosis["next_action"] = "correlate DA6AC path state with D8FF0/D8F0E/D94E4 return values"
+        else:
+            diagnosis["next_action"] = "capture the DA6AC internal lookup/factory path before the NULL return"
+    if lookups:
+        diagnosis["last_observed_lookup"] = lookups[-1]["line"]
+    return diagnosis
+
+
+def write_investigation(diagnosis: dict) -> pathlib.Path:
+    out = PUBLIC / "boz-investigation.json"
+    temporary = out.with_suffix(".json.tmp")
+    temporary.write_text(json.dumps(diagnosis, indent=2) + "\n", encoding="utf-8")
+    temporary.replace(out)
+    return out
+
+
 def write_report(report: dict) -> None:
     out = PUBLIC / "runner-report.json"
     temporary = out.with_suffix(".json.tmp")
@@ -293,6 +336,11 @@ def run_boz_diagnostic(report: dict) -> int:
 
     if p.stdout:
         print(p.stdout, end="" if p.stdout.endswith("\n") else "\n", flush=True)
+    diagnosis = analyze_boz_output(p.stdout or "")
+    investigation = write_investigation(diagnosis)
+    report["investigation_artifact"] = str(investigation)
+    report["investigation"] = diagnosis
+    print("[INVESTIGATOR] " + json.dumps(diagnosis, separators=(",", ":")), flush=True)
     print(f"[RUNNER] BOZ rc={p.returncode}", flush=True)
     objdump = shutil.which("arm-linux-gnueabihf-objdump")
     if objdump:
