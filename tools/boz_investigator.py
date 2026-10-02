@@ -43,13 +43,38 @@ def main():
     xrefs = {f"{t:x}": [c for c in calls if c["target"] == t] for t in targets}
     ranked = []
     seen = set()
-    for s in stores:
-        off = s["site"]
+    for store in stores:
+        off = store["site"]
         if off is None or off & 1 or off in seen:
             continue
         seen.add(off)
         ranked.append({"off": off, "mode": "thumb16", "reason": "store_plus4",
-                       "function": s["function"], "line": s["line"]})
+                       "function": store["function"], "line": store["line"]})
+
+    # Also probe the instruction immediately after calls in the manager
+    # initializer around DAA84. This captures return/register state after
+    # each initialization step without instrumenting every instruction.
+    instruction_sites = [addr(line) for line in lines]
+    for i, line in enumerate(lines):
+        site = addr(line)
+        if site is None or not (0xDA9B6 <= site <= 0xDAE84):
+            continue
+        if not CALL.search(line):
+            continue
+        next_site = None
+        next_line = None
+        for j in range(i + 1, min(len(lines), i + 4)):
+            candidate = addr(lines[j])
+            if candidate is not None:
+                next_site = candidate
+                next_line = lines[j].strip()
+                break
+        if next_site is None or next_site & 1 or next_site in seen:
+            continue
+        seen.add(next_site)
+        ranked.append({"off": next_site, "mode": "thumb16",
+                       "reason": "post_call_manager_init",
+                       "function": 0xDA9B6, "line": next_line})
     ranked = ranked[:max(0, min(a.probe_limit, 512))]
 
     result = {"functions": len(funcs), "calls": len(calls),
