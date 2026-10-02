@@ -473,12 +473,14 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
                     __builtin___clear_cache((char *)site, (char *)(site + 1));
                 }
                 p->armed = 0;
-                uint32_t p4 = uc->uc_mcontext.arm_r4
-                                  ? *(uint32_t *)(uintptr_t)(uc->uc_mcontext.arm_r4 + 4u)
-                                  : 0;
-                uint32_t p5 = uc->uc_mcontext.arm_r5
-                                  ? *(uint32_t *)(uintptr_t)(uc->uc_mcontext.arm_r5 + 4u)
-                                  : 0;
+                /*
+                 * Mass probes can stop at dozens of unrelated instructions.
+                 * r4/r5 are not guaranteed to be valid pointers at every site,
+                 * so never dereference them from the signal handler. Raw
+                 * register values are enough for offline manager correlation.
+                 */
+                uint32_t p4 = 0;
+                uint32_t p5 = 0;
                 uint32_t p3 = 0;
                 if (p->off == 0x000daa84u && uc->uc_mcontext.arm_r3) {
                     g_trace_sentinel = (uint32_t)uc->uc_mcontext.arm_r3;
