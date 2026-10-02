@@ -144,7 +144,7 @@ static int g_d8ffa_trace_armed;
 static int g_d8984_trace_armed;
 static uint32_t g_d8ff0_manager;
 typedef struct { uint32_t off; uint16_t saved; int armed; } boz_probe_t;
-#define BOZ_MAX_MASS_PROBES 64u
+#define BOZ_MAX_MASS_PROBES 512u
 static boz_probe_t g_tree_probes[BOZ_MAX_MASS_PROBES] = {
     {0x000da228u,0,0},{0x000da50au,0,0},{0x000da50cu,0,0},{0x000da50eu,0,0},{0x000da510u,0,0},{0x000da816u,0,0},{0x000daef2u,0,0}
 };
@@ -162,7 +162,7 @@ static void load_mass_probe_env(void) {
         }
         s=end; while (*s && *s!=',') ++s; if (*s==',') ++s;
     }
-    fprintf(stderr,"[MASS_PROBE] candidates=%u\\n",g_tree_probe_count);
+    fprintf(stderr,"[MASS_PROBE] candidates=%u capacity=%u\\n",g_tree_probe_count,BOZ_MAX_MASS_PROBES);
 }
 static void arm_tree_probes(void) {
     load_mass_probe_env();
