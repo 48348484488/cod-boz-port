@@ -1823,7 +1823,7 @@ def run_boz_diagnostic(report: dict) -> int:
                                                 late_writer_entry = None
                                                 if focus_function_start is not None:
                                                     entry_re = re.compile(
-                                                        r"^\\[TREE_PROBE\\](?: mode=[^ ]+)? off=0*([0-9a-fA-F]+).*?\\blr=([0-9a-fA-F]{8})\\b"
+                                                        r"^\[TREE_PROBE\](?: mode=[^ ]+)? off=0*([0-9a-fA-F]+).*?\blr=([0-9a-fA-F]{8})\b"
                                                     )
                                                     for entry_line in focus_out.replace("\\\\n", "\\n").splitlines():
                                                         em = entry_re.match(entry_line.strip())
