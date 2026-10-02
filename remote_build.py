@@ -887,14 +887,15 @@ def run_boz_diagnostic(report: dict) -> int:
                                     # nearby real Thumb instruction boundaries in one more
                                     # run. This turns the broad pass into a self-narrowing
                                     # investigation without patching BOZ behavior.
+                                    mass_norm = mass_out.replace("\\n", "\n")
                                     sentinel_match = re.search(
-                                        r"\\[D8FF0_HASH\\].*sentinel=([0-9a-fA-F]+)",
-                                        mass_out,
+                                        r"\[D8FF0_HASH\].*sentinel=([0-9a-fA-F]+)",
+                                        mass_norm,
                                     )
                                     focus_center = None
                                     if sentinel_match:
                                         sentinel_hex = sentinel_match.group(1).lower()
-                                        pre_lookup = mass_out.split("[D8FF0_ENTER]", 1)[0]
+                                        pre_lookup = mass_norm.split("[D8FF0_ENTER]", 1)[0]
                                         for probe_line in pre_lookup.splitlines():
                                             if not probe_line.startswith("[TREE_PROBE]"):
                                                 continue
