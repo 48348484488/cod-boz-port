@@ -755,7 +755,7 @@ def run_boz_diagnostic(report: dict) -> int:
                         if not sm:
                             continue
                         static_off = int(sm.group(1), 16)
-                        if 0xDAA20 <= static_off <= 0xDAB20:
+                        if (0xDAA1C <= static_off <= 0xDAB20) or (0xDAE40 <= static_off <= 0xDAF40):
                             daa_context.append({
                                 "off": f"0x{static_off:x}",
                                 "op": sm.group(2).strip(),
@@ -765,7 +765,7 @@ def run_boz_diagnostic(report: dict) -> int:
                     daa_path.write_text(
                         json.dumps(
                             {
-                                "range": ["0xdaa20", "0xdab20"],
+                                "ranges": [["0xdaa1c", "0xdab20"], ["0xdae40", "0xdaf40"]],
                                 "instructions": daa_context,
                             },
                             indent=2,
