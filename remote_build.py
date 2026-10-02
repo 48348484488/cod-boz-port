@@ -258,6 +258,7 @@ def run_boz_diagnostic(report: dict) -> int:
 
     env = os.environ.copy()
     env["GL_UPLOAD_TRACE"] = "1"
+    env["BOZ_NULL_OBJECT_TRACE"] = "1"
     env.setdefault("SDL_VIDEODRIVER", "x11")
     env["LIBGL_ALWAYS_SOFTWARE"] = "1"
     env["LD_LIBRARY_PATH"] = "/usr/lib/arm-linux-gnueabihf:/lib/arm-linux-gnueabihf"
