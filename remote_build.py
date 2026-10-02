@@ -91,6 +91,92 @@ def write_report(report: dict) -> None:
     temporary.replace(out)
 
 
+def build_focus_probe_plan(disassembly: str, trace: str, limit: int = 64) -> dict:
+    manager_match = re.search(r"\\[D8FF0_ENTER\\].*?manager=([0-9a-fA-F]+)", trace)
+    if not manager_match:
+        return {"version": 1, "manager": None, "hot_sites": [], "probes": []}
+
+    manager = int(manager_match.group(1), 16)
+    before_lookup = trace[:manager_match.start()]
+    hot_sites = []
+    hit_re = re.compile(
+        r"\\[TREE_PROBE\\] off=([0-9a-fA-F]+).*?"
+        r"r4=([0-9a-fA-F]+).*?r5=([0-9a-fA-F]+)"
+    )
+    for hit in hit_re.finditer(before_lookup):
+        off = int(hit.group(1), 16)
+        r4 = int(hit.group(2), 16)
+        r5 = int(hit.group(3), 16)
+        if r4 == manager or r5 == manager:
+            hot_sites.append(off)
+
+    hot_sites = sorted(set(hot_sites))
+    if not hot_sites:
+        return {
+            "version": 1,
+            "manager": f"0x{manager:08x}",
+            "hot_sites": [],
+            "probes": [],
+        }
+
+    instruction_re = re.compile(
+        r"^\\s*([0-9a-fA-F]+):\\s+(?:[0-9a-fA-F]{2,8}(?:\\s+[0-9a-fA-F]{2,8})*\\s+)(.+)$"
+    )
+    blocked = {0xD8984, 0xD8FF0, 0xD8FFA, 0xDA6C6, 0xDB31E, 0x254F44}
+    ranked = []
+    seen = set()
+    for line in disassembly.splitlines():
+        match = instruction_re.match(line)
+        if not match:
+            continue
+        off = int(match.group(1), 16)
+        if off in blocked or off & 1 or not (0xD6000 <= off < 0xDB800):
+            continue
+        distance = min(abs(off - hot) for hot in hot_sites)
+        if distance > 0x80:
+            continue
+        op = match.group(2).lower()
+        score = max(0, 0x80 - distance)
+        reasons = [f"near_manager_hot_site:{distance:#x}"]
+        if off in hot_sites:
+            score += 100
+            reasons.append("runtime_manager_identity")
+        if "str" in op:
+            score += 35
+            reasons.append("store")
+        if "#4]" in op:
+            score += 55
+            reasons.append("plus4_link")
+        if re.search(r"\\bblx?\\b", op):
+            score += 25
+            reasons.append("call")
+        if "ldr" in op:
+            score += 8
+            reasons.append("load")
+        if "cmp" in op:
+            score += 4
+            reasons.append("compare")
+        if off not in seen:
+            seen.add(off)
+            ranked.append({
+                "off": off,
+                "mode": "thumb16",
+                "score": score,
+                "distance": distance,
+                "reasons": reasons,
+                "line": line.strip(),
+            })
+
+    ranked.sort(key=lambda item: (-item["score"], item["distance"], item["off"]))
+    return {
+        "version": 1,
+        "manager": f"0x{manager:08x}",
+        "hot_sites": [f"0x{off:x}" for off in hot_sites],
+        "count": min(limit, len(ranked)),
+        "probes": ranked[:limit],
+    }
+
+
 class ArtifactRequestHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(PUBLIC), **kwargs)
@@ -432,12 +518,89 @@ def run_boz_diagnostic(report: dict) -> int:
                                     report["boz_mass_probe_hits"] = mass_out.count("[TREE_PROBE]")
                                     report["boz_mass_probe_trace"] = str(mass_trace)
                                     report["boz_mass_probe_analysis"] = analyze_boz_output(mass_out)
+
+                                    focus_plan = build_focus_probe_plan(
+                                        auto_dis.read_text(encoding="utf-8", errors="replace"),
+                                        mass_out,
+                                        limit=64,
+                                    )
+                                    focus_path = PUBLIC / "boz-focus-plan.json"
+                                    focus_path.write_text(
+                                        json.dumps(focus_plan, indent=2) + "\n",
+                                        encoding="utf-8",
+                                    )
+                                    report["boz_focus_plan"] = str(focus_path)
+                                    report["boz_focus_hot_sites"] = focus_plan.get("hot_sites", [])
+                                    focus_probes = focus_plan.get("probes", [])
+                                    focus_env_text = ",".join(
+                                        f"0x{int(item['off']):x}" for item in focus_probes
+                                    )
+                                    print(
+                                        f"[FOCUS_PLAN] manager={focus_plan.get('manager')} "
+                                        f"hot={len(focus_plan.get('hot_sites', []))} "
+                                        f"probes={len(focus_probes)} artifact={focus_path}",
+                                        flush=True,
+                                    )
+
+                                    focus_rc = None
+                                    focus_hits = 0
+                                    focus_analysis = None
+                                    if focus_env_text and os.environ.get("BOZ_AUTO_FOCUS_PROBE", "1") == "1":
+                                        focus_env = env.copy()
+                                        focus_env["BOZ_MASS_PROBES"] = focus_env_text
+                                        print(
+                                            f"[FOCUS_RUN] launching count={len(focus_probes)}",
+                                            flush=True,
+                                        )
+                                        try:
+                                            focus = subprocess.run(
+                                                cmd,
+                                                cwd=ROOT,
+                                                env=focus_env,
+                                                text=True,
+                                                stdout=subprocess.PIPE,
+                                                stderr=subprocess.STDOUT,
+                                                timeout=int(os.environ.get("BOZ_FOCUS_RUN_TIMEOUT", "60")),
+                                            )
+                                            focus_out = focus.stdout or ""
+                                            focus_trace = PUBLIC / "boz-focus-probe-trace.log"
+                                            focus_trace.write_text(focus_out, encoding="utf-8")
+                                            focus_rc = focus.returncode
+                                            focus_hits = focus_out.count("[TREE_PROBE]")
+                                            focus_analysis = analyze_boz_output(focus_out)
+                                            report["boz_focus_probe_rc"] = focus_rc
+                                            report["boz_focus_probe_hits"] = focus_hits
+                                            report["boz_focus_probe_trace"] = str(focus_trace)
+                                            report["boz_focus_probe_analysis"] = focus_analysis
+                                            print(
+                                                f"[FOCUS_RUN] rc={focus_rc} hits={focus_hits} "
+                                                f"artifact={focus_trace}",
+                                                flush=True,
+                                            )
+                                            for focus_line in focus_out.splitlines():
+                                                if focus_line.startswith((
+                                                    "[TREE_PROBE]",
+                                                    "[D8FF0_",
+                                                    "[NULL_OBJECT]",
+                                                    "[NULL_FLOW]",
+                                                )):
+                                                    print("[FOCUS_RUN] " + focus_line, flush=True)
+                                        except subprocess.TimeoutExpired:
+                                            focus_rc = 124
+                                            report["boz_focus_probe_rc"] = 124
+                                            report["boz_focus_probe_error"] = "timeout"
+                                            print("[FOCUS_RUN] timed out", flush=True)
+
                                     compare = {
                                         "baseline_rc": p.returncode,
                                         "mass_probe_rc": mass.returncode,
+                                        "focus_probe_rc": focus_rc,
                                         "baseline_analysis": diagnosis,
                                         "mass_probe_analysis": report["boz_mass_probe_analysis"],
+                                        "focus_probe_analysis": focus_analysis,
                                         "tree_probe_hits": report["boz_mass_probe_hits"],
+                                        "focus_probe_hits": focus_hits,
+                                        "focus_hot_sites": focus_plan.get("hot_sites", []),
                                         "same_empty_registry_tree": bool(
                                             diagnosis.get("empty_registry_tree")
                                             and report["boz_mass_probe_analysis"].get("empty_registry_tree")
