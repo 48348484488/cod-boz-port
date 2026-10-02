@@ -450,6 +450,35 @@ def run_boz_diagnostic(report: dict) -> int:
     print(f"[RUNNER] BOZ rc={p.returncode}", flush=True)
     objdump = shutil.which("arm-linux-gnueabihf-objdump")
     if objdump:
+        arm_raw = pathlib.Path("/tmp/boz-mapped-254e80.bin")
+        if arm_raw.is_file():
+            arm_dis = subprocess.run(
+                [objdump, "-D", "-b", "binary", "-m", "arm",
+                 "--adjust-vma", hex(0x254E80), str(arm_raw)],
+                text=True, capture_output=True, check=False,
+            )
+            arm_path = PUBLIC / "boz-arm-caller.txt"
+            arm_path.write_text(arm_dis.stdout, encoding="utf-8")
+            report["boz_arm_caller"] = str(arm_path)
+            report["boz_arm_caller_rc"] = arm_dis.returncode
+            print(
+                f"[ARM_CALLER] region=0x254e80..0x255180 rc={arm_dis.returncode} artifact={arm_path}",
+                flush=True,
+            )
+            arm_lines = arm_dis.stdout.splitlines()
+            for index, arm_line in enumerate(arm_lines):
+                low = arm_line.lower()
+                if arm_line.lstrip().startswith("254f44:"):
+                    lo = max(0, index - 12)
+                    hi = min(len(arm_lines), index + 20)
+                    for ctx_line in arm_lines[lo:hi]:
+                        print("[ARM_CALLER_CTX] " + ctx_line, flush=True)
+                if ("\tbl" in low or " bl" in low) and any(
+                    target in low
+                    for target in ("da9b6", "da1a0", "da46c", "dae62", "d8ff0")
+                ):
+                    print("[ARM_CALLER_XREF] " + arm_line, flush=True)
+
         for raw, off in ((pathlib.Path("/tmp/boz-mapped-d6000.bin"), 0xD6000),
                          (pathlib.Path("/tmp/boz-mapped-d8e80.bin"), 0xD8800),
                          (pathlib.Path("/tmp/boz-mapped-da680.bin"), 0xDA680),
