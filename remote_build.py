@@ -1435,7 +1435,7 @@ def run_boz_diagnostic(report: dict) -> int:
                                         mass_norm.splitlines()
                                     ):
                                         pm = re.match(
-                                            r"^\\[TREE_PROBE\\](?: mode=[^ ]+)? off=0*([0-9a-fA-F]+) (.*)$",
+                                            r"^\[TREE_PROBE\](?: mode=[^ ]+)? off=0*([0-9a-fA-F]+) (.*)$",
                                             runtime_line.strip(),
                                         )
                                         if not pm:
@@ -1504,6 +1504,8 @@ def run_boz_diagnostic(report: dict) -> int:
                                     )
 
                                     sentinel_writes = []
+                                    late_sentinel_writes = []
+                                    late_write_focus = None
                                     if sentinel_match:
                                         sentinel_value = int(sentinel_match.group(1), 16)
                                         plan_by_off = {
@@ -1553,6 +1555,70 @@ def run_boz_diagnostic(report: dict) -> int:
                                                 "sentinel": f"0x{sentinel_value:08x}",
                                                 "phase": "before_D8FF0",
                                             })
+
+                                        # The probe fires before the original instruction.
+                                        # Therefore a post-lookup `str src, [sentinel, #4]`
+                                        # with a non-zero source is the exact late writer
+                                        # that populates the registry root too late for D8FF0.
+                                        post_lookup_text = (
+                                            mass_norm.split("[D8FF0_ENTER]", 1)[1]
+                                            if "[D8FF0_ENTER]" in mass_norm else ""
+                                        )
+                                        for runtime_line in post_lookup_text.splitlines():
+                                            pm = probe_re.match(runtime_line.strip())
+                                            if not pm:
+                                                continue
+                                            off = int(pm.group(1), 16)
+                                            candidate = plan_by_off.get(off)
+                                            if not candidate:
+                                                continue
+                                            static_line = candidate.get("line", "")
+                                            sm = store_re.search(static_line)
+                                            if not sm:
+                                                continue
+                                            regs = {
+                                                name.lower(): int(value, 16)
+                                                for name, value in reg_re.findall(pm.group(2))
+                                            }
+                                            src_reg = sm.group(1).lower()
+                                            base_reg = sm.group(2).lower()
+                                            if regs.get(base_reg) != sentinel_value:
+                                                continue
+                                            event = {
+                                                "off": f"0x{off:x}",
+                                                "static": static_line,
+                                                "base_register": base_reg,
+                                                "source_register": src_reg,
+                                                "source_value": (
+                                                    f"0x{regs[src_reg]:08x}"
+                                                    if src_reg in regs else None
+                                                ),
+                                                "sentinel": f"0x{sentinel_value:08x}",
+                                                "phase": "after_D8FF0",
+                                            }
+                                            late_sentinel_writes.append(event)
+
+                                        first_late_nonzero = next(
+                                            (
+                                                item for item in late_sentinel_writes
+                                                if item.get("source_value")
+                                                not in (None, "0x00000000")
+                                            ),
+                                            None,
+                                        )
+                                        if first_late_nonzero:
+                                            late_write_focus = int(
+                                                first_late_nonzero["off"], 16
+                                            )
+                                            print(
+                                                "[LATE_ROOT_WRITE] "
+                                                f"off={first_late_nonzero['off']} "
+                                                f"src={first_late_nonzero['source_register']} "
+                                                f"value={first_late_nonzero['source_value']} "
+                                                f"base={first_late_nonzero['base_register']}",
+                                                flush=True,
+                                            )
+
                                         root_events = []
                                         for runtime_line in pre_lookup_text.splitlines():
                                             pm = probe_re.match(runtime_line.strip())
@@ -1601,17 +1667,32 @@ def run_boz_diagnostic(report: dict) -> int:
                                             json.dumps({
                                                 "sentinel": f"0x{sentinel_value:08x}",
                                                 "writes_before_lookup": sentinel_writes,
-                                                "nonzero_write_seen": any(
+                                                "writes_after_lookup": late_sentinel_writes,
+                                                "first_nonzero_write_after_lookup": first_late_nonzero,
+                                                "nonzero_write_seen_before_lookup": any(
                                                     w.get("source_value") not in (None, "0x00000000")
                                                     for w in sentinel_writes
+                                                ),
+                                                "registration_after_lookup": bool(
+                                                    first_late_nonzero
+                                                    and not any(
+                                                        w.get("source_value")
+                                                        not in (None, "0x00000000")
+                                                        for w in sentinel_writes
+                                                    )
                                                 ),
                                             }, indent=2) + "\n",
                                             encoding="utf-8",
                                         )
                                         report["boz_sentinel_writes"] = str(writes_path)
                                         report["boz_sentinel_write_count"] = len(sentinel_writes)
+                                        report["boz_late_sentinel_write_count"] = len(
+                                            late_sentinel_writes
+                                        )
+                                        report["boz_first_late_root_write"] = first_late_nonzero
                                         print(
                                             f"[SENTINEL_FLOW] writes_before_lookup={len(sentinel_writes)} "
+                                            f"writes_after_lookup={len(late_sentinel_writes)} "
                                             f"artifact={writes_path}",
                                             flush=True,
                                         )
@@ -1624,8 +1705,8 @@ def run_boz_diagnostic(report: dict) -> int:
                                                 flush=True,
                                             )
 
-                                    focus_center = None
-                                    if sentinel_match:
+                                    focus_center = late_write_focus
+                                    if focus_center is None and sentinel_match:
                                         sentinel_hex = sentinel_match.group(1).lower()
                                         pre_lookup = mass_norm.split("[D8FF0_ENTER]", 1)[0]
                                         for probe_line in pre_lookup.splitlines():
@@ -1696,7 +1777,7 @@ def run_boz_diagnostic(report: dict) -> int:
                                         if focus_offsets:
                                             focus_env = env.copy()
                                             focus_env["BOZ_MASS_PROBES"] = ",".join(
-                                                f"0x{x:x}" for x in focus_offsets
+                                                f"t:0x{x:x}" for x in focus_offsets
                                             )
                                             print(
                                                 f"[FOCUS_RUN] center=0x{focus_center:x} "
