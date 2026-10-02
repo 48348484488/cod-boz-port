@@ -368,7 +368,8 @@ def run_boz_diagnostic(report: dict) -> int:
                      "--adjust-vma", hex(off), str(raw)],
                     text=True, capture_output=True, check=False)
                 print(f"[MAPPED_DISASM] BOZ+0x{off:06x} rc={dis.returncode}", flush=True)
-                print(dis.stdout, flush=True)
+                # Run high-value automated analysis before emitting any verbose
+                # disassembly so Render log limits cannot hide the result.
                 if off == 0xD6000 and dis.returncode == 0:
                     auto_dis = pathlib.Path("/tmp/boz-investigator.disasm")
                     auto_dis.write_text(dis.stdout, encoding="utf-8")
@@ -389,6 +390,13 @@ def run_boz_diagnostic(report: dict) -> int:
                             print("[AUTO_INVESTIGATOR] " + inv_line, flush=True)
                     if inv.stderr:
                         print("[AUTO_INVESTIGATOR_ERR] " + inv.stderr.strip(), flush=True)
+                    # The complete disassembly is already preserved in auto_dis.
+                    # Only print a compact preview after the investigator output.
+                    for dis_line in dis.stdout.splitlines()[:24]:
+                        print("[MAPPED_PREVIEW] " + dis_line, flush=True)
+                elif off != 0xD8800:
+                    for dis_line in dis.stdout.splitlines()[:24]:
+                        print("[MAPPED_PREVIEW] " + dis_line, flush=True)
                 if off == 0xD8800:
                     lines = dis.stdout.splitlines()
                     interesting = []
