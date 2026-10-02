@@ -1773,6 +1773,23 @@ def run_boz_diagnostic(report: dict) -> int:
                                             if choose:
                                                 focus_offsets.append(ins_off)
                                             previous_was_call = mnemonic in ("bl", "blx", "bl.w", "blx.w")
+                                        focus_function_start = next(
+                                            (
+                                                ins_off
+                                                for ins_off, mnemonic, dis_line in reversed(decoded)
+                                                if ins_off <= focus_center
+                                                and "lr" in dis_line.lower()
+                                                and (
+                                                    "push" in mnemonic
+                                                    or "stmdb" in mnemonic
+                                                    or "push" in dis_line.lower()
+                                                    or "stmdb" in dis_line.lower()
+                                                )
+                                            ),
+                                            None,
+                                        )
+                                        if focus_function_start is not None:
+                                            focus_offsets.append(focus_function_start)
                                         focus_offsets = sorted(set(focus_offsets))[:24]
                                         if focus_offsets:
                                             focus_env = env.copy()
@@ -1803,8 +1820,35 @@ def run_boz_diagnostic(report: dict) -> int:
                                                     encoding="utf-8",
                                                 )
                                                 focus_analysis = analyze_boz_output(focus_out)
+                                                late_writer_entry = None
+                                                if focus_function_start is not None:
+                                                    entry_re = re.compile(
+                                                        r"^\\[TREE_PROBE\\](?: mode=[^ ]+)? off=0*([0-9a-fA-F]+).*?\\blr=([0-9a-fA-F]{8})\\b"
+                                                    )
+                                                    for entry_line in focus_out.replace("\\\\n", "\\n").splitlines():
+                                                        em = entry_re.match(entry_line.strip())
+                                                        if not em:
+                                                            continue
+                                                        if int(em.group(1), 16) != focus_function_start:
+                                                            continue
+                                                        late_writer_entry = {
+                                                            "function_start": f"0x{focus_function_start:x}",
+                                                            "caller_lr": f"0x{int(em.group(2), 16):08x}",
+                                                            "line": entry_line.strip(),
+                                                        }
+                                                        print(
+                                                            f"[LATE_WRITER_ENTRY] function=0x{focus_function_start:x} "
+                                                            f"caller_lr=0x{int(em.group(2), 16):08x}",
+                                                            flush=True,
+                                                        )
+                                                        break
                                                 focus_result = {
                                                     "center": f"0x{focus_center:x}",
+                                                    "function_start": (
+                                                        f"0x{focus_function_start:x}"
+                                                        if focus_function_start is not None else None
+                                                    ),
+                                                    "late_writer_entry": late_writer_entry,
                                                     "probe_count": len(focus_offsets),
                                                     "rc": focus.returncode,
                                                     "tree_probe_hits": focus_out.count("[TREE_PROBE]"),
