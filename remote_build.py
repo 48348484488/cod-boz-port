@@ -437,17 +437,37 @@ def run_boz_diagnostic(report: dict) -> int:
                     # Cross-reference the strongest concrete object stores. This
                     # exposes direct callers in the same mapped region and avoids another
                     # manual objdump/search cycle.
-                    strong_sites = ("da228", "da50a", "da816")
+                    strong_sites = ("da228", "da50a", "da816", "daef2")
                     xrefs = []
+                    # Approximate Thumb function boundaries around each strong store using
+                    # PUSH as entry and POP/BX LR as exit, then search calls to the entry.
+                    functions = []
+                    import re
                     for site in strong_sites:
+                        site_idx = next((i for i, ln in enumerate(lines) if ln.lstrip().lower().startswith(site + ":")), None)
+                        if site_idx is None:
+                            continue
+                        start = site_idx
+                        while start > 0 and "push" not in lines[start].lower():
+                            start -= 1
+                        end = site_idx
+                        while end + 1 < len(lines) and not ("pop" in lines[end].lower() or "bx\tlr" in lines[end].lower()):
+                            end += 1
+                        m = re.match(r"\s*([0-9a-f]+):", lines[start].lower())
+                        entry = m.group(1) if m else site
+                        fn = {"site": site, "entry": entry, "start": lines[start].strip(), "end": lines[end].strip()}
+                        functions.append(fn)
                         for line in lines:
                             low = line.lower()
-                            if ("bl" in low) and (("0x" + site) in low or (" " + site) in low):
-                                xrefs.append({"target": site, "caller": line.strip()})
+                            if ("bl" in low) and (("0x" + entry) in low or ("\t" + entry) in low or (" " + entry) in low):
+                                xrefs.append({"site": site, "target": entry, "caller": line.strip()})
+                    shortlist_lines.append("FUNCTION_FAMILIES")
+                    for fn in functions:
+                        shortlist_lines.append(f"site={fn['site']} entry={fn['entry']} start={fn['start']} end={fn['end']}")
                     shortlist_lines.append("DIRECT_XREFS")
                     if xrefs:
                         for x in xrefs:
-                            shortlist_lines.append(f"target={x['target']} caller={x['caller']}")
+                            shortlist_lines.append(f"site={x.get('site','')} target={x['target']} caller={x['caller']}")
                     else:
                         shortlist_lines.append("none_in_mapped_region")
                     report["manager_tree_direct_xrefs"] = xrefs
