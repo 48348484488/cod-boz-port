@@ -262,6 +262,19 @@ def run_boz_diagnostic(report: dict) -> int:
     env["LIBGL_ALWAYS_SOFTWARE"] = "1"
     env["LD_LIBRARY_PATH"] = "/usr/lib/arm-linux-gnueabihf:/lib/arm-linux-gnueabihf"
     env["BOZ_TRACE_ARTIFACT"] = str(trace)
+    objdump = shutil.which("arm-linux-gnueabihf-objdump")
+    if objdump:
+        image_bytes = image.read_bytes()
+        for off, size in ((0xDA680, 0x120), (0xDB2E0, 0x100)):
+            raw = pathlib.Path(f"/tmp/boz-code-{off:06x}.bin")
+            raw.write_bytes(image_bytes[off:off + size])
+            dis = subprocess.run(
+                [objdump, "-D", "-b", "binary", "-m", "arm", "-M", "force-thumb",
+                 "--adjust-vma", hex(off), str(raw)],
+                text=True, capture_output=True, check=False)
+            print(f"[DISASM] BOZ+0x{off:06x} rc={dis.returncode}", flush=True)
+            print(dis.stdout, flush=True)
+
     display_size = os.environ.get("BOZ_DISPLAY_SIZE", "640x480")
     qemu_arm = shutil.which(os.environ.get("QEMU_ARM", "qemu-arm"))
     if not qemu_arm:
