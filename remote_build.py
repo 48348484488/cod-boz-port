@@ -644,24 +644,39 @@ def run_boz_diagnostic(report: dict) -> int:
                                                 {"off": off, "line": line}
                                                 for off, line in function_slice
                                             ]
-                                            constructor_info["calls"] = [
-                                                {"off": off, "line": line}
-                                                for off, line in function_slice
-                                                if re.search(r"\\bblx?\\b", line.lower())
-                                            ]
+                                            constructor_info["calls"] = []
+                                            for off, line in function_slice:
+                                                parts = line.lower().split()
+                                                for token_index, token in enumerate(parts[:-1]):
+                                                    if token in ("bl", "blx"):
+                                                        try:
+                                                            target = int(parts[token_index + 1], 16)
+                                                        except ValueError:
+                                                            target = None
+                                                        constructor_info["calls"].append({
+                                                            "off": off,
+                                                            "target": target,
+                                                            "line": line,
+                                                        })
+                                                        break
                                     function_entry = constructor_info.get("function_start")
                                     constructor_callers = []
                                     if function_entry is not None:
-                                        call_target_re = re.compile(
-                                            r"\\bblx?\\s+(?:0x)?([0-9a-fA-F]+)\\b"
-                                        )
                                         for off, line in parsed_disasm:
-                                            match = call_target_re.search(line)
-                                            if match and int(match.group(1), 16) == function_entry:
-                                                constructor_callers.append({
-                                                    "off": off,
-                                                    "line": line,
-                                                })
+                                            parts = line.lower().split()
+                                            for token_index, token in enumerate(parts[:-1]):
+                                                if token not in ("bl", "blx"):
+                                                    continue
+                                                try:
+                                                    target = int(parts[token_index + 1], 16)
+                                                except ValueError:
+                                                    target = None
+                                                if target == function_entry:
+                                                    constructor_callers.append({
+                                                        "off": off,
+                                                        "line": line,
+                                                    })
+                                                break
                                     constructor_info["callers"] = constructor_callers
                                     constructor_info["post_sentinel_calls"] = [
                                         call
