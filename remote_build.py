@@ -582,6 +582,107 @@ def run_boz_diagnostic(report: dict) -> int:
                 ):
                     print("[ARM_CALLER_XREF] " + arm_line, flush=True)
 
+        arm34_raw = pathlib.Path("/tmp/boz-mapped-arm34.bin")
+        if arm34_raw.is_file():
+            arm34_dis = subprocess.run(
+                [objdump, "-D", "-b", "binary", "-m", "arm",
+                 "--adjust-vma", hex(0x34B000), str(arm34_raw)],
+                text=True, capture_output=True, check=False,
+            )
+            arm34_txt = PUBLIC / "boz-arm34-caller.txt"
+            arm34_txt.write_text(arm34_dis.stdout, encoding="utf-8")
+            arm34_parsed = []
+            for line in arm34_dis.stdout.splitlines():
+                m = re.match(r"^\\s*([0-9a-fA-F]+):\\s+[0-9a-fA-F]+\\s+(.+)$", line)
+                if m:
+                    arm34_parsed.append(
+                        (int(m.group(1), 16), m.group(2).strip(), line.strip())
+                    )
+
+            return_off = 0x34C1C0
+            return_i = next(
+                (i for i, (off, _, _) in enumerate(arm34_parsed) if off == return_off),
+                None,
+            )
+            arm34_info = {
+                "return_address": "0x34c1c0",
+                "callsite": None,
+                "call_instruction": None,
+                "function_start": None,
+                "function_end": None,
+                "direct_callers": [],
+                "context": [],
+            }
+            if return_i is not None:
+                lo = max(0, return_i - 12)
+                hi = min(len(arm34_parsed), return_i + 16)
+                arm34_info["context"] = [
+                    {"off": f"0x{off:x}", "op": op}
+                    for off, op, _ in arm34_parsed[lo:hi]
+                ]
+
+                for i in range(return_i - 1, max(-1, return_i - 5), -1):
+                    off, op, _ = arm34_parsed[i]
+                    if re.search(r"\\bblx?\\b", op):
+                        arm34_info["callsite"] = f"0x{off:x}"
+                        arm34_info["call_instruction"] = op
+                        break
+
+                start_i = return_i
+                while start_i > 0:
+                    op = arm34_parsed[start_i][1].lower()
+                    if (
+                        ("push" in op and "lr" in op)
+                        or ("stmdb" in op and "sp!" in op and "lr" in op)
+                    ):
+                        break
+                    start_i -= 1
+                end_i = return_i
+                while end_i + 1 < len(arm34_parsed):
+                    op = arm34_parsed[end_i][1].lower()
+                    if (
+                        ("pop" in op and "pc" in op)
+                        or ("ldmia" in op and "sp!" in op and "pc" in op)
+                        or op.startswith("bx\\tlr")
+                        or op.startswith("bx lr")
+                    ):
+                        break
+                    end_i += 1
+                if start_i <= return_i:
+                    fn_start = arm34_parsed[start_i][0]
+                    fn_end = arm34_parsed[end_i][0]
+                    arm34_info["function_start"] = f"0x{fn_start:x}"
+                    arm34_info["function_end"] = f"0x{fn_end:x}"
+                    for off, op, raw_line in arm34_parsed:
+                        cm = re.search(r"\\bblx?\\s+(?:0x)?([0-9a-fA-F]+)\\b", op)
+                        if cm and int(cm.group(1), 16) == fn_start:
+                            arm34_info["direct_callers"].append({
+                                "off": f"0x{off:x}",
+                                "line": raw_line,
+                            })
+
+            arm34_json = PUBLIC / "boz-arm34-caller.json"
+            arm34_json.write_text(
+                json.dumps(arm34_info, indent=2) + "\\n",
+                encoding="utf-8",
+            )
+            report["boz_arm34_caller"] = str(arm34_json)
+            report["boz_arm34_caller_text"] = str(arm34_txt)
+            print(
+                "[ARM34] "
+                f"callsite={arm34_info['callsite']} "
+                f"insn={arm34_info['call_instruction']} "
+                f"start={arm34_info['function_start']} "
+                f"end={arm34_info['function_end']} "
+                f"callers={len(arm34_info['direct_callers'])}",
+                flush=True,
+            )
+            for item in arm34_info["context"]:
+                print(
+                    f"[ARM34_CTX] {item['off']} {item['op']}",
+                    flush=True,
+                )
+
         for raw, off in ((pathlib.Path("/tmp/boz-mapped-d6000.bin"), 0xD6000),
                          (pathlib.Path("/tmp/boz-mapped-d8e80.bin"), 0xD8800),
                          (pathlib.Path("/tmp/boz-mapped-da680.bin"), 0xDA680),
