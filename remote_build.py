@@ -742,12 +742,48 @@ def run_boz_diagnostic(report: dict) -> int:
                                         (off, line) for off, line in parsed_disasm
                                         if 0xDA4DC <= off <= 0xDA50A
                                     ]
+                                    static_transition = {
+                                        "runtime_bracket": {
+                                            "before": "0xda4dc root=0",
+                                            "after": "0xda50a root!=0",
+                                        },
+                                        "instructions": [
+                                            {"off": f"0x{off:x}", "line": line}
+                                            for off, line in zoom_static
+                                        ],
+                                        "store_candidates": [
+                                            {"off": f"0x{off:x}", "line": line}
+                                            for off, line in zoom_static
+                                            if "str" in line.lower() and "[sp" not in line.lower()
+                                        ],
+                                    }
+                                    static_transition_path = PUBLIC / "boz-root-transition-static.json"
+                                    static_transition_path.write_text(
+                                        json.dumps(static_transition, indent=2) + "\n",
+                                        encoding="utf-8",
+                                    )
+                                    report["boz_root_transition_static"] = str(static_transition_path)
+                                    print(
+                                        f"[ROOT_STATIC] instructions={len(zoom_static)} "
+                                        f"stores={len(static_transition['store_candidates'])}",
+                                        flush=True,
+                                    )
+                                    for item in static_transition["instructions"]:
+                                        print(
+                                            f"[ROOT_STATIC] {item['off']} {item['line']}",
+                                            flush=True,
+                                        )
+                                    for item in static_transition["store_candidates"]:
+                                        print(
+                                            f"[ROOT_STATIC_CANDIDATE] {item['off']} {item['line']}",
+                                            flush=True,
+                                        )
                                     zoom_offsets = [0xDAA84] + [
                                         off for off, _ in zoom_static if off != 0xDAA84
                                     ]
                                     zoom_rc = None
                                     zoom_hits = 0
-                                    if zoom_static and os.environ.get("BOZ_AUTO_ROOT_ZOOM", "1") == "1":
+                                    if zoom_static and os.environ.get("BOZ_AUTO_ROOT_ZOOM", "0") == "1":
                                         zoom_env = env.copy()
                                         zoom_env["BOZ_MASS_PROBES"] = ",".join(
                                             f"0x{off:x}" for off in zoom_offsets
@@ -764,7 +800,7 @@ def run_boz_diagnostic(report: dict) -> int:
                                                 text=True,
                                                 stdout=subprocess.PIPE,
                                                 stderr=subprocess.STDOUT,
-                                                timeout=int(os.environ.get("BOZ_ROOT_ZOOM_TIMEOUT", "60")),
+                                                timeout=int(os.environ.get("BOZ_ROOT_ZOOM_TIMEOUT", "30")),
                                             )
                                             zoom_out = (zoom.stdout or "").replace("\\n", "\n")
                                             zoom_rc = zoom.returncode
