@@ -144,11 +144,28 @@ static int g_d8ffa_trace_armed;
 static int g_d8984_trace_armed;
 static uint32_t g_d8ff0_manager;
 typedef struct { uint32_t off; uint16_t saved; int armed; } boz_probe_t;
-static boz_probe_t g_tree_probes[] = {
+#define BOZ_MAX_MASS_PROBES 64u
+static boz_probe_t g_tree_probes[BOZ_MAX_MASS_PROBES] = {
     {0x000da228u,0,0},{0x000da50au,0,0},{0x000da50cu,0,0},{0x000da50eu,0,0},{0x000da510u,0,0},{0x000da816u,0,0},{0x000daef2u,0,0}
 };
+static unsigned g_tree_probe_count = 7u;
+static void load_mass_probe_env(void) {
+    const char *s=getenv("BOZ_MASS_PROBES");
+    if (!s || !*s) return;
+    while (*s && g_tree_probe_count<BOZ_MAX_MASS_PROBES) {
+        char *end=NULL; unsigned long off=strtoul(s,&end,0);
+        if (end==s) { while (*s && *s!=',') ++s; if (*s==',') ++s; continue; }
+        if (off<0x41d970u && !(off&1u)) {
+            bool dup=false;
+            for (unsigned i=0;i<g_tree_probe_count;++i) if (g_tree_probes[i].off==(uint32_t)off) { dup=true; break; }
+            if (!dup) g_tree_probes[g_tree_probe_count++]=(boz_probe_t){(uint32_t)off,0,0};
+        }
+        s=end; while (*s && *s!=',') ++s; if (*s==',') ++s;
+    }
+    fprintf(stderr,"[MASS_PROBE] candidates=%u\\n",g_tree_probe_count);
+}
 static void arm_tree_probes(void) {
-    for (unsigned i=0;i<sizeof(g_tree_probes)/sizeof(g_tree_probes[0]);++i) {
+    for (unsigned i=0;i<g_tree_probe_count;++i) {
         uint16_t *site=(uint16_t *)(uintptr_t)(g_loaded_base+g_tree_probes[i].off);
         g_tree_probes[i].saved=*site; *site=0xbe00u;
         __builtin___clear_cache((char *)site,(char *)(site+1)); g_tree_probes[i].armed=1;
