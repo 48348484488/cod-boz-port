@@ -316,6 +316,21 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
                 (unsigned long)uc->uc_mcontext.arm_r8,
                 (unsigned long)uc->uc_mcontext.arm_lr,
                 (unsigned long)uc->uc_mcontext.arm_cpsr);
+        {
+            uintptr_t lr = (uintptr_t)uc->uc_mcontext.arm_lr;
+            uintptr_t image_lo = g_loaded_base;
+            uintptr_t image_hi = g_loaded_base + 0x0041d970u;
+            if (lr >= image_lo + 16u && lr + 16u < image_hi) {
+                uint32_t *p = (uint32_t *)(lr - 16u);
+                fprintf(stderr,
+                        "[ARM_CALLER_WORDS] lr=%08lx "
+                        "m16=%08x m12=%08x m8=%08x m4=%08x "
+                        "p0=%08x p4=%08x p8=%08x p12=%08x\n",
+                        (unsigned long)lr,
+                        p[0], p[1], p[2], p[3],
+                        p[4], p[5], p[6], p[7]);
+            }
+        }
         uc->uc_mcontext.arm_pc = g_loaded_base + 0x00254f04u;
         return;
     }
