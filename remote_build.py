@@ -466,6 +466,104 @@ def run_boz_diagnostic(report: dict) -> int:
                 flush=True,
             )
             arm_lines = arm_dis.stdout.splitlines()
+
+            # Resolve the ARM dispatcher that indirectly reaches the late
+            # DA4DC insertion path. 0x254f40 is the BLX and 0x254f44 is its
+            # return address observed at runtime.
+            arm_parsed = []
+            for arm_line in arm_lines:
+                m = re.match(r"^\s*([0-9a-fA-F]+):\s+[0-9a-fA-F]+\s+(.+)$", arm_line)
+                if m:
+                    arm_parsed.append((int(m.group(1), 16), m.group(2).strip(), arm_line.strip()))
+
+            dispatch_site = 0x254F40
+            dispatch_index = next(
+                (i for i, (off, _, _) in enumerate(arm_parsed) if off == dispatch_site),
+                None,
+            )
+            dispatch_info = {
+                "site": "0x254f40",
+                "return": "0x254f44",
+                "indirect_vtable_slot": "0x0c",
+                "function_start": None,
+                "function_end": None,
+                "direct_callers": [],
+                "instructions": [],
+            }
+            if dispatch_index is not None:
+                start_i = dispatch_index
+                while start_i > 0:
+                    op = arm_parsed[start_i][1].lower()
+                    if (
+                        ("push" in op and "lr" in op)
+                        or ("stmdb" in op and "sp!" in op and "lr" in op)
+                    ):
+                        break
+                    start_i -= 1
+                end_i = dispatch_index
+                while end_i + 1 < len(arm_parsed):
+                    op = arm_parsed[end_i][1].lower()
+                    if (
+                        ("pop" in op and "pc" in op)
+                        or ("ldmia" in op and "sp!" in op and "pc" in op)
+                        or op.startswith("bx\tlr")
+                        or op.startswith("bx lr")
+                    ):
+                        break
+                    end_i += 1
+
+                fn = arm_parsed[start_i:end_i + 1]
+                if fn:
+                    fn_start = fn[0][0]
+                    fn_end = fn[-1][0]
+                    dispatch_info["function_start"] = f"0x{fn_start:x}"
+                    dispatch_info["function_end"] = f"0x{fn_end:x}"
+                    dispatch_info["instructions"] = [
+                        {"off": f"0x{off:x}", "op": op}
+                        for off, op, _ in fn
+                    ]
+
+                    # Direct ARM BL/BLX-immediate references inside the mapped
+                    # region. Indirect references remain explicitly unknown.
+                    for off, op, raw_line in arm_parsed:
+                        call_match = re.search(
+                            r"\bblx?\s+(?:0x)?([0-9a-fA-F]+)\b",
+                            op,
+                        )
+                        if call_match and int(call_match.group(1), 16) == fn_start:
+                            dispatch_info["direct_callers"].append({
+                                "off": f"0x{off:x}",
+                                "line": raw_line,
+                            })
+
+                    # The path at 254f2c..254f40 loads [object], then [vtable+12],
+                    # so preserve that relationship explicitly for the next pass.
+                    dispatch_info["dispatch_sequence"] = {
+                        "object_register": "r4",
+                        "arg1_register": "r7",
+                        "arg2_register": "r5",
+                        "vtable_load": "ldr r3, [r4]",
+                        "target_load": "ldr r3, [r3, #12]",
+                        "call": "blx r3",
+                    }
+
+            arm_dispatch_path = PUBLIC / "boz-arm-dispatch.json"
+            arm_dispatch_path.write_text(
+                json.dumps(dispatch_info, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            report["boz_arm_dispatch"] = str(arm_dispatch_path)
+            print(
+                "[ARM_DISPATCH] "
+                f"start={dispatch_info['function_start']} "
+                f"end={dispatch_info['function_end']} "
+                f"callers={len(dispatch_info['direct_callers'])} "
+                f"artifact={arm_dispatch_path}",
+                flush=True,
+            )
+            for caller in dispatch_info["direct_callers"]:
+                print("[ARM_DISPATCH_XREF] " + caller["line"], flush=True)
+
             for index, arm_line in enumerate(arm_lines):
                 low = arm_line.lower()
                 if arm_line.lstrip().startswith("254f44:"):
