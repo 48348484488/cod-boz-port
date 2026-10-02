@@ -880,6 +880,116 @@ def run_boz_diagnostic(report: dict) -> int:
                                             "[NULL_FLOW]",
                                         )):
                                             print("[MASS_PROBE_RUN] " + mass_line, flush=True)
+
+
+                                    # Auto-focus: if a pre-lookup probe already carries
+                                    # the same sentinel later observed by D8FF0, zoom into
+                                    # nearby real Thumb instruction boundaries in one more
+                                    # run. This turns the broad pass into a self-narrowing
+                                    # investigation without patching BOZ behavior.
+                                    sentinel_match = re.search(
+                                        r"\\[D8FF0_HASH\\].*sentinel=([0-9a-fA-F]+)",
+                                        mass_out,
+                                    )
+                                    focus_center = None
+                                    if sentinel_match:
+                                        sentinel_hex = sentinel_match.group(1).lower()
+                                        pre_lookup = mass_out.split("[D8FF0_ENTER]", 1)[0]
+                                        for probe_line in pre_lookup.splitlines():
+                                            if not probe_line.startswith("[TREE_PROBE]"):
+                                                continue
+                                            if sentinel_hex not in probe_line.lower():
+                                                continue
+                                            off_match = re.search(
+                                                r"off=0*([0-9a-fA-F]+)",
+                                                probe_line,
+                                            )
+                                            if off_match:
+                                                focus_center = int(off_match.group(1), 16)
+
+                                    if focus_center is not None:
+                                        instruction_offsets = []
+                                        for dis_line in auto_dis.read_text(
+                                            encoding="utf-8", errors="replace"
+                                        ).splitlines():
+                                            addr_match = re.match(
+                                                r"^\\s*([0-9a-fA-F]+):",
+                                                dis_line,
+                                            )
+                                            if not addr_match:
+                                                continue
+                                            ins_off = int(addr_match.group(1), 16)
+                                            if focus_center - 0x50 <= ins_off <= focus_center + 0x50:
+                                                instruction_offsets.append(ins_off)
+                                        focus_offsets = sorted(set(instruction_offsets))[:64]
+                                        if focus_offsets:
+                                            focus_env = env.copy()
+                                            focus_env["BOZ_MASS_PROBES"] = ",".join(
+                                                f"0x{x:x}" for x in focus_offsets
+                                            )
+                                            print(
+                                                f"[FOCUS_RUN] center=0x{focus_center:x} "
+                                                f"count={len(focus_offsets)}",
+                                                flush=True,
+                                            )
+                                            try:
+                                                focus = subprocess.run(
+                                                    cmd,
+                                                    cwd=ROOT,
+                                                    env=focus_env,
+                                                    text=True,
+                                                    stdout=subprocess.PIPE,
+                                                    stderr=subprocess.STDOUT,
+                                                    timeout=int(os.environ.get(
+                                                        "BOZ_FOCUS_RUN_TIMEOUT", "60"
+                                                    )),
+                                                )
+                                                focus_out = focus.stdout or ""
+                                                focus_trace = PUBLIC / "boz-focus-probe-trace.log"
+                                                focus_trace.write_text(
+                                                    focus_out,
+                                                    encoding="utf-8",
+                                                )
+                                                focus_analysis = analyze_boz_output(focus_out)
+                                                focus_result = {
+                                                    "center": f"0x{focus_center:x}",
+                                                    "probe_count": len(focus_offsets),
+                                                    "rc": focus.returncode,
+                                                    "tree_probe_hits": focus_out.count("[TREE_PROBE]"),
+                                                    "analysis": focus_analysis,
+                                                }
+                                                focus_json = PUBLIC / "boz-focus-analysis.json"
+                                                focus_json.write_text(
+                                                    json.dumps(focus_result, indent=2) + "\n",
+                                                    encoding="utf-8",
+                                                )
+                                                report["boz_focus_center"] = f"0x{focus_center:x}"
+                                                report["boz_focus_probe_count"] = len(focus_offsets)
+                                                report["boz_focus_probe_hits"] = focus_result["tree_probe_hits"]
+                                                report["boz_focus_probe_rc"] = focus.returncode
+                                                report["boz_focus_trace"] = str(focus_trace)
+                                                report["boz_focus_analysis"] = str(focus_json)
+                                                print(
+                                                    f"[FOCUS_RUN] rc={focus.returncode} "
+                                                    f"hits={focus_result['tree_probe_hits']} "
+                                                    f"artifact={focus_trace}",
+                                                    flush=True,
+                                                )
+                                                for focus_line in focus_out.splitlines():
+                                                    if focus_line.startswith((
+                                                        "[TREE_PROBE]",
+                                                        "[D8FF0_",
+                                                        "[NULL_OBJECT]",
+                                                        "[NULL_FLOW]",
+                                                    )):
+                                                        print(
+                                                            "[FOCUS_RUN] " + focus_line,
+                                                            flush=True,
+                                                        )
+                                            except subprocess.TimeoutExpired as exc:
+                                                report["boz_focus_probe_rc"] = 124
+                                                report["boz_focus_probe_error"] = "timeout"
+                                                print("[FOCUS_RUN] timed out", flush=True)
                                 except subprocess.TimeoutExpired as exc:
                                     report["boz_mass_probe_rc"] = 124
                                     report["boz_mass_probe_hits"] = 0
