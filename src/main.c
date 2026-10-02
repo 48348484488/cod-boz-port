@@ -139,7 +139,9 @@ static uint16_t g_da6c6_saved;
 static uint16_t g_d8ffa_saved;
 static uint16_t g_d8984_saved;
 static uint32_t g_arm_dispatch_saved;
+static uint32_t g_arm_callsite_saved;
 static int g_arm_dispatch_trace_armed;
+static int g_arm_callsite_trace_armed;
 static int g_d8ff0_trace_armed;
 static int g_da6c6_trace_armed;
 static int g_d8ffa_trace_armed;
@@ -184,6 +186,14 @@ static void arm_dispatch_trace(void) {
     g_arm_dispatch_trace_armed = 1;
 }
 
+static void arm_dispatch_callsite_trace(void) {
+    uint32_t *site = (uint32_t *)(uintptr_t)(g_loaded_base + 0x00254f40u);
+    g_arm_callsite_saved = *site;
+    *site = 0xe1200070u; /* ARM-state BKPT #0 */
+    __builtin___clear_cache((char *)site, (char *)site + sizeof(*site));
+    g_arm_callsite_trace_armed = 1;
+}
+
 static void arm_d8ff0_trace(void) {
     uint16_t *site = (uint16_t *)(uintptr_t)(g_loaded_base + 0x000d8ff0u);
     g_d8ff0_saved = *site;
@@ -220,6 +230,28 @@ static void arm_da6c6_trace(void) {
 static void crash_handler(int sig, siginfo_t *info, void *context) {
 #if defined(__arm__)
     ucontext_t *uc = (ucontext_t *)context;
+    if ((sig == SIGTRAP || sig == SIGILL) && g_arm_callsite_trace_armed &&
+        (uc->uc_mcontext.arm_pc == g_loaded_base + 0x00254f40u ||
+         uc->uc_mcontext.arm_pc == g_loaded_base + 0x00254f44u)) {
+        uint32_t *site = (uint32_t *)(uintptr_t)(g_loaded_base + 0x00254f40u);
+        *site = g_arm_callsite_saved;
+        __builtin___clear_cache((char *)site, (char *)site + sizeof(*site));
+        g_arm_callsite_trace_armed = 0;
+        fprintf(stderr,
+                "[ARM_DISPATCH_CALL] target=%08lx object=%08lx arg1=%08lx arg2=%08lx "
+                "r0=%08lx r1=%08lx r2=%08lx lr=%08lx cpsr=%08lx\n",
+                (unsigned long)uc->uc_mcontext.arm_r3,
+                (unsigned long)uc->uc_mcontext.arm_r4,
+                (unsigned long)uc->uc_mcontext.arm_r7,
+                (unsigned long)uc->uc_mcontext.arm_r5,
+                (unsigned long)uc->uc_mcontext.arm_r0,
+                (unsigned long)uc->uc_mcontext.arm_r1,
+                (unsigned long)uc->uc_mcontext.arm_r2,
+                (unsigned long)uc->uc_mcontext.arm_lr,
+                (unsigned long)uc->uc_mcontext.arm_cpsr);
+        uc->uc_mcontext.arm_pc = g_loaded_base + 0x00254f40u;
+        return;
+    }
     if ((sig == SIGTRAP || sig == SIGILL) && g_arm_dispatch_trace_armed &&
         (uc->uc_mcontext.arm_pc == g_loaded_base + 0x00254f04u ||
          uc->uc_mcontext.arm_pc == g_loaded_base + 0x00254f08u)) {
@@ -628,7 +660,10 @@ int main(int argc, char **argv) {
         arm_d8ff0_trace();
         arm_da6c6_trace();
         arm_d8984_trace();
-        if (getenv("BOZ_ARM_DISPATCH_TRACE")) arm_dispatch_trace();
+        if (getenv("BOZ_ARM_DISPATCH_TRACE")) {
+            arm_dispatch_trace();
+            arm_dispatch_callsite_trace();
+        }
         arm_tree_probes();
     }
 #endif
