@@ -87,7 +87,7 @@ def main():
               "target_xrefs": xrefs}
     if a.probe_plan:
         Path(a.probe_plan).write_text(json.dumps(
-            {"version": 2, "capacity": 512, "count": len(ranked), "probes": ranked}, indent=2) + "\n")
+            {"version": 3, "capacity": 512,\n             "confirmed_thumb_ranges": [[hex(lo), hex(hi)] for lo, hi in CONFIRMED_THUMB_RANGES],\n             "count": len(ranked), "probes": ranked}, indent=2) + "\n")
     data = json.dumps(result, indent=2)
     if a.json_out:
         Path(a.json_out).write_text(data + "\n")
