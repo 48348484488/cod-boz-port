@@ -501,7 +501,7 @@ def run_boz_diagnostic(report: dict) -> int:
                         [sys.executable, str(investigator), str(auto_dis),
                          "--target", "0xDA1A0", "--target", "0xDA46C", "--target", "0xDAE62",
                          "--json-out", str(auto_json), "--text-out", str(auto_txt),
-                         "--probe-plan", str(PUBLIC / "boz-probe-plan.json"), "--probe-limit", "128"],
+                         "--probe-plan", str(PUBLIC / "boz-probe-plan.json"), "--probe-limit", "256"],
                         text=True, capture_output=True, check=False)
                     report["boz_investigator_rc"] = inv.returncode
                     report["boz_investigation_json"] = str(auto_json)
@@ -516,7 +516,7 @@ def run_boz_diagnostic(report: dict) -> int:
                                 if p.get("mode") == "thumb16"
                                 and 0xD6000 <= int(p["off"]) < 0xDB800
                                 and int(p["off"]) != 0x254F44
-                            ][:128]
+                            ][:256]
                             report["boz_mass_probe_count"] = len(safe_probes)
                             report["boz_mass_probe_env"] = ",".join(
                                 f"0x{int(p['off']):x}" for p in safe_probes
