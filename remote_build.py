@@ -1842,6 +1842,374 @@ def run_boz_diagnostic(report: dict) -> int:
                                                             flush=True,
                                                         )
                                                         break
+
+                                                # Resolve the late writer's caller from the runtime LR
+                                                # without assuming a fixed Thumb BL width. The LR has
+                                                # bit 0 set in Thumb state; the normalized return address
+                                                # must equal the instruction immediately after BL/BLX.
+                                                late_writer_caller = None
+                                                caller_focus_result = None
+                                                if late_writer_entry is not None:
+                                                    caller_lr_value = int(
+                                                        late_writer_entry["caller_lr"], 16
+                                                    )
+                                                    caller_return = caller_lr_value & ~1
+                                                    caller_candidates = []
+                                                    for caller_index, (
+                                                        caller_off,
+                                                        caller_line,
+                                                    ) in enumerate(parsed_disasm):
+                                                        if not (
+                                                            caller_return - 8
+                                                            <= caller_off
+                                                            < caller_return
+                                                        ):
+                                                            continue
+                                                        call_match = re.search(
+                                                            r"\\bblx?(?:\\.w)?\\s+(?:0x)?([0-9a-fA-F]+)\\b",
+                                                            caller_line.lower(),
+                                                        )
+                                                        if not call_match:
+                                                            continue
+                                                        call_target = int(
+                                                            call_match.group(1), 16
+                                                        )
+                                                        next_off = (
+                                                            parsed_disasm[caller_index + 1][0]
+                                                            if caller_index + 1 < len(parsed_disasm)
+                                                            else None
+                                                        )
+                                                        if (
+                                                            call_target == focus_function_start
+                                                            and next_off == caller_return
+                                                        ):
+                                                            caller_candidates.append(
+                                                                (caller_index, caller_off, caller_line)
+                                                            )
+
+                                                    if caller_candidates:
+                                                        (
+                                                            caller_index,
+                                                            caller_callsite,
+                                                            caller_call_line,
+                                                        ) = caller_candidates[-1]
+                                                        caller_function_start = None
+                                                        for search_index in range(
+                                                            caller_index, -1, -1
+                                                        ):
+                                                            entry_off, entry_line = parsed_disasm[
+                                                                search_index
+                                                            ]
+                                                            if (
+                                                                caller_callsite - entry_off > 0x300
+                                                            ):
+                                                                break
+                                                            entry_low = entry_line.lower()
+                                                            if (
+                                                                "lr" in entry_low
+                                                                and (
+                                                                    "push" in entry_low
+                                                                    or "stmdb" in entry_low
+                                                                )
+                                                            ):
+                                                                caller_function_start = entry_off
+                                                                break
+
+                                                        caller_context = [
+                                                            {
+                                                                "off": f"0x{off:x}",
+                                                                "line": line,
+                                                            }
+                                                            for off, line in parsed_disasm
+                                                            if caller_callsite - 0x80
+                                                            <= off
+                                                            <= caller_callsite + 0x80
+                                                        ]
+                                                        late_writer_caller = {
+                                                            "callee": f"0x{focus_function_start:x}",
+                                                            "runtime_lr": f"0x{caller_lr_value:08x}",
+                                                            "return_address": f"0x{caller_return:x}",
+                                                            "callsite": f"0x{caller_callsite:x}",
+                                                            "call_instruction": caller_call_line,
+                                                            "function_start": (
+                                                                f"0x{caller_function_start:x}"
+                                                                if caller_function_start is not None
+                                                                else None
+                                                            ),
+                                                            "context": caller_context,
+                                                        }
+                                                        print(
+                                                            "[LATE_WRITER_CALLER] "
+                                                            f"callee=0x{focus_function_start:x} "
+                                                            f"return=0x{caller_return:x} "
+                                                            f"callsite=0x{caller_callsite:x} "
+                                                            "function="
+                                                            + (
+                                                                f"0x{caller_function_start:x}"
+                                                                if caller_function_start is not None
+                                                                else "unknown"
+                                                            ),
+                                                            flush=True,
+                                                        )
+
+                                                        # A second self-narrowing pass follows the
+                                                        # caller, but only inside the runtime-confirmed
+                                                        # Thumb window. As with the first focus pass,
+                                                        # skip IT blocks and prefer stores / call
+                                                        # boundaries over dense single stepping.
+                                                        caller_decoded = []
+                                                        caller_ins_re = re.compile(
+                                                            r"^\\s*([0-9a-fA-F]+):\\s+"
+                                                            r"[0-9a-fA-F ]+\\s+([a-zA-Z0-9.]+)"
+                                                        )
+                                                        for entry in caller_context:
+                                                            caller_match = caller_ins_re.match(
+                                                                entry["line"]
+                                                            )
+                                                            if caller_match:
+                                                                caller_decoded.append(
+                                                                    (
+                                                                        int(
+                                                                            caller_match.group(1),
+                                                                            16,
+                                                                        ),
+                                                                        caller_match.group(2).lower(),
+                                                                        entry["line"],
+                                                                    )
+                                                                )
+
+                                                        caller_offsets = []
+                                                        caller_conditional_left = 0
+                                                        caller_previous_was_call = False
+                                                        for (
+                                                            ins_off,
+                                                            mnemonic,
+                                                            dis_line,
+                                                        ) in caller_decoded:
+                                                            in_it = caller_conditional_left > 0
+                                                            if mnemonic.startswith("it"):
+                                                                caller_conditional_left = max(
+                                                                    1, len(mnemonic) - 1
+                                                                )
+                                                                caller_previous_was_call = False
+                                                                continue
+                                                            if in_it:
+                                                                caller_conditional_left -= 1
+                                                                caller_previous_was_call = False
+                                                                continue
+                                                            if (
+                                                                mnemonic.startswith("str")
+                                                                or caller_previous_was_call
+                                                                or ins_off == caller_callsite
+                                                            ):
+                                                                caller_offsets.append(ins_off)
+                                                            caller_previous_was_call = mnemonic in (
+                                                                "bl",
+                                                                "blx",
+                                                                "bl.w",
+                                                                "blx.w",
+                                                            )
+                                                        if caller_function_start is not None:
+                                                            caller_offsets.append(
+                                                                caller_function_start
+                                                            )
+                                                        caller_offsets = sorted(
+                                                            {
+                                                                off
+                                                                for off in caller_offsets
+                                                                if probe_is_arch_safe(
+                                                                    {
+                                                                        "off": off,
+                                                                        "mode": "thumb16",
+                                                                    }
+                                                                )
+                                                            }
+                                                        )[:24]
+                                                        late_writer_caller[
+                                                            "probe_offsets"
+                                                        ] = [
+                                                            f"0x{off:x}"
+                                                            for off in caller_offsets
+                                                        ]
+
+                                                        if (
+                                                            caller_offsets
+                                                            and os.environ.get(
+                                                                "BOZ_AUTO_CALLER_FOCUS", "1"
+                                                            )
+                                                            == "1"
+                                                        ):
+                                                            caller_env = env.copy()
+                                                            caller_env[
+                                                                "BOZ_MASS_PROBES"
+                                                            ] = ",".join(
+                                                                f"t:0x{off:x}"
+                                                                for off in caller_offsets
+                                                            )
+                                                            print(
+                                                                "[CALLER_FOCUS] "
+                                                                f"callsite=0x{caller_callsite:x} "
+                                                                f"count={len(caller_offsets)}",
+                                                                flush=True,
+                                                            )
+                                                            try:
+                                                                caller_run = subprocess.run(
+                                                                    cmd,
+                                                                    cwd=ROOT,
+                                                                    env=caller_env,
+                                                                    text=True,
+                                                                    stdout=subprocess.PIPE,
+                                                                    stderr=subprocess.STDOUT,
+                                                                    timeout=int(
+                                                                        os.environ.get(
+                                                                            "BOZ_CALLER_FOCUS_TIMEOUT",
+                                                                            "60",
+                                                                        )
+                                                                    ),
+                                                                )
+                                                                caller_out = (
+                                                                    caller_run.stdout or ""
+                                                                )
+                                                                caller_trace = (
+                                                                    PUBLIC
+                                                                    / "boz-caller-focus-trace.log"
+                                                                )
+                                                                caller_trace.write_text(
+                                                                    caller_out,
+                                                                    encoding="utf-8",
+                                                                )
+                                                                caller_entry = None
+                                                                if (
+                                                                    caller_function_start
+                                                                    is not None
+                                                                ):
+                                                                    caller_entry_re = re.compile(
+                                                                        r"^\\[TREE_PROBE\\]"
+                                                                        r"(?: mode=[^ ]+)? "
+                                                                        r"off=0*([0-9a-fA-F]+)"
+                                                                        r".*?\\blr=([0-9a-fA-F]{8})\\b"
+                                                                    )
+                                                                    for caller_line in (
+                                                                        caller_out.replace(
+                                                                            "\\\\n", "\\n"
+                                                                        ).splitlines()
+                                                                    ):
+                                                                        caller_entry_match = (
+                                                                            caller_entry_re.match(
+                                                                                caller_line.strip()
+                                                                            )
+                                                                        )
+                                                                        if not caller_entry_match:
+                                                                            continue
+                                                                        if (
+                                                                            int(
+                                                                                caller_entry_match.group(
+                                                                                    1
+                                                                                ),
+                                                                                16,
+                                                                            )
+                                                                            != caller_function_start
+                                                                        ):
+                                                                            continue
+                                                                        parent_lr = int(
+                                                                            caller_entry_match.group(
+                                                                                2
+                                                                            ),
+                                                                            16,
+                                                                        )
+                                                                        caller_entry = {
+                                                                            "function_start": (
+                                                                                f"0x{caller_function_start:x}"
+                                                                            ),
+                                                                            "caller_lr": (
+                                                                                f"0x{parent_lr:08x}"
+                                                                            ),
+                                                                            "line": caller_line.strip(),
+                                                                        }
+                                                                        print(
+                                                                            "[CALLER_PARENT] "
+                                                                            f"function=0x{caller_function_start:x} "
+                                                                            f"caller_lr=0x{parent_lr:08x}",
+                                                                            flush=True,
+                                                                        )
+                                                                        break
+
+                                                                caller_focus_result = {
+                                                                    "rc": caller_run.returncode,
+                                                                    "tree_probe_hits": caller_out.count(
+                                                                        "[TREE_PROBE]"
+                                                                    ),
+                                                                    "entry": caller_entry,
+                                                                    "analysis": analyze_boz_output(
+                                                                        caller_out
+                                                                    ),
+                                                                    "trace": str(caller_trace),
+                                                                }
+                                                                print(
+                                                                    "[CALLER_FOCUS] "
+                                                                    f"rc={caller_run.returncode} "
+                                                                    "hits="
+                                                                    f"{caller_focus_result['tree_probe_hits']} "
+                                                                    f"artifact={caller_trace}",
+                                                                    flush=True,
+                                                                )
+                                                                for caller_line in caller_out.splitlines():
+                                                                    if caller_line.startswith(
+                                                                        (
+                                                                            "[TREE_PROBE]",
+                                                                            "[D8FF0_",
+                                                                            "[NULL_OBJECT]",
+                                                                            "[NULL_FLOW]",
+                                                                        )
+                                                                    ):
+                                                                        print(
+                                                                            "[CALLER_FOCUS] "
+                                                                            + caller_line,
+                                                                            flush=True,
+                                                                        )
+                                                            except subprocess.TimeoutExpired:
+                                                                caller_focus_result = {
+                                                                    "rc": 124,
+                                                                    "error": "timeout",
+                                                                }
+                                                                print(
+                                                                    "[CALLER_FOCUS] timed out",
+                                                                    flush=True,
+                                                                )
+                                                    else:
+                                                        print(
+                                                            "[LATE_WRITER_CALLER] "
+                                                            f"unresolved return=0x{caller_return:x} "
+                                                            f"callee=0x{focus_function_start:x}",
+                                                            flush=True,
+                                                        )
+
+                                                if late_writer_caller is not None:
+                                                    late_writer_caller[
+                                                        "focus_run"
+                                                    ] = caller_focus_result
+                                                    caller_json = (
+                                                        PUBLIC
+                                                        / "boz-late-writer-caller.json"
+                                                    )
+                                                    caller_json.write_text(
+                                                        json.dumps(
+                                                            late_writer_caller, indent=2
+                                                        )
+                                                        + "\\n",
+                                                        encoding="utf-8",
+                                                    )
+                                                    report[
+                                                        "boz_late_writer_caller"
+                                                    ] = str(caller_json)
+                                                    report[
+                                                        "boz_late_writer_callsite"
+                                                    ] = late_writer_caller.get("callsite")
+                                                    report[
+                                                        "boz_late_writer_parent_function"
+                                                    ] = late_writer_caller.get(
+                                                        "function_start"
+                                                    )
                                                 focus_result = {
                                                     "center": f"0x{focus_center:x}",
                                                     "function_start": (
