@@ -649,6 +649,26 @@ def run_boz_diagnostic(report: dict) -> int:
                                                 for off, line in function_slice
                                                 if re.search(r"\\bblx?\\b", line.lower())
                                             ]
+                                    function_entry = constructor_info.get("function_start")
+                                    constructor_callers = []
+                                    if function_entry is not None:
+                                        call_target_re = re.compile(
+                                            r"\\bblx?\\s+(?:0x)?([0-9a-fA-F]+)\\b"
+                                        )
+                                        for off, line in parsed_disasm:
+                                            match = call_target_re.search(line)
+                                            if match and int(match.group(1), 16) == function_entry:
+                                                constructor_callers.append({
+                                                    "off": off,
+                                                    "line": line,
+                                                })
+                                    constructor_info["callers"] = constructor_callers
+                                    constructor_info["post_sentinel_calls"] = [
+                                        call
+                                        for call in constructor_info["calls"]
+                                        if call["off"] > constructor_target
+                                    ]
+
                                     constructor_path = PUBLIC / "boz-manager-constructor.json"
                                     constructor_path.write_text(
                                         json.dumps(constructor_info, indent=2) + "\n",
@@ -658,13 +678,16 @@ def run_boz_diagnostic(report: dict) -> int:
                                     print(
                                         "[MANAGER_CTOR] "
                                         f"target=0x{constructor_target:x} "
-                                        f"start={constructor_info['function_start']} "
-                                        f"end={constructor_info['function_end']} "
-                                        f"calls={len(constructor_info['calls'])}",
+                                        f"start={hex(constructor_info['function_start']) if constructor_info['function_start'] is not None else None} "
+                                        f"end={hex(constructor_info['function_end']) if constructor_info['function_end'] is not None else None} "
+                                        f"calls={len(constructor_info['calls'])} "
+                                        f"callers={len(constructor_info.get('callers', []))}",
                                         flush=True,
                                     )
-                                    for call in constructor_info["calls"]:
+                                    for call in constructor_info["post_sentinel_calls"]:
                                         print("[MANAGER_CTOR_CALL] " + call["line"], flush=True)
+                                    for caller in constructor_info.get("callers", []):
+                                        print("[MANAGER_CTOR_XREF] " + caller["line"], flush=True)
 
                                     focus_rc = None
                                     focus_hits = 0
