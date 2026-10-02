@@ -450,11 +450,15 @@ def run_boz_diagnostic(report: dict) -> int:
     print(f"[RUNNER] BOZ rc={p.returncode}", flush=True)
     objdump = shutil.which("arm-linux-gnueabihf-objdump")
     if objdump:
-        arm_raw = pathlib.Path("/tmp/boz-mapped-254e80.bin")
+        arm_raw = pathlib.Path("/tmp/boz-mapped-arm25.bin")
+        arm_base = 0x250000
+        if not arm_raw.is_file():
+            arm_raw = pathlib.Path("/tmp/boz-mapped-254e80.bin")
+            arm_base = 0x254E80
         if arm_raw.is_file():
             arm_dis = subprocess.run(
                 [objdump, "-D", "-b", "binary", "-m", "arm",
-                 "--adjust-vma", hex(0x254E80), str(arm_raw)],
+                 "--adjust-vma", hex(arm_base), str(arm_raw)],
                 text=True, capture_output=True, check=False,
             )
             arm_path = PUBLIC / "boz-arm-caller.txt"
@@ -462,7 +466,7 @@ def run_boz_diagnostic(report: dict) -> int:
             report["boz_arm_caller"] = str(arm_path)
             report["boz_arm_caller_rc"] = arm_dis.returncode
             print(
-                f"[ARM_CALLER] region=0x254e80..0x255180 rc={arm_dis.returncode} artifact={arm_path}",
+                f"[ARM_CALLER] base=0x{arm_base:x} size=0x{arm_raw.stat().st_size:x} rc={arm_dis.returncode} artifact={arm_path}",
                 flush=True,
             )
             arm_lines = arm_dis.stdout.splitlines()
