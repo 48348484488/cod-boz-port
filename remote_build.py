@@ -398,6 +398,9 @@ def run_boz_diagnostic(report: dict) -> int:
                         low = line.lower()
                         if "str" not in low or "#4]" not in low:
                             continue
+                        # Stack temporaries are not tree-root writes.
+                        if "[sp," in low:
+                            continue
                         lo, hi = max(0, i - 8), min(len(lines), i + 9)
                         ctx = lines[lo:hi]
                         joined = "\n".join(ctx).lower()
@@ -431,6 +434,24 @@ def run_boz_diagnostic(report: dict) -> int:
                         shortlist_lines.append("REASONS " + ",".join(reasons))
                         shortlist_lines.extend(ctx)
                         shortlist_lines.append("")
+                    # Cross-reference the strongest concrete object stores. This
+                    # exposes direct callers in the same mapped region and avoids another
+                    # manual objdump/search cycle.
+                    strong_sites = ("da228", "da50a", "da816")
+                    xrefs = []
+                    for site in strong_sites:
+                        for line in lines:
+                            low = line.lower()
+                            if ("bl" in low) and (("0x" + site) in low or (" " + site) in low):
+                                xrefs.append({"target": site, "caller": line.strip()})
+                    shortlist_lines.append("DIRECT_XREFS")
+                    if xrefs:
+                        for x in xrefs:
+                            shortlist_lines.append(f"target={x['target']} caller={x['caller']}")
+                    else:
+                        shortlist_lines.append("none_in_mapped_region")
+                    report["manager_tree_direct_xrefs"] = xrefs
+
                     shortlist_text = "\n".join(shortlist_lines) + "\n"
                     shortlist_path = PUBLIC / "manager-tree-shortlist.txt"
                     shortlist_path.write_text(shortlist_text, encoding="utf-8")
