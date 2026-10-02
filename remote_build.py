@@ -597,6 +597,49 @@ def run_boz_diagnostic(report: dict) -> int:
                 if off == 0xD6000 and dis.returncode == 0:
                     auto_dis = pathlib.Path("/tmp/boz-investigator.disasm")
                     auto_dis.write_text(dis.stdout, encoding="utf-8")
+
+                    da46_prefix = []
+                    for static_line in dis.stdout.splitlines():
+                        sm = re.match(
+                            r"^\s*([0-9a-fA-F]+):\s+[0-9a-fA-F ]+\s+(.+)$",
+                            static_line,
+                        )
+                        if not sm:
+                            continue
+                        static_off = int(sm.group(1), 16)
+                        if 0xDA46C <= static_off <= 0xDA4DC:
+                            da46_prefix.append({
+                                "off": f"0x{static_off:x}",
+                                "op": sm.group(2).strip(),
+                                "line": static_line.strip(),
+                            })
+                    da46_calls = [
+                        item for item in da46_prefix
+                        if re.search(r"\bblx?\b", item["op"])
+                    ]
+                    da46_branches = [
+                        item for item in da46_prefix
+                        if re.search(r"\bb(?:eq|ne|gt|ge|lt|le|hi|ls|cc|cs|pl|mi|vs|vc)?(?:\.n)?\b", item["op"])
+                    ]
+                    da46_report = {
+                        "range": ["0xda46c", "0xda4dc"],
+                        "instructions": da46_prefix,
+                        "calls": da46_calls,
+                        "branches": da46_branches,
+                    }
+                    da46_path = PUBLIC / "boz-da46c-prefix.json"
+                    da46_path.write_text(
+                        json.dumps(da46_report, indent=2) + "\n",
+                        encoding="utf-8",
+                    )
+                    report["boz_da46c_prefix"] = str(da46_path)
+                    print(
+                        f"[DA46_PREFIX] instructions={len(da46_prefix)} "
+                        f"calls={len(da46_calls)} branches={len(da46_branches)}",
+                        flush=True,
+                    )
+                    for item in da46_prefix:
+                        print("[DA46_PREFIX] " + item["line"], flush=True)
                     auto_json = PUBLIC / "boz-investigation.json"
                     auto_txt = PUBLIC / "boz-investigation.txt"
                     investigator = ROOT / "tools" / "boz_investigator.py"
