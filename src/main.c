@@ -142,6 +142,10 @@ static uint32_t g_arm_dispatch_saved;
 static uint32_t g_arm_callsite_saved;
 static uint32_t g_arm_return_saved;
 static unsigned g_arm_dispatch_call_seq;
+#define BOZ_ARM_ALLOC_TRACE_MAX 96u
+static uint32_t g_arm_call_size[BOZ_ARM_ALLOC_TRACE_MAX];
+static uint32_t g_arm_call_lr[BOZ_ARM_ALLOC_TRACE_MAX];
+static uint32_t g_arm_return_r0[BOZ_ARM_ALLOC_TRACE_MAX];
 static int g_arm_dispatch_trace_armed;
 static int g_arm_callsite_trace_armed;
 static int g_arm_return_trace_armed;
@@ -240,6 +244,11 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
         *ret_site = g_arm_return_saved;
         __builtin___clear_cache((char *)ret_site, (char *)ret_site + sizeof(*ret_site));
         g_arm_return_trace_armed = 0;
+        if (g_arm_dispatch_call_seq > 0u &&
+            g_arm_dispatch_call_seq <= BOZ_ARM_ALLOC_TRACE_MAX) {
+            g_arm_return_r0[g_arm_dispatch_call_seq - 1u] =
+                (uint32_t)uc->uc_mcontext.arm_r0;
+        }
         fprintf(stderr,
                 "[ARM_DISPATCH_RETURN] seq=%u r0=%08lx r1=%08lx r2=%08lx r3=%08lx "
                 "r4=%08lx r5=%08lx r6=%08lx r7=%08lx lr=%08lx cpsr=%08lx\n",
@@ -254,7 +263,7 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
                 (unsigned long)uc->uc_mcontext.arm_r7,
                 (unsigned long)uc->uc_mcontext.arm_lr,
                 (unsigned long)uc->uc_mcontext.arm_cpsr);
-        if (g_arm_dispatch_call_seq < 24u) {
+        if (g_arm_dispatch_call_seq < BOZ_ARM_ALLOC_TRACE_MAX) {
             uint32_t *call_site = (uint32_t *)(uintptr_t)(g_loaded_base + 0x00254f40u);
             g_arm_callsite_saved = *call_site;
             *call_site = 0xe1200070u;
@@ -272,6 +281,12 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
         __builtin___clear_cache((char *)site, (char *)site + sizeof(*site));
         g_arm_callsite_trace_armed = 0;
         ++g_arm_dispatch_call_seq;
+        if (g_arm_dispatch_call_seq <= BOZ_ARM_ALLOC_TRACE_MAX) {
+            g_arm_call_size[g_arm_dispatch_call_seq - 1u] =
+                (uint32_t)uc->uc_mcontext.arm_r2;
+            g_arm_call_lr[g_arm_dispatch_call_seq - 1u] =
+                (uint32_t)uc->uc_mcontext.arm_lr;
+        }
         fprintf(stderr,
                 "[ARM_DISPATCH_CALL] seq=%u target=%08lx object=%08lx arg1=%08lx arg2=%08lx "
                 "r0=%08lx r1=%08lx r2=%08lx lr=%08lx cpsr=%08lx\n",
@@ -285,7 +300,7 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
                 (unsigned long)uc->uc_mcontext.arm_r2,
                 (unsigned long)uc->uc_mcontext.arm_lr,
                 (unsigned long)uc->uc_mcontext.arm_cpsr);
-        if (g_arm_dispatch_call_seq < 24u) {
+        if (g_arm_dispatch_call_seq <= BOZ_ARM_ALLOC_TRACE_MAX) {
             uint32_t *ret_site = (uint32_t *)(uintptr_t)(g_loaded_base + 0x00254f44u);
             g_arm_return_saved = *ret_site;
             *ret_site = 0xe1200070u;
@@ -388,6 +403,24 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
         uint32_t manager = g_d8ff0_manager;
         uint32_t sentinel = manager ? *(uint32_t *)(uintptr_t)(manager + 0x20u) : 0;
         uint32_t root = sentinel ? *(uint32_t *)(uintptr_t)(sentinel + 4u) : 0;
+        for (unsigned i = 0;
+             i < g_arm_dispatch_call_seq && i < BOZ_ARM_ALLOC_TRACE_MAX;
+             ++i) {
+            if (g_arm_return_r0[i] == sentinel) {
+                fprintf(stderr,
+                        "[ARM_ALLOC_MATCH] kind=sentinel seq=%u size=%08x "
+                        "caller_lr=%08x value=%08x\n",
+                        i + 1u, g_arm_call_size[i], g_arm_call_lr[i],
+                        g_arm_return_r0[i]);
+            }
+            if (root && g_arm_return_r0[i] == root) {
+                fprintf(stderr,
+                        "[ARM_ALLOC_MATCH] kind=root seq=%u size=%08x "
+                        "caller_lr=%08x value=%08x\n",
+                        i + 1u, g_arm_call_size[i], g_arm_call_lr[i],
+                        g_arm_return_r0[i]);
+            }
+        }
         fprintf(stderr, "[D8FF0_HASH] hash=%08lx manager=%08x sentinel=%08x root=%08x",
                 (unsigned long)uc->uc_mcontext.arm_r0, manager, sentinel, root);
         if (root && root != sentinel) {
@@ -423,6 +456,17 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
         __builtin___clear_cache((char *)site, (char *)(site + 1));
         g_d8ff0_trace_armed = 0;
         g_d8ff0_manager = (uint32_t)uc->uc_mcontext.arm_r0;
+        for (unsigned i = 0;
+             i < g_arm_dispatch_call_seq && i < BOZ_ARM_ALLOC_TRACE_MAX;
+             ++i) {
+            if (g_arm_return_r0[i] == g_d8ff0_manager) {
+                fprintf(stderr,
+                        "[ARM_ALLOC_MATCH] kind=manager seq=%u size=%08x "
+                        "caller_lr=%08x value=%08x\n",
+                        i + 1u, g_arm_call_size[i], g_arm_call_lr[i],
+                        g_arm_return_r0[i]);
+            }
+        }
         arm_d8ffa_trace();
         fprintf(stderr, "[D8FF0_ENTER] manager=%08lx key=%08lx r2=%08lx r3=%08lx",
                 (unsigned long)uc->uc_mcontext.arm_r0, (unsigned long)uc->uc_mcontext.arm_r1,
