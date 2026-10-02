@@ -139,30 +139,14 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
     if (sig == SIGSEGV && recover_bucket_allocator_fault(uc)) return;
     if (sig == SIGSEGV && recover_null_buffer_write(uc)) return;
     if (sig == SIGSEGV && recover_null_buffer_slot(uc)) return;
-    /*
-     * BOZ +0x0db31e (Thumb): ldr r3, [r0]
-     * The immediately preceding BLX returns a nullable host object.  The
-     * original Marmalade environment supplies it, while the current host can
-     * return NULL.  Do not dereference a missing object; return to the caller
-     * so startup can continue and expose the next missing host dependency.
-     */
+    /* Observe the missing host object; do not fabricate control flow. */
     if (sig == SIGSEGV && uc->uc_mcontext.arm_pc == g_loaded_base + 0x0db31eu &&
         uc->uc_mcontext.arm_r0 == 0) {
-        fprintf(stderr,
-                "[RECOVER] nullable host object at BOZ+0x0db31e; returning to lr=0x%08lx\n",
-                (unsigned long)uc->uc_mcontext.arm_lr);
-        /*
-         * LR is the caller return address, not a valid continuation inside
-         * this callee.  Returning there leaves the caller expecting a normal
-         * function epilogue and can branch through NULL.  At this site the
-         * failed virtual dispatch sequence is:
-         *   ldr r3,[r0]; ldr r3,[r3,#0x18]; blx r3; b <loop>
-         * Skip the dispatch and its back-edge, continuing at BOZ+0x0db32a.
-         */
-        uc->uc_mcontext.arm_r0 = 0;
-        uc->uc_mcontext.arm_pc = g_loaded_base + 0x0db32au;
-        uc->uc_mcontext.arm_cpsr |= (1u << 5);
-        return;
+        fprintf(stderr, "[NULL_OBJECT] BOZ+0x0db31e after BLX r12; "
+                        "lr=0x%08lx r12=0x%08lx sp=0x%08lx\n",
+                (unsigned long)uc->uc_mcontext.arm_lr,
+                (unsigned long)uc->uc_mcontext.arm_ip,
+                (unsigned long)uc->uc_mcontext.arm_sp);
     }
     if (sig == SIGSEGV && uc->uc_mcontext.arm_pc == g_loaded_base + 0x368ddcu &&
         uc->uc_mcontext.arm_r1 == 0) {
@@ -204,9 +188,11 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
             (unsigned long)((uc->uc_mcontext.arm_cpsr >> 5) & 1u),
             (unsigned long)uc->uc_mcontext.arm_r0, (unsigned long)uc->uc_mcontext.arm_r1,
             (unsigned long)uc->uc_mcontext.arm_r2, (unsigned long)uc->uc_mcontext.arm_r3);
-    fprintf(stderr, "pc-bytes:");
-    for (int i = -8; i < 16; ++i) fprintf(stderr, " %02x", pc_bytes[i]);
-    fprintf(stderr, "\n");
+    if (pc_offset != UINTPTR_MAX && pc_offset >= 8 && pc_offset + 16 < 0x41d970u) {
+        fprintf(stderr, "pc-bytes:");
+        for (int i = -8; i < 16; ++i) fprintf(stderr, " %02x", pc_bytes[i]);
+        fprintf(stderr, "\n");
+    }
     uint32_t *sp = (uint32_t *)(uintptr_t)uc->uc_mcontext.arm_sp;
     fprintf(stderr, "stack:");
     for (int i = 0; i < 32; ++i) fprintf(stderr, " %08x", sp[i]);
