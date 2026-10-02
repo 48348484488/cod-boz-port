@@ -603,9 +603,10 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
             }
         }
         arm_d8ffa_trace();
-        fprintf(stderr, "[D8FF0_ENTER] manager=%08lx key=%08lx r2=%08lx r3=%08lx",
+        fprintf(stderr, "[D8FF0_ENTER] manager=%08lx key=%08lx r2=%08lx r3=%08lx lr=%08lx cpsr=%08lx",
                 (unsigned long)uc->uc_mcontext.arm_r0, (unsigned long)uc->uc_mcontext.arm_r1,
-                (unsigned long)uc->uc_mcontext.arm_r2, (unsigned long)uc->uc_mcontext.arm_r3);
+                (unsigned long)uc->uc_mcontext.arm_r2, (unsigned long)uc->uc_mcontext.arm_r3,
+                (unsigned long)uc->uc_mcontext.arm_lr, (unsigned long)uc->uc_mcontext.arm_cpsr);
         if (uc->uc_mcontext.arm_r1) {
             const unsigned char *s = (const unsigned char *)(uintptr_t)uc->uc_mcontext.arm_r1;
             fprintf(stderr, " key_bytes=");
