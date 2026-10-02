@@ -147,6 +147,29 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
                 (unsigned long)uc->uc_mcontext.arm_lr,
                 (unsigned long)uc->uc_mcontext.arm_ip,
                 (unsigned long)uc->uc_mcontext.arm_sp);
+        fprintf(stderr,
+                "[NULL_FLOW] r0=%08lx r1=%08lx r2=%08lx r3=%08lx "
+                "r4=%08lx r5=%08lx r6=%08lx r7=%08lx r8=%08lx r9=%08lx "
+                "r10=%08lx fp=%08lx ip=%08lx lr=%08lx\n",
+                (unsigned long)uc->uc_mcontext.arm_r0, (unsigned long)uc->uc_mcontext.arm_r1,
+                (unsigned long)uc->uc_mcontext.arm_r2, (unsigned long)uc->uc_mcontext.arm_r3,
+                (unsigned long)uc->uc_mcontext.arm_r4, (unsigned long)uc->uc_mcontext.arm_r5,
+                (unsigned long)uc->uc_mcontext.arm_r6, (unsigned long)uc->uc_mcontext.arm_r7,
+                (unsigned long)uc->uc_mcontext.arm_r8, (unsigned long)uc->uc_mcontext.arm_r9,
+                (unsigned long)uc->uc_mcontext.arm_r10, (unsigned long)uc->uc_mcontext.arm_fp,
+                (unsigned long)uc->uc_mcontext.arm_ip, (unsigned long)uc->uc_mcontext.arm_lr);
+        {
+            const uint32_t *spw = (const uint32_t *)(uintptr_t)uc->uc_mcontext.arm_sp;
+            fprintf(stderr, "[NULL_STACK]");
+            for (int n = 0; n < 24; ++n) fprintf(stderr, " %02x:%08x", n * 4, spw[n]);
+            fprintf(stderr, "\n");
+            const uint32_t *owner = (const uint32_t *)(uintptr_t)uc->uc_mcontext.arm_r4;
+            if (owner) {
+                fprintf(stderr, "[NULL_OWNER]");
+                for (int n = 0; n < 40; ++n) fprintf(stderr, " %02x:%08x", n * 4, owner[n]);
+                fprintf(stderr, "\n");
+            }
+        }
     }
     if (sig == SIGSEGV && uc->uc_mcontext.arm_pc == g_loaded_base + 0x368ddcu &&
         uc->uc_mcontext.arm_r1 == 0) {
