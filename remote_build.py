@@ -609,7 +609,7 @@ def run_boz_diagnostic(report: dict) -> int:
 
             arm34_parsed = []
             for line in arm34_dis.stdout.splitlines():
-                m = re.match(r"^\\s*([0-9a-fA-F]+):\\s*(.*)$", line)
+                m = re.match(r"^\s*([0-9a-fA-F]+):\s*(.*)$", line)
                 if not m:
                     continue
                 rest = m.group(2).strip()
@@ -617,7 +617,7 @@ def run_boz_diagnostic(report: dict) -> int:
                 # several byte/halfword tokens. Strip only the leading
                 # machine-code columns and keep the mnemonic/operands.
                 op_match = re.match(
-                    r"^(?:(?:[0-9a-fA-F]{2,8})\\s+)+(.+)$",
+                    r"^(?:(?:[0-9a-fA-F]{2,8})\s+)+(.+)$",
                     rest,
                 )
                 if not op_match:
@@ -654,7 +654,7 @@ def run_boz_diagnostic(report: dict) -> int:
 
                 for i in range(return_i - 1, max(-1, return_i - 5), -1):
                     off, op, _ = arm34_parsed[i]
-                    if re.search(r"\\bblx?\\b", op):
+                    if re.search(r"\bblx?\b", op):
                         arm34_info["callsite"] = f"0x{off:x}"
                         arm34_info["call_instruction"] = op
                         break
@@ -685,7 +685,7 @@ def run_boz_diagnostic(report: dict) -> int:
                     arm34_info["function_start"] = f"0x{fn_start:x}"
                     arm34_info["function_end"] = f"0x{fn_end:x}"
                     for off, op, raw_line in arm34_parsed:
-                        cm = re.search(r"\\bblx?\\s+(?:0x)?([0-9a-fA-F]+)\\b", op)
+                        cm = re.search(r"\bblx?\s+(?:0x)?([0-9a-fA-F]+)\b", op)
                         if cm and int(cm.group(1), 16) == fn_start:
                             arm34_info["direct_callers"].append({
                                 "off": f"0x{off:x}",
@@ -701,7 +701,7 @@ def run_boz_diagnostic(report: dict) -> int:
                 arm34_info["callsite_inferred_from_lr"] = True
                 for raw_line in arm34_window.stdout.splitlines():
                     if re.match(
-                        rf"^\\s*{inferred_callsite:x}:",
+                        rf"^\s*{inferred_callsite:x}:",
                         raw_line,
                         re.IGNORECASE,
                     ):
@@ -749,7 +749,7 @@ def run_boz_diagnostic(report: dict) -> int:
                     daa_context = []
                     for static_line in dis.stdout.splitlines():
                         sm = re.match(
-                            r"^\\s*([0-9a-fA-F]+):\\s+[0-9a-fA-F ]+\\s+(.+)$",
+                            r"^\s*([0-9a-fA-F]+):\s+[0-9a-fA-F ]+\s+(.+)$",
                             static_line,
                         )
                         if not sm:
@@ -1398,7 +1398,7 @@ def run_boz_diagnostic(report: dict) -> int:
                                         if not pm:
                                             continue
                                         rm = re.search(
-                                            r"\\broot=([0-9a-fA-F]{8})\\b",
+                                            r"\broot=([0-9a-fA-F]{8})\b",
                                             pm.group(2),
                                         )
                                         if not rm:
@@ -1601,7 +1601,7 @@ def run_boz_diagnostic(report: dict) -> int:
                                         focus_lines = []
                                         decoded = []
                                         ins_re = re.compile(
-                                            r"^\\s*([0-9a-fA-F]+):\\s+[0-9a-fA-F ]+\\s+([a-zA-Z0-9.]+)"
+                                            r"^\s*([0-9a-fA-F]+):\s+[0-9a-fA-F ]+\s+([a-zA-Z0-9.]+)"
                                         )
                                         for dis_line in auto_dis.read_text(
                                             encoding="utf-8", errors="replace"
