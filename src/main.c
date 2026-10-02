@@ -145,7 +145,7 @@ static int g_d8984_trace_armed;
 static uint32_t g_d8ff0_manager;
 typedef struct { uint32_t off; uint16_t saved; int armed; } boz_probe_t;
 static boz_probe_t g_tree_probes[] = {
-    {0x000da228u,0,0},{0x000da50au,0,0},{0x000da816u,0,0},{0x000daef2u,0,0}
+    {0x000da228u,0,0},{0x000da50au,0,0},{0x000da50cu,0,0},{0x000da50eu,0,0},{0x000da510u,0,0},{0x000da816u,0,0},{0x000daef2u,0,0},{0x00254f44u,0,0}
 };
 static void arm_tree_probes(void) {
     for (unsigned i=0;i<sizeof(g_tree_probes)/sizeof(g_tree_probes[0]);++i) {
@@ -198,10 +198,12 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
                              uc->uc_mcontext.arm_pc==g_loaded_base+p->off+2u)) {
                 uint16_t *site=(uint16_t *)(uintptr_t)(g_loaded_base+p->off);
                 *site=p->saved; __builtin___clear_cache((char *)site,(char *)(site+1)); p->armed=0;
-                fprintf(stderr,"[TREE_PROBE] off=%06x r0=%08lx r1=%08lx r2=%08lx r3=%08lx r4=%08lx r5=%08lx r6=%08lx r7=%08lx r8=%08lx lr=%08lx\n",
+                uint32_t p4=uc->uc_mcontext.arm_r4 ? *(uint32_t *)(uintptr_t)(uc->uc_mcontext.arm_r4+4u) : 0;
+                uint32_t p5=uc->uc_mcontext.arm_r5 ? *(uint32_t *)(uintptr_t)(uc->uc_mcontext.arm_r5+4u) : 0;
+                fprintf(stderr,"[TREE_PROBE] off=%06x r0=%08lx r1=%08lx r2=%08lx r3=%08lx r4=%08lx r5=%08lx r4p4=%08x r5p4=%08x r6=%08lx r7=%08lx r8=%08lx lr=%08lx\\n",
                     p->off,(unsigned long)uc->uc_mcontext.arm_r0,(unsigned long)uc->uc_mcontext.arm_r1,
                     (unsigned long)uc->uc_mcontext.arm_r2,(unsigned long)uc->uc_mcontext.arm_r3,
-                    (unsigned long)uc->uc_mcontext.arm_r4,(unsigned long)uc->uc_mcontext.arm_r5,
+                    (unsigned long)uc->uc_mcontext.arm_r4,(unsigned long)uc->uc_mcontext.arm_r5,p4,p5,
                     (unsigned long)uc->uc_mcontext.arm_r6,(unsigned long)uc->uc_mcontext.arm_r7,
                     (unsigned long)uc->uc_mcontext.arm_r8,(unsigned long)uc->uc_mcontext.arm_lr);
                 uc->uc_mcontext.arm_pc=g_loaded_base+p->off; return;
