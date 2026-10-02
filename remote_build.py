@@ -2156,12 +2156,319 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                         )
                                                                         break
 
+                                                                # Resolve and instrument one more caller level
+                                                                # from the runtime LR captured at the entry of
+                                                                # caller_function_start. This turns the late-writer
+                                                                # trace into a three-function chain in one deploy.
+                                                                parent_resolution = None
+                                                                parent_focus_result = None
+                                                                if (
+                                                                    caller_entry is not None
+                                                                    and caller_function_start is not None
+                                                                ):
+                                                                    parent_lr_value = int(
+                                                                        caller_entry["caller_lr"], 16
+                                                                    )
+                                                                    parent_return_abs = parent_lr_value & ~1
+                                                                    parent_return = (
+                                                                        parent_return_abs - caller_image_base
+                                                                        if caller_image_base
+                                                                        and parent_return_abs >= caller_image_base
+                                                                        else parent_return_abs
+                                                                    )
+                                                                    parent_candidates = []
+                                                                    for parent_index, (
+                                                                        parent_off,
+                                                                        parent_line,
+                                                                    ) in enumerate(parsed_disasm):
+                                                                        if not (
+                                                                            parent_return - 8
+                                                                            <= parent_off
+                                                                            < parent_return
+                                                                        ):
+                                                                            continue
+                                                                        next_off = (
+                                                                            parsed_disasm[parent_index + 1][0]
+                                                                            if parent_index + 1 < len(parsed_disasm)
+                                                                            else None
+                                                                        )
+                                                                        if next_off != parent_return:
+                                                                            continue
+                                                                        parent_low = parent_line.lower()
+                                                                        if not re.search(
+                                                                            r"\bblx?(?:\.w)?\b",
+                                                                            parent_low,
+                                                                        ):
+                                                                            continue
+                                                                        direct_parent = re.search(
+                                                                            r"\bblx?(?:\.w)?\s+(?:0x)?([0-9a-fA-F]+)\b",
+                                                                            parent_low,
+                                                                        )
+                                                                        if direct_parent:
+                                                                            parent_target = int(
+                                                                                direct_parent.group(1), 16
+                                                                            )
+                                                                            if parent_target != caller_function_start:
+                                                                                continue
+                                                                        parent_candidates.append(
+                                                                            (parent_index, parent_off, parent_line)
+                                                                        )
+
+                                                                    if parent_candidates:
+                                                                        (
+                                                                            parent_index,
+                                                                            parent_callsite,
+                                                                            parent_call_line,
+                                                                        ) = parent_candidates[-1]
+                                                                        parent_function_start = None
+                                                                        for search_index in range(
+                                                                            parent_index, -1, -1
+                                                                        ):
+                                                                            entry_off, entry_line = parsed_disasm[
+                                                                                search_index
+                                                                            ]
+                                                                            if parent_callsite - entry_off > 0x400:
+                                                                                break
+                                                                            entry_low = entry_line.lower()
+                                                                            if (
+                                                                                "lr" in entry_low
+                                                                                and (
+                                                                                    "push" in entry_low
+                                                                                    or "stmdb" in entry_low
+                                                                                )
+                                                                            ):
+                                                                                parent_function_start = entry_off
+                                                                                break
+
+                                                                        parent_context = [
+                                                                            {
+                                                                                "off": f"0x{off:x}",
+                                                                                "line": line,
+                                                                            }
+                                                                            for off, line in parsed_disasm
+                                                                            if parent_callsite - 0x100
+                                                                            <= off
+                                                                            <= parent_callsite + 0x100
+                                                                        ]
+                                                                        parent_resolution = {
+                                                                            "callee": f"0x{caller_function_start:x}",
+                                                                            "runtime_lr": f"0x{parent_lr_value:08x}",
+                                                                            "return_address_absolute": f"0x{parent_return_abs:08x}",
+                                                                            "return_address": f"0x{parent_return:x}",
+                                                                            "callsite": f"0x{parent_callsite:x}",
+                                                                            "call_instruction": parent_call_line,
+                                                                            "function_start": (
+                                                                                f"0x{parent_function_start:x}"
+                                                                                if parent_function_start is not None
+                                                                                else None
+                                                                            ),
+                                                                            "context": parent_context,
+                                                                        }
+                                                                        print(
+                                                                            "[CALLER_GRANDPARENT] "
+                                                                            f"callee=0x{caller_function_start:x} "
+                                                                            f"return=0x{parent_return:x} "
+                                                                            f"callsite=0x{parent_callsite:x} "
+                                                                            "function="
+                                                                            + (
+                                                                                f"0x{parent_function_start:x}"
+                                                                                if parent_function_start is not None
+                                                                                else "unknown"
+                                                                            ),
+                                                                            flush=True,
+                                                                        )
+
+                                                                        parent_decoded = []
+                                                                        parent_ins_re = re.compile(
+                                                                            r"^\s*([0-9a-fA-F]+):\s+"
+                                                                            r"[0-9a-fA-F ]+\s+([a-zA-Z0-9.]+)"
+                                                                        )
+                                                                        for entry in parent_context:
+                                                                            parent_match = parent_ins_re.match(
+                                                                                entry["line"]
+                                                                            )
+                                                                            if parent_match:
+                                                                                parent_decoded.append(
+                                                                                    (
+                                                                                        int(parent_match.group(1), 16),
+                                                                                        parent_match.group(2).lower(),
+                                                                                        entry["line"],
+                                                                                    )
+                                                                                )
+
+                                                                        parent_offsets = []
+                                                                        parent_conditional_left = 0
+                                                                        parent_previous_was_call = False
+                                                                        for (
+                                                                            ins_off,
+                                                                            mnemonic,
+                                                                            dis_line,
+                                                                        ) in parent_decoded:
+                                                                            in_it = parent_conditional_left > 0
+                                                                            if mnemonic.startswith("it"):
+                                                                                parent_conditional_left = max(
+                                                                                    1, len(mnemonic) - 1
+                                                                                )
+                                                                                parent_previous_was_call = False
+                                                                                continue
+                                                                            if in_it:
+                                                                                parent_conditional_left -= 1
+                                                                                parent_previous_was_call = False
+                                                                                continue
+                                                                            if (
+                                                                                mnemonic.startswith("str")
+                                                                                or parent_previous_was_call
+                                                                                or ins_off == parent_callsite
+                                                                            ):
+                                                                                parent_offsets.append(ins_off)
+                                                                            parent_previous_was_call = mnemonic in (
+                                                                                "bl",
+                                                                                "blx",
+                                                                                "bl.w",
+                                                                                "blx.w",
+                                                                            )
+                                                                        if parent_function_start is not None:
+                                                                            parent_offsets.append(
+                                                                                parent_function_start
+                                                                            )
+                                                                        parent_offsets = sorted(
+                                                                            {
+                                                                                off
+                                                                                for off in parent_offsets
+                                                                                if probe_is_arch_safe(
+                                                                                    {
+                                                                                        "off": off,
+                                                                                        "mode": "thumb16",
+                                                                                    }
+                                                                                )
+                                                                            }
+                                                                        )[:32]
+                                                                        parent_resolution["probe_offsets"] = [
+                                                                            f"0x{off:x}"
+                                                                            for off in parent_offsets
+                                                                        ]
+
+                                                                        if (
+                                                                            parent_offsets
+                                                                            and os.environ.get(
+                                                                                "BOZ_AUTO_PARENT_FOCUS", "1"
+                                                                            )
+                                                                            == "1"
+                                                                        ):
+                                                                            parent_env = env.copy()
+                                                                            parent_env[
+                                                                                "BOZ_MASS_PROBES"
+                                                                            ] = ",".join(
+                                                                                f"t:0x{off:x}"
+                                                                                for off in parent_offsets
+                                                                            )
+                                                                            print(
+                                                                                "[PARENT_FOCUS] "
+                                                                                f"callsite=0x{parent_callsite:x} "
+                                                                                f"count={len(parent_offsets)}",
+                                                                                flush=True,
+                                                                            )
+                                                                            try:
+                                                                                parent_run = subprocess.run(
+                                                                                    cmd,
+                                                                                    cwd=ROOT,
+                                                                                    env=parent_env,
+                                                                                    text=True,
+                                                                                    stdout=subprocess.PIPE,
+                                                                                    stderr=subprocess.STDOUT,
+                                                                                    timeout=int(
+                                                                                        os.environ.get(
+                                                                                            "BOZ_PARENT_FOCUS_TIMEOUT",
+                                                                                            "60",
+                                                                                        )
+                                                                                    ),
+                                                                                )
+                                                                                parent_out = parent_run.stdout or ""
+                                                                                parent_trace = (
+                                                                                    PUBLIC
+                                                                                    / "boz-parent-focus-trace.log"
+                                                                                )
+                                                                                parent_trace.write_text(
+                                                                                    parent_out,
+                                                                                    encoding="utf-8",
+                                                                                )
+                                                                                grandparent_entry = None
+                                                                                if parent_function_start is not None:
+                                                                                    for parent_line in parent_out.replace(
+                                                                                        "\\\\n", "\\n"
+                                                                                    ).splitlines():
+                                                                                        parent_entry_match = caller_entry_re.match(
+                                                                                            parent_line.strip()
+                                                                                        )
+                                                                                        if not parent_entry_match:
+                                                                                            continue
+                                                                                        if (
+                                                                                            int(
+                                                                                                parent_entry_match.group(1),
+                                                                                                16,
+                                                                                            )
+                                                                                            != parent_function_start
+                                                                                        ):
+                                                                                            continue
+                                                                                        grandparent_lr = int(
+                                                                                            parent_entry_match.group(2),
+                                                                                            16,
+                                                                                        )
+                                                                                        grandparent_entry = {
+                                                                                            "function_start": f"0x{parent_function_start:x}",
+                                                                                            "caller_lr": f"0x{grandparent_lr:08x}",
+                                                                                            "line": parent_line.strip(),
+                                                                                        }
+                                                                                        print(
+                                                                                            "[GRANDPARENT_ENTRY] "
+                                                                                            f"function=0x{parent_function_start:x} "
+                                                                                            f"caller_lr=0x{grandparent_lr:08x}",
+                                                                                            flush=True,
+                                                                                        )
+                                                                                        break
+                                                                                parent_focus_result = {
+                                                                                    "rc": parent_run.returncode,
+                                                                                    "tree_probe_hits": parent_out.count(
+                                                                                        "[TREE_PROBE]"
+                                                                                    ),
+                                                                                    "entry": grandparent_entry,
+                                                                                    "analysis": analyze_boz_output(
+                                                                                        parent_out
+                                                                                    ),
+                                                                                    "trace": str(parent_trace),
+                                                                                }
+                                                                                print(
+                                                                                    "[PARENT_FOCUS] "
+                                                                                    f"rc={parent_run.returncode} "
+                                                                                    f"hits={parent_focus_result['tree_probe_hits']} "
+                                                                                    f"artifact={parent_trace}",
+                                                                                    flush=True,
+                                                                                )
+                                                                            except subprocess.TimeoutExpired:
+                                                                                parent_focus_result = {
+                                                                                    "rc": 124,
+                                                                                    "error": "timeout",
+                                                                                }
+                                                                                print(
+                                                                                    "[PARENT_FOCUS] timed out",
+                                                                                    flush=True,
+                                                                                )
+                                                                    else:
+                                                                        print(
+                                                                            "[CALLER_GRANDPARENT] "
+                                                                            f"unresolved return=0x{parent_return:x} "
+                                                                            f"callee=0x{caller_function_start:x}",
+                                                                            flush=True,
+                                                                        )
+
                                                                 caller_focus_result = {
                                                                     "rc": caller_run.returncode,
                                                                     "tree_probe_hits": caller_out.count(
                                                                         "[TREE_PROBE]"
                                                                     ),
                                                                     "entry": caller_entry,
+                                                                    "parent_resolution": parent_resolution,
+                                                                    "parent_focus": parent_focus_result,
                                                                     "analysis": analyze_boz_output(
                                                                         caller_out
                                                                     ),
