@@ -1866,7 +1866,7 @@ def run_boz_diagnostic(report: dict) -> int:
                                                         ):
                                                             continue
                                                         call_match = re.search(
-                                                            r"\\bblx?(?:\\.w)?\\s+(?:0x)?([0-9a-fA-F]+)\\b",
+                                                            r"\bblx?(?:\.w)?\s+(?:0x)?([0-9a-fA-F]+)\b",
                                                             caller_line.lower(),
                                                         )
                                                         if not call_match:
@@ -1959,8 +1959,8 @@ def run_boz_diagnostic(report: dict) -> int:
                                                         # boundaries over dense single stepping.
                                                         caller_decoded = []
                                                         caller_ins_re = re.compile(
-                                                            r"^\\s*([0-9a-fA-F]+):\\s+"
-                                                            r"[0-9a-fA-F ]+\\s+([a-zA-Z0-9.]+)"
+                                                            r"^\s*([0-9a-fA-F]+):\s+"
+                                                            r"[0-9a-fA-F ]+\s+([a-zA-Z0-9.]+)"
                                                         )
                                                         for entry in caller_context:
                                                             caller_match = caller_ins_re.match(
@@ -2084,10 +2084,10 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                     is not None
                                                                 ):
                                                                     caller_entry_re = re.compile(
-                                                                        r"^\\[TREE_PROBE\\]"
+                                                                        r"^\[TREE_PROBE\]"
                                                                         r"(?: mode=[^ ]+)? "
                                                                         r"off=0*([0-9a-fA-F]+)"
-                                                                        r".*?\\blr=([0-9a-fA-F]{8})\\b"
+                                                                        r".*?\blr=([0-9a-fA-F]{8})\b"
                                                                     )
                                                                     for caller_line in (
                                                                         caller_out.replace(
