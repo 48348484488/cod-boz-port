@@ -5,7 +5,7 @@ A=re.compile(r"^\s*([0-9a-fA-F]+):"); C=re.compile(r"\bblx?\s+(?:0x)?([0-9a-fA-F
 def ad(s):
  m=A.match(s); return int(m.group(1),16) if m else None
 def main():
- p=argparse.ArgumentParser();p.add_argument("disassembly");p.add_argument("--target",action="append",default=[]);p.add_argument("--json-out");p.add_argument("--text-out");a=p.parse_args()
+ p=argparse.ArgumentParser();p.add_argument("disassembly");p.add_argument("--target",action="append",default=[]);p.add_argument("--json-out");p.add_argument("--text-out");p.add_argument("--probe-header");p.add_argument("--probe-limit",type=int,default=32);a=p.parse_args()
  ls=Path(a.disassembly).read_text(errors="replace").splitlines(); targets=[int(x,0) for x in a.target]
  starts=[i for i,x in enumerate(ls) if A.match(x) and "push" in x.lower() and "lr" in x.lower()]
  fs=[]
