@@ -943,6 +943,49 @@ def run_boz_diagnostic(report: dict) -> int:
                                                 "sentinel": f"0x{sentinel_value:08x}",
                                                 "phase": "before_D8FF0",
                                             })
+                                        root_events = []
+                                        for runtime_line in pre_lookup_text.splitlines():
+                                            pm = probe_re.match(runtime_line.strip())
+                                            if not pm:
+                                                continue
+                                            root_match = re.search(
+                                                r"\broot=([0-9a-fA-F]{8})\b",
+                                                pm.group(2),
+                                            )
+                                            if not root_match:
+                                                continue
+                                            root_value = int(root_match.group(1), 16)
+                                            root_events.append({
+                                                "off": f"0x{int(pm.group(1), 16):x}",
+                                                "root": f"0x{root_value:08x}",
+                                            })
+                                        first_nonzero = next(
+                                            (event for event in root_events
+                                             if event["root"] != "0x00000000"),
+                                            None,
+                                        )
+                                        transition_path = PUBLIC / "boz-root-transition.json"
+                                        transition_path.write_text(
+                                            json.dumps({
+                                                "sentinel": f"0x{sentinel_value:08x}",
+                                                "first_nonzero_before_lookup": first_nonzero,
+                                                "events": root_events,
+                                            }, indent=2) + "\n",
+                                            encoding="utf-8",
+                                        )
+                                        report["boz_root_transition"] = str(transition_path)
+                                        if first_nonzero:
+                                            print(
+                                                f"[ROOT_TRANSITION] off={first_nonzero['off']} "
+                                                f"root={first_nonzero['root']}",
+                                                flush=True,
+                                            )
+                                        else:
+                                            print(
+                                                "[ROOT_TRANSITION] none_before_lookup",
+                                                flush=True,
+                                            )
+
                                         writes_path = PUBLIC / "boz-sentinel-writes.json"
                                         writes_path.write_text(
                                             json.dumps({
