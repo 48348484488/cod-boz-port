@@ -174,10 +174,12 @@ static boz_probe_t g_tree_probes[BOZ_MAX_MASS_PROBES] = {
     {0x000da50cu, 0, BOZ_PROBE_THUMB16, 0},
     {0x000da50eu, 0, BOZ_PROBE_THUMB16, 0},
     {0x000da510u, 0, BOZ_PROBE_THUMB16, 0},
+    {0x000da52au, 0, BOZ_PROBE_THUMB16, 0},
+    {0x000da6acu, 0, BOZ_PROBE_THUMB16, 0},
     {0x000da816u, 0, BOZ_PROBE_THUMB16, 0},
     {0x000daef2u, 0, BOZ_PROBE_THUMB16, 0},
 };
-static unsigned g_tree_probe_count = 7u;
+static unsigned g_tree_probe_count = 9u;
 
 static const char *probe_mode_name(uint8_t mode) {
     return mode == BOZ_PROBE_ARM32 ? "arm32" : "thumb16";
