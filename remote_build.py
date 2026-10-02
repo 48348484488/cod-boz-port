@@ -2426,12 +2426,134 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                             flush=True,
                                                                                         )
                                                                                         break
+                                                                                great_parent_resolution = None
+                                                                                if (
+                                                                                    grandparent_entry is not None
+                                                                                    and parent_function_start is not None
+                                                                                ):
+                                                                                    great_lr_value = int(
+                                                                                        grandparent_entry["caller_lr"], 16
+                                                                                    )
+                                                                                    great_return_abs = great_lr_value & ~1
+                                                                                    great_return = (
+                                                                                        great_return_abs - caller_image_base
+                                                                                        if caller_image_base
+                                                                                        and great_return_abs >= caller_image_base
+                                                                                        else great_return_abs
+                                                                                    )
+                                                                                    great_candidates = []
+                                                                                    for great_index, (
+                                                                                        great_off,
+                                                                                        great_line,
+                                                                                    ) in enumerate(parsed_disasm):
+                                                                                        if not (
+                                                                                            great_return - 8
+                                                                                            <= great_off
+                                                                                            < great_return
+                                                                                        ):
+                                                                                            continue
+                                                                                        great_next_off = (
+                                                                                            parsed_disasm[great_index + 1][0]
+                                                                                            if great_index + 1 < len(parsed_disasm)
+                                                                                            else None
+                                                                                        )
+                                                                                        if great_next_off != great_return:
+                                                                                            continue
+                                                                                        great_low = great_line.lower()
+                                                                                        if not re.search(
+                                                                                            r"\bblx?(?:\.w)?\b",
+                                                                                            great_low,
+                                                                                        ):
+                                                                                            continue
+                                                                                        great_direct = re.search(
+                                                                                            r"\bblx?(?:\.w)?\s+(?:0x)?([0-9a-fA-F]+)\b",
+                                                                                            great_low,
+                                                                                        )
+                                                                                        if great_direct:
+                                                                                            great_target = int(
+                                                                                                great_direct.group(1), 16
+                                                                                            )
+                                                                                            if great_target != parent_function_start:
+                                                                                                continue
+                                                                                        great_candidates.append(
+                                                                                            (great_index, great_off, great_line)
+                                                                                        )
+
+                                                                                    if great_candidates:
+                                                                                        (
+                                                                                            great_index,
+                                                                                            great_callsite,
+                                                                                            great_call_line,
+                                                                                        ) = great_candidates[-1]
+                                                                                        great_function_start = None
+                                                                                        for search_index in range(
+                                                                                            great_index, -1, -1
+                                                                                        ):
+                                                                                            entry_off, entry_line = parsed_disasm[
+                                                                                                search_index
+                                                                                            ]
+                                                                                            if great_callsite - entry_off > 0x500:
+                                                                                                break
+                                                                                            entry_low = entry_line.lower()
+                                                                                            if (
+                                                                                                "lr" in entry_low
+                                                                                                and (
+                                                                                                    "push" in entry_low
+                                                                                                    or "stmdb" in entry_low
+                                                                                                )
+                                                                                            ):
+                                                                                                great_function_start = entry_off
+                                                                                                break
+                                                                                        great_parent_resolution = {
+                                                                                            "callee": f"0x{parent_function_start:x}",
+                                                                                            "runtime_lr": f"0x{great_lr_value:08x}",
+                                                                                            "return_address_absolute": f"0x{great_return_abs:08x}",
+                                                                                            "return_address": f"0x{great_return:x}",
+                                                                                            "callsite": f"0x{great_callsite:x}",
+                                                                                            "call_instruction": great_call_line,
+                                                                                            "function_start": (
+                                                                                                f"0x{great_function_start:x}"
+                                                                                                if great_function_start is not None
+                                                                                                else None
+                                                                                            ),
+                                                                                            "same_function_as_d8ff0_caller": (
+                                                                                                great_function_start == 0xDA6AC
+                                                                                            ),
+                                                                                        }
+                                                                                        print(
+                                                                                            "[GREAT_GRANDPARENT] "
+                                                                                            f"callee=0x{parent_function_start:x} "
+                                                                                            f"return=0x{great_return:x} "
+                                                                                            f"callsite=0x{great_callsite:x} "
+                                                                                            "function="
+                                                                                            + (
+                                                                                                f"0x{great_function_start:x}"
+                                                                                                if great_function_start is not None
+                                                                                                else "unknown"
+                                                                                            )
+                                                                                            + " same_as_d8ff0_owner="
+                                                                                            + (
+                                                                                                "yes"
+                                                                                                if great_function_start == 0xDA6AC
+                                                                                                else "no"
+                                                                                            ),
+                                                                                            flush=True,
+                                                                                        )
+                                                                                    else:
+                                                                                        print(
+                                                                                            "[GREAT_GRANDPARENT] "
+                                                                                            f"unresolved return=0x{great_return:x} "
+                                                                                            f"callee=0x{parent_function_start:x}",
+                                                                                            flush=True,
+                                                                                        )
+
                                                                                 parent_focus_result = {
                                                                                     "rc": parent_run.returncode,
                                                                                     "tree_probe_hits": parent_out.count(
                                                                                         "[TREE_PROBE]"
                                                                                     ),
                                                                                     "entry": grandparent_entry,
+                                                                                    "parent_resolution": great_parent_resolution,
                                                                                     "analysis": analyze_boz_output(
                                                                                         parent_out
                                                                                     ),
