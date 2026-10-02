@@ -218,7 +218,7 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
                 *site=p->saved; __builtin___clear_cache((char *)site,(char *)(site+1)); p->armed=0;
                 uint32_t p4=uc->uc_mcontext.arm_r4 ? *(uint32_t *)(uintptr_t)(uc->uc_mcontext.arm_r4+4u) : 0;
                 uint32_t p5=uc->uc_mcontext.arm_r5 ? *(uint32_t *)(uintptr_t)(uc->uc_mcontext.arm_r5+4u) : 0;
-                fprintf(stderr,"[TREE_PROBE] off=%06x r0=%08lx r1=%08lx r2=%08lx r3=%08lx r4=%08lx r5=%08lx r4p4=%08x r5p4=%08x r6=%08lx r7=%08lx r8=%08lx lr=%08lx\\n",
+                fprintf(stderr,"[TREE_PROBE] off=%06x r0=%08lx r1=%08lx r2=%08lx r3=%08lx r4=%08lx r5=%08lx r4p4=%08x r5p4=%08x r6=%08lx r7=%08lx r8=%08lx lr=%08lx\n",
                     p->off,(unsigned long)uc->uc_mcontext.arm_r0,(unsigned long)uc->uc_mcontext.arm_r1,
                     (unsigned long)uc->uc_mcontext.arm_r2,(unsigned long)uc->uc_mcontext.arm_r3,
                     (unsigned long)uc->uc_mcontext.arm_r4,(unsigned long)uc->uc_mcontext.arm_r5,p4,p5,
