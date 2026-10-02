@@ -782,15 +782,77 @@ def run_boz_diagnostic(report: dict) -> int:
                                             report["boz_focus_probe_error"] = "timeout"
                                             print("[FOCUS_RUN] timed out", flush=True)
 
+                                    reg_offsets = [
+                                        0xDABE8, 0xDABF4, 0xDAC00, 0xDAC0C,
+                                        0xDAC18, 0xDAC24, 0xDAC30, 0xDAC3C,
+                                        0xDAC48, 0xDAC54, 0xDAC60, 0xDAC6C,
+                                        0xDAC78, 0xDAC84, 0xDAC90, 0xDAC9C,
+                                        0xDACA8, 0xDACB4, 0xDACC0, 0xDACCC,
+                                        0xDACD8, 0xDACE4, 0xDACF0, 0xDACFE,
+                                    ]
+                                    reg_rc = None
+                                    reg_hits = 0
+                                    reg_analysis = None
+                                    if os.environ.get("BOZ_AUTO_REG_TRACE", "1") == "1":
+                                        reg_env = env.copy()
+                                        reg_env["BOZ_MASS_PROBES"] = ",".join(
+                                            f"0x{off:x}" for off in reg_offsets
+                                        )
+                                        print(
+                                            f"[REG_TRACE] launching count={len(reg_offsets)}",
+                                            flush=True,
+                                        )
+                                        try:
+                                            reg = subprocess.run(
+                                                cmd,
+                                                cwd=ROOT,
+                                                env=reg_env,
+                                                text=True,
+                                                stdout=subprocess.PIPE,
+                                                stderr=subprocess.STDOUT,
+                                                timeout=int(os.environ.get("BOZ_REG_RUN_TIMEOUT", "60")),
+                                            )
+                                            reg_out = reg.stdout or ""
+                                            reg_path = PUBLIC / "boz-registration-trace.log"
+                                            reg_path.write_text(reg_out, encoding="utf-8")
+                                            reg_rc = reg.returncode
+                                            reg_hits = reg_out.count("[TREE_PROBE]")
+                                            reg_analysis = analyze_boz_output(reg_out)
+                                            report["boz_registration_trace"] = str(reg_path)
+                                            report["boz_registration_rc"] = reg_rc
+                                            report["boz_registration_hits"] = reg_hits
+                                            report["boz_registration_analysis"] = reg_analysis
+                                            selected = {
+                                                f"{off:06x}" for off in reg_offsets
+                                            }
+                                            for reg_line in reg_out.splitlines():
+                                                if not reg_line.startswith("[TREE_PROBE]"):
+                                                    continue
+                                                match = re.search(r"off=([0-9a-fA-F]+)", reg_line)
+                                                if match and match.group(1).lower() in selected:
+                                                    print("[REG_TRACE] " + reg_line, flush=True)
+                                            print(
+                                                f"[REG_TRACE] rc={reg_rc} hits={reg_hits} artifact={reg_path}",
+                                                flush=True,
+                                            )
+                                        except subprocess.TimeoutExpired:
+                                            reg_rc = 124
+                                            report["boz_registration_rc"] = 124
+                                            report["boz_registration_error"] = "timeout"
+                                            print("[REG_TRACE] timed out", flush=True)
+
                                     compare = {
                                         "baseline_rc": p.returncode,
                                         "mass_probe_rc": mass.returncode,
                                         "focus_probe_rc": focus_rc,
+                                        "registration_probe_rc": reg_rc,
                                         "baseline_analysis": diagnosis,
                                         "mass_probe_analysis": report["boz_mass_probe_analysis"],
                                         "focus_probe_analysis": focus_analysis,
                                         "tree_probe_hits": report["boz_mass_probe_hits"],
                                         "focus_probe_hits": focus_hits,
+                                        "registration_probe_hits": reg_hits,
+                                        "registration_probe_analysis": reg_analysis,
                                         "focus_hot_sites": focus_plan.get("hot_sites", []),
                                         "same_empty_registry_tree": bool(
                                             diagnosis.get("empty_registry_tree")
