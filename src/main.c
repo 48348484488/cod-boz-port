@@ -135,7 +135,9 @@ static bool parse_display_size(const char *value, uint32_t *width, uint32_t *hei
 
 #if defined(__arm__)
 static uint16_t g_d8ff0_saved;
+static uint16_t g_da6c6_saved;
 static int g_d8ff0_trace_armed;
+static int g_da6c6_trace_armed;
 
 static void arm_d8ff0_trace(void) {
     uint16_t *site = (uint16_t *)(uintptr_t)(g_loaded_base + 0x000d8ff0u);
@@ -144,11 +146,35 @@ static void arm_d8ff0_trace(void) {
     __builtin___clear_cache((char *)site, (char *)(site + 1));
     g_d8ff0_trace_armed = 1;
 }
+
+static void arm_da6c6_trace(void) {
+    uint16_t *site = (uint16_t *)(uintptr_t)(g_loaded_base + 0x000da6c6u);
+    g_da6c6_saved = *site;
+    *site = 0xbe00u;
+    __builtin___clear_cache((char *)site, (char *)(site + 1));
+    g_da6c6_trace_armed = 1;
+}
 #endif
 
 static void crash_handler(int sig, siginfo_t *info, void *context) {
 #if defined(__arm__)
     ucontext_t *uc = (ucontext_t *)context;
+    if (sig == SIGTRAP && g_da6c6_trace_armed &&
+        (uc->uc_mcontext.arm_pc == g_loaded_base + 0x000da6c6u ||
+         uc->uc_mcontext.arm_pc == g_loaded_base + 0x000da6c8u)) {
+        uint16_t *site = (uint16_t *)(uintptr_t)(g_loaded_base + 0x000da6c6u);
+        *site = g_da6c6_saved;
+        __builtin___clear_cache((char *)site, (char *)(site + 1));
+        g_da6c6_trace_armed = 0;
+        fprintf(stderr, "[DA6C6_ENTER] r0=%08lx r1=%08lx r2=%08lx r3=%08lx r4=%08lx r5=%08lx r6=%08lx r7=%08lx r8=%08lx lr=%08lx\\n",
+                (unsigned long)uc->uc_mcontext.arm_r0,(unsigned long)uc->uc_mcontext.arm_r1,
+                (unsigned long)uc->uc_mcontext.arm_r2,(unsigned long)uc->uc_mcontext.arm_r3,
+                (unsigned long)uc->uc_mcontext.arm_r4,(unsigned long)uc->uc_mcontext.arm_r5,
+                (unsigned long)uc->uc_mcontext.arm_r6,(unsigned long)uc->uc_mcontext.arm_r7,
+                (unsigned long)uc->uc_mcontext.arm_r8,(unsigned long)uc->uc_mcontext.arm_lr);
+        uc->uc_mcontext.arm_pc = g_loaded_base + 0x000da6c6u;
+        return;
+    }
     if (sig == SIGTRAP && g_d8ff0_trace_armed &&
         (uc->uc_mcontext.arm_pc == g_loaded_base + 0x000d8ff0u ||
          uc->uc_mcontext.arm_pc == g_loaded_base + 0x000d8ff2u)) {
@@ -422,7 +448,10 @@ int main(int argc, char **argv) {
 #endif
 #if defined(__arm__)
     g_loaded_base = (uintptr_t)loaded.base;
-    if (getenv("BOZ_NULL_OBJECT_TRACE")) arm_d8ff0_trace();
+    if (getenv("BOZ_NULL_OBJECT_TRACE")) {
+        arm_d8ff0_trace();
+        arm_da6c6_trace();
+    }
 #endif
     if (run) {
         int (*entry)(void) = (int (*)(void))(uintptr_t)(loaded.base + loaded.entry_offset);
