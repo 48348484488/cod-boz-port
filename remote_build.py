@@ -893,6 +893,83 @@ def run_boz_diagnostic(report: dict) -> int:
                                         mass_norm,
                                     )
 
+                                    # Record root ordering independently of the
+                                    # store-correlation pass. This makes the decisive
+                                    # before/after relationship visible even if a
+                                    # later static matcher finds no candidate.
+                                    root_timeline = []
+                                    for runtime_index, runtime_line in enumerate(
+                                        mass_norm.splitlines()
+                                    ):
+                                        pm = re.match(
+                                            r"^\\[TREE_PROBE\\] off=0*([0-9a-fA-F]+) (.*)$",
+                                            runtime_line.strip(),
+                                        )
+                                        if not pm:
+                                            continue
+                                        rm = re.search(
+                                            r"\\broot=([0-9a-fA-F]{8})\\b",
+                                            pm.group(2),
+                                        )
+                                        if not rm:
+                                            continue
+                                        root_timeline.append({
+                                            "index": runtime_index,
+                                            "off": f"0x{int(pm.group(1), 16):x}",
+                                            "root": f"0x{int(rm.group(1), 16):08x}",
+                                        })
+                                    lookup_line_index = next(
+                                        (
+                                            i for i, line in enumerate(mass_norm.splitlines())
+                                            if line.startswith("[D8FF0_ENTER]")
+                                        ),
+                                        None,
+                                    )
+                                    first_before = None
+                                    first_after = None
+                                    if lookup_line_index is not None:
+                                        first_before = next(
+                                            (
+                                                e for e in root_timeline
+                                                if e["index"] < lookup_line_index
+                                                and e["root"] != "0x00000000"
+                                            ),
+                                            None,
+                                        )
+                                        first_after = next(
+                                            (
+                                                e for e in root_timeline
+                                                if e["index"] > lookup_line_index
+                                                and e["root"] != "0x00000000"
+                                            ),
+                                            None,
+                                        )
+                                    ordering = {
+                                        "lookup_line_index": lookup_line_index,
+                                        "first_nonzero_before_lookup": first_before,
+                                        "first_nonzero_after_lookup": first_after,
+                                        "events": root_timeline,
+                                    }
+                                    ordering_path = PUBLIC / "boz-root-ordering.json"
+                                    ordering_path.write_text(
+                                        json.dumps(ordering, indent=2) + "\n",
+                                        encoding="utf-8",
+                                    )
+                                    report["boz_root_ordering"] = str(ordering_path)
+                                    print(
+                                        "[ROOT_ORDER] before="
+                                        + (
+                                            f"{first_before['off']}:{first_before['root']}"
+                                            if first_before else "none"
+                                        )
+                                        + " after="
+                                        + (
+                                            f"{first_after['off']}:{first_after['root']}"
+                                            if first_after else "none"
+                                        ),
+                                        flush=True,
+                                    )
+
                                     sentinel_writes = []
                                     if sentinel_match:
                                         sentinel_value = int(sentinel_match.group(1), 16)
