@@ -137,9 +137,11 @@ static bool parse_display_size(const char *value, uint32_t *width, uint32_t *hei
 static uint16_t g_d8ff0_saved;
 static uint16_t g_da6c6_saved;
 static uint16_t g_d8ffa_saved;
+static uint16_t g_d8984_saved;
 static int g_d8ff0_trace_armed;
 static int g_da6c6_trace_armed;
 static int g_d8ffa_trace_armed;
+static int g_d8984_trace_armed;
 static uint32_t g_d8ff0_manager;
 
 static void arm_d8ff0_trace(void) {
@@ -148,6 +150,14 @@ static void arm_d8ff0_trace(void) {
     *site = 0xbe00u;
     __builtin___clear_cache((char *)site, (char *)(site + 1));
     g_d8ff0_trace_armed = 1;
+}
+
+static void arm_d8984_trace(void) {
+    uint16_t *site = (uint16_t *)(uintptr_t)(g_loaded_base + 0x000d8984u);
+    g_d8984_saved = *site;
+    *site = 0xbe00u;
+    __builtin___clear_cache((char *)site, (char *)(site + 1));
+    g_d8984_trace_armed = 1;
 }
 
 static void arm_d8ffa_trace(void) {
@@ -170,6 +180,23 @@ static void arm_da6c6_trace(void) {
 static void crash_handler(int sig, siginfo_t *info, void *context) {
 #if defined(__arm__)
     ucontext_t *uc = (ucontext_t *)context;
+    if (sig == SIGTRAP && g_d8984_trace_armed &&
+        (uc->uc_mcontext.arm_pc == g_loaded_base + 0x000d8984u ||
+         uc->uc_mcontext.arm_pc == g_loaded_base + 0x000d8986u)) {
+        uint16_t *site = (uint16_t *)(uintptr_t)(g_loaded_base + 0x000d8984u);
+        *site = g_d8984_saved;
+        __builtin___clear_cache((char *)site, (char *)(site + 1));
+        g_d8984_trace_armed = 0;
+        fprintf(stderr, "[MANAGER_TREE_INIT] manager=%08lx new20=%08lx new24=%08lx old20=%08x old24=%08x lr=%08lx\n",
+                (unsigned long)uc->uc_mcontext.arm_r4,
+                (unsigned long)uc->uc_mcontext.arm_r10,
+                (unsigned long)uc->uc_mcontext.arm_r9,
+                *(uint32_t *)(uintptr_t)(uc->uc_mcontext.arm_r4 + 0x20u),
+                *(uint32_t *)(uintptr_t)(uc->uc_mcontext.arm_r4 + 0x24u),
+                (unsigned long)uc->uc_mcontext.arm_lr);
+        uc->uc_mcontext.arm_pc = g_loaded_base + 0x000d8984u;
+        return;
+    }
     if (sig == SIGTRAP && g_d8ffa_trace_armed &&
         (uc->uc_mcontext.arm_pc == g_loaded_base + 0x000d8ffau ||
          uc->uc_mcontext.arm_pc == g_loaded_base + 0x000d8ffcu)) {
@@ -485,6 +512,7 @@ int main(int argc, char **argv) {
     if (getenv("BOZ_NULL_OBJECT_TRACE")) {
         arm_d8ff0_trace();
         arm_da6c6_trace();
+        arm_d8984_trace();
     }
 #endif
     if (run) {
