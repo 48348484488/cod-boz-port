@@ -136,8 +136,11 @@ static bool parse_display_size(const char *value, uint32_t *width, uint32_t *hei
 #if defined(__arm__)
 static uint16_t g_d8ff0_saved;
 static uint16_t g_da6c6_saved;
+static uint16_t g_d8ffa_saved;
 static int g_d8ff0_trace_armed;
 static int g_da6c6_trace_armed;
+static int g_d8ffa_trace_armed;
+static uint32_t g_d8ff0_manager;
 
 static void arm_d8ff0_trace(void) {
     uint16_t *site = (uint16_t *)(uintptr_t)(g_loaded_base + 0x000d8ff0u);
@@ -145,6 +148,14 @@ static void arm_d8ff0_trace(void) {
     *site = 0xbe00u;
     __builtin___clear_cache((char *)site, (char *)(site + 1));
     g_d8ff0_trace_armed = 1;
+}
+
+static void arm_d8ffa_trace(void) {
+    uint16_t *site = (uint16_t *)(uintptr_t)(g_loaded_base + 0x000d8ffau);
+    g_d8ffa_saved = *site;
+    *site = 0xbe00u;
+    __builtin___clear_cache((char *)site, (char *)(site + 1));
+    g_d8ffa_trace_armed = 1;
 }
 
 static void arm_da6c6_trace(void) {
@@ -159,6 +170,27 @@ static void arm_da6c6_trace(void) {
 static void crash_handler(int sig, siginfo_t *info, void *context) {
 #if defined(__arm__)
     ucontext_t *uc = (ucontext_t *)context;
+    if (sig == SIGTRAP && g_d8ffa_trace_armed &&
+        (uc->uc_mcontext.arm_pc == g_loaded_base + 0x000d8ffau ||
+         uc->uc_mcontext.arm_pc == g_loaded_base + 0x000d8ffcu)) {
+        uint16_t *site = (uint16_t *)(uintptr_t)(g_loaded_base + 0x000d8ffau);
+        *site = g_d8ffa_saved;
+        __builtin___clear_cache((char *)site, (char *)(site + 1));
+        g_d8ffa_trace_armed = 0;
+        uint32_t manager = g_d8ff0_manager;
+        uint32_t sentinel = manager ? *(uint32_t *)(uintptr_t)(manager + 0x20u) : 0;
+        uint32_t root = sentinel ? *(uint32_t *)(uintptr_t)(sentinel + 4u) : 0;
+        fprintf(stderr, "[D8FF0_HASH] hash=%08lx manager=%08x sentinel=%08x root=%08x",
+                (unsigned long)uc->uc_mcontext.arm_r0, manager, sentinel, root);
+        if (root && root != sentinel) {
+            const uint32_t *node = (const uint32_t *)(uintptr_t)root;
+            fprintf(stderr, " root_key=%08x root_payload=%08x left=%08x right=%08x",
+                    node[4], node[5], node[2], node[3]);
+        }
+        fprintf(stderr, "\n");
+        uc->uc_mcontext.arm_pc = g_loaded_base + 0x000d8ffau;
+        return;
+    }
     if (sig == SIGTRAP && g_da6c6_trace_armed &&
         (uc->uc_mcontext.arm_pc == g_loaded_base + 0x000da6c6u ||
          uc->uc_mcontext.arm_pc == g_loaded_base + 0x000da6c8u)) {
@@ -182,6 +214,8 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
         *site = g_d8ff0_saved;
         __builtin___clear_cache((char *)site, (char *)(site + 1));
         g_d8ff0_trace_armed = 0;
+        g_d8ff0_manager = (uint32_t)uc->uc_mcontext.arm_r0;
+        arm_d8ffa_trace();
         fprintf(stderr, "[D8FF0_ENTER] manager=%08lx key=%08lx r2=%08lx r3=%08lx",
                 (unsigned long)uc->uc_mcontext.arm_r0, (unsigned long)uc->uc_mcontext.arm_r1,
                 (unsigned long)uc->uc_mcontext.arm_r2, (unsigned long)uc->uc_mcontext.arm_r3);
