@@ -93,15 +93,20 @@ def write_report(report: dict) -> None:
 
 
 def build_focus_probe_plan(disassembly: str, trace: str, limit: int = 64) -> dict:
-    manager_match = re.search(r"\\[D8FF0_ENTER\\].*?manager=([0-9a-fA-F]+)", trace)
+    lookup_pos = trace.find("[D8FF0_ENTER]")
+    if lookup_pos < 0:
+        return {"version": 2, "manager": None, "hot_sites": [], "probes": []}
+
+    lookup_text = trace[lookup_pos:lookup_pos + 512]
+    manager_match = re.search(r"manager=([0-9a-fA-F]+)", lookup_text)
     if not manager_match:
-        return {"version": 1, "manager": None, "hot_sites": [], "probes": []}
+        return {"version": 2, "manager": None, "hot_sites": [], "probes": []}
 
     manager = int(manager_match.group(1), 16)
-    before_lookup = trace[:manager_match.start()]
+    before_lookup = trace[:lookup_pos]
     hot_sites = []
     hit_re = re.compile(
-        r"\\[TREE_PROBE\\] off=([0-9a-fA-F]+).*?"
+        r"\[TREE_PROBE\]\s+off=([0-9a-fA-F]+).*?"
         r"r4=([0-9a-fA-F]+).*?r5=([0-9a-fA-F]+)"
     )
     for hit in hit_re.finditer(before_lookup):
@@ -114,14 +119,14 @@ def build_focus_probe_plan(disassembly: str, trace: str, limit: int = 64) -> dic
     hot_sites = sorted(set(hot_sites))
     if not hot_sites:
         return {
-            "version": 1,
+            "version": 2,
             "manager": f"0x{manager:08x}",
             "hot_sites": [],
             "probes": [],
         }
 
     instruction_re = re.compile(
-        r"^\\s*([0-9a-fA-F]+):\\s+(?:[0-9a-fA-F]{2,8}(?:\\s+[0-9a-fA-F]{2,8})*\\s+)(.+)$"
+        r"^\s*([0-9a-fA-F]+):\s+(?:[0-9a-fA-F]{2,8}(?:\s+[0-9a-fA-F]{2,8})*\s+)(.+)$"
     )
     blocked = {0xD8984, 0xD8FF0, 0xD8FFA, 0xDA6C6, 0xDB31E, 0x254F44}
     ranked = []
@@ -148,7 +153,7 @@ def build_focus_probe_plan(disassembly: str, trace: str, limit: int = 64) -> dic
         if "#4]" in op:
             score += 55
             reasons.append("plus4_link")
-        if re.search(r"\\bblx?\\b", op):
+        if re.search(r"\bblx?\b", op):
             score += 25
             reasons.append("call")
         if "ldr" in op:
@@ -170,7 +175,7 @@ def build_focus_probe_plan(disassembly: str, trace: str, limit: int = 64) -> dic
 
     ranked.sort(key=lambda item: (-item["score"], item["distance"], item["off"]))
     return {
-        "version": 1,
+        "version": 2,
         "manager": f"0x{manager:08x}",
         "hot_sites": [f"0x{off:x}" for off in hot_sites],
         "count": min(limit, len(ranked)),
