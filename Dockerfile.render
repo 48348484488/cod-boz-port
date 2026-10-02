@@ -27,9 +27,11 @@ RUN dpkg --add-architecture armhf \
 
 WORKDIR /app
 
-COPY . .
-
+# Keep Python dependencies in a cacheable layer so source-only changes do not
+# reinstall numpy/unicorn on every diagnostic deploy.
 RUN python -m pip install --no-cache-dir numpy unicorn
+
+COPY . .
 
 EXPOSE 10000
 
