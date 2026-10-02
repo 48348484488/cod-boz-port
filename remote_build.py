@@ -394,6 +394,25 @@ def run_boz_diagnostic(report: dict) -> int:
                             report["boz_mass_probe_env"] = ",".join(f"{int(p['off']):x}" for p in probes)
                             print(f"[MASS_PROBE_PLAN] count={len(probes)} artifact={probe_plan}", flush=True)
                             print("[MASS_PROBE_PLAN] " + report["boz_mass_probe_env"], flush=True)
+                            if probes:
+                                mass_env = env.copy()
+                                mass_env["BOZ_MASS_PROBES"] = report["boz_mass_probe_env"]
+                                print(f"[MASS_PROBE_RUN] launching count={len(probes)}", flush=True)
+                                try:
+                                    mass = subprocess.run(cmd, cwd=ROOT, env=mass_env, text=True,
+                                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                        timeout=int(os.environ.get("BOZ_RUN_TIMEOUT", "60")))
+                                    mass_out = mass.stdout or ""
+                                    report["boz_mass_probe_rc"] = mass.returncode
+                                    report["boz_mass_probe_hits"] = mass_out.count("[TREE_PROBE]")
+                                    print(mass_out, end="" if mass_out.endswith("\\n") else "\\n", flush=True)
+                                    print(f"[MASS_PROBE_RUN] rc={mass.returncode} hits={report['boz_mass_probe_hits']}", flush=True)
+                                except subprocess.TimeoutExpired as exc:
+                                    report["boz_mass_probe_rc"] = 124
+                                    report["boz_mass_probe_hits"] = 0
+                                    print("[MASS_PROBE_RUN] timed out", flush=True)
+                                    if exc.stdout:
+                                        print(exc.stdout, flush=True)
                         except Exception as exc:
                             report["boz_mass_probe_plan_error"] = repr(exc)
                     print(f"[AUTO_INVESTIGATOR] rc={inv.returncode} json={auto_json} text={auto_txt}", flush=True)
