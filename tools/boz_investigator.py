@@ -7,6 +7,14 @@ from pathlib import Path
 ADDR = re.compile(r"^\s*([0-9a-fA-F]+):")
 CALL = re.compile(r"\bblx?\s+(?:0x)?([0-9a-fA-F]+)\b", re.I)
 
+# Runtime traces at D8FF0/DA6C6/DAA84/DA4DC confirm this mapped window
+# executes in Thumb state. Do not infer Thumb only from force-thumb decoding.
+CONFIRMED_THUMB_RANGES = ((0xD6000, 0xDB800),)
+
+
+def confirmed_thumb(off):
+    return any(lo <= off < hi for lo, hi in CONFIRMED_THUMB_RANGES)
+
 def addr(line):
     m = ADDR.match(line)
     return int(m.group(1), 16) if m else None
@@ -87,7 +95,9 @@ def main():
               "target_xrefs": xrefs}
     if a.probe_plan:
         Path(a.probe_plan).write_text(json.dumps(
-            {"version": 3, "capacity": 512,\n             "confirmed_thumb_ranges": [[hex(lo), hex(hi)] for lo, hi in CONFIRMED_THUMB_RANGES],\n             "count": len(ranked), "probes": ranked}, indent=2) + "\n")
+            {"version": 3, "capacity": 512,
+             "confirmed_thumb_ranges": [[hex(lo), hex(hi)] for lo, hi in CONFIRMED_THUMB_RANGES],
+             "count": len(ranked), "probes": ranked}, indent=2) + "\n")
     data = json.dumps(result, indent=2)
     if a.json_out:
         Path(a.json_out).write_text(data + "\n")
