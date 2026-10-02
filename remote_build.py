@@ -605,6 +605,67 @@ def run_boz_diagnostic(report: dict) -> int:
                                                     flush=True,
                                                 )
 
+                                    # Resolve the Thumb function containing the exact
+                                    # sentinel constructor at DAA84 and enumerate calls
+                                    # from that function without adding more runtime traps.
+                                    constructor_target = 0xDAA84
+                                    constructor_index = next(
+                                        (
+                                            index for index, (off, _line) in enumerate(parsed_disasm)
+                                            if off == constructor_target
+                                        ),
+                                        None,
+                                    )
+                                    constructor_info = {
+                                        "target": constructor_target,
+                                        "function_start": None,
+                                        "function_end": None,
+                                        "calls": [],
+                                        "instructions": [],
+                                    }
+                                    if constructor_index is not None:
+                                        start_index = constructor_index
+                                        while start_index > 0:
+                                            low = parsed_disasm[start_index][1].lower()
+                                            if "\tpush" in low or " push" in low:
+                                                break
+                                            start_index -= 1
+                                        end_index = constructor_index
+                                        while end_index + 1 < len(parsed_disasm):
+                                            low = parsed_disasm[end_index][1].lower()
+                                            if "\tpop" in low or " bx\tlr" in low:
+                                                break
+                                            end_index += 1
+                                        function_slice = parsed_disasm[start_index:end_index + 1]
+                                        if function_slice:
+                                            constructor_info["function_start"] = function_slice[0][0]
+                                            constructor_info["function_end"] = function_slice[-1][0]
+                                            constructor_info["instructions"] = [
+                                                {"off": off, "line": line}
+                                                for off, line in function_slice
+                                            ]
+                                            constructor_info["calls"] = [
+                                                {"off": off, "line": line}
+                                                for off, line in function_slice
+                                                if re.search(r"\\bblx?\\b", line.lower())
+                                            ]
+                                    constructor_path = PUBLIC / "boz-manager-constructor.json"
+                                    constructor_path.write_text(
+                                        json.dumps(constructor_info, indent=2) + "\n",
+                                        encoding="utf-8",
+                                    )
+                                    report["boz_manager_constructor"] = str(constructor_path)
+                                    print(
+                                        "[MANAGER_CTOR] "
+                                        f"target=0x{constructor_target:x} "
+                                        f"start={constructor_info['function_start']} "
+                                        f"end={constructor_info['function_end']} "
+                                        f"calls={len(constructor_info['calls'])}",
+                                        flush=True,
+                                    )
+                                    for call in constructor_info["calls"]:
+                                        print("[MANAGER_CTOR_CALL] " + call["line"], flush=True)
+
                                     focus_rc = None
                                     focus_hits = 0
                                     focus_analysis = None
