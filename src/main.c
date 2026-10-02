@@ -133,9 +133,45 @@ static bool parse_display_size(const char *value, uint32_t *width, uint32_t *hei
     return true;
 }
 
+#if defined(__arm__)
+static uint16_t g_d8ff0_saved;
+static int g_d8ff0_trace_armed;
+
+static void arm_d8ff0_trace(void) {
+    uint16_t *site = (uint16_t *)(uintptr_t)(g_loaded_base + 0x000d8ff0u);
+    g_d8ff0_saved = *site;
+    *site = 0xbe00u;
+    __builtin___clear_cache((char *)site, (char *)(site + 1));
+    g_d8ff0_trace_armed = 1;
+}
+#endif
+
 static void crash_handler(int sig, siginfo_t *info, void *context) {
 #if defined(__arm__)
     ucontext_t *uc = (ucontext_t *)context;
+    if (sig == SIGTRAP && g_d8ff0_trace_armed &&
+        (uc->uc_mcontext.arm_pc == g_loaded_base + 0x000d8ff0u ||
+         uc->uc_mcontext.arm_pc == g_loaded_base + 0x000d8ff2u)) {
+        uint16_t *site = (uint16_t *)(uintptr_t)(g_loaded_base + 0x000d8ff0u);
+        *site = g_d8ff0_saved;
+        __builtin___clear_cache((char *)site, (char *)(site + 1));
+        g_d8ff0_trace_armed = 0;
+        fprintf(stderr, "[D8FF0_ENTER] manager=%08lx key=%08lx r2=%08lx r3=%08lx",
+                (unsigned long)uc->uc_mcontext.arm_r0, (unsigned long)uc->uc_mcontext.arm_r1,
+                (unsigned long)uc->uc_mcontext.arm_r2, (unsigned long)uc->uc_mcontext.arm_r3);
+        if (uc->uc_mcontext.arm_r1) {
+            const unsigned char *s = (const unsigned char *)(uintptr_t)uc->uc_mcontext.arm_r1;
+            fprintf(stderr, " key_bytes=");
+            for (int i = 0; i < 64; ++i) {
+                unsigned char ch = s[i];
+                if (!ch) break;
+                fputc((ch >= 32 && ch < 127) ? ch : '.', stderr);
+            }
+        }
+        fprintf(stderr, "\n");
+        uc->uc_mcontext.arm_pc = g_loaded_base + 0x000d8ff0u;
+        return;
+    }
     if (sig == SIGSEGV && recover_bucket_allocator_fault(uc)) return;
     if (sig == SIGSEGV && recover_null_buffer_write(uc)) return;
     if (sig == SIGSEGV && recover_null_buffer_slot(uc)) return;
@@ -235,6 +271,7 @@ static void install_crash_handlers(void) {
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = SA_SIGINFO;
     sigaction(SIGSEGV, &sa, NULL);
+    sigaction(SIGTRAP, &sa, NULL);
     sigaction(SIGILL, &sa, NULL);
     sigaction(SIGBUS, &sa, NULL);
     sigaction(SIGABRT, &sa, NULL);
@@ -385,6 +422,7 @@ int main(int argc, char **argv) {
 #endif
 #if defined(__arm__)
     g_loaded_base = (uintptr_t)loaded.base;
+    if (getenv("BOZ_NULL_OBJECT_TRACE")) arm_d8ff0_trace();
 #endif
     if (run) {
         int (*entry)(void) = (int (*)(void))(uintptr_t)(loaded.base + loaded.entry_offset);
