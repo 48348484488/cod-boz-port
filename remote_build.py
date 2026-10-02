@@ -390,35 +390,94 @@ def run_boz_diagnostic(report: dict) -> int:
                         try:
                             plan = json.loads(probe_plan.read_text(encoding="utf-8"))
                             probes = plan.get("probes", [])
-                            report["boz_mass_probe_count"] = len(probes)
-                            report["boz_mass_probe_env"] = ",".join(f"{int(p['off']):x}" for p in probes)
-                            print(f"[MASS_PROBE_PLAN] count={len(safe_probes)} artifact={probe_plan}", flush=True)
-                            print("[MASS_PROBE_PLAN] " + report["boz_mass_probe_env"], flush=True)
-                            if safe_probes:
+                            safe_probes = [
+                                p for p in probes
+                                if p.get("mode") == "thumb16"
+                                and 0xD6000 <= int(p["off"]) < 0xDB800
+                                and int(p["off"]) != 0x254F44
+                            ][:64]
+                            report["boz_mass_probe_count"] = len(safe_probes)
+                            report["boz_mass_probe_env"] = ",".join(
+                                f"0x{int(p['off']):x}" for p in safe_probes
+                            )
+                            print(
+                                f"[MASS_PROBE_PLAN] count={len(safe_probes)} artifact={probe_plan}",
+                                flush=True,
+                            )
+                            print(
+                                "[MASS_PROBE_PLAN] " + report["boz_mass_probe_env"],
+                                flush=True,
+                            )
+                            if safe_probes and os.environ.get("BOZ_AUTO_MASS_PROBE", "1") == "1":
                                 mass_env = env.copy()
                                 mass_env["BOZ_MASS_PROBES"] = report["boz_mass_probe_env"]
-                                print(f"[MASS_PROBE_RUN] launching count={len(safe_probes)}", flush=True)
+                                print(
+                                    f"[MASS_PROBE_RUN] launching count={len(safe_probes)}",
+                                    flush=True,
+                                )
                                 try:
-                                    mass = subprocess.run(cmd, cwd=ROOT, env=mass_env, text=True,
-                                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                        timeout=int(os.environ.get("BOZ_RUN_TIMEOUT", "60")))
+                                    mass = subprocess.run(
+                                        cmd,
+                                        cwd=ROOT,
+                                        env=mass_env,
+                                        text=True,
+                                        stdout=subprocess.PIPE,
+                                        stderr=subprocess.STDOUT,
+                                        timeout=int(os.environ.get("BOZ_MASS_RUN_TIMEOUT", "60")),
+                                    )
                                     mass_out = mass.stdout or ""
-                                    report["boz_mass_probe_rc"] = mass.returncode
-                                    report["boz_mass_probe_hits"] = mass_out.count("[TREE_PROBE]")
                                     mass_trace = PUBLIC / "boz-mass-probe-trace.log"
                                     mass_trace.write_text(mass_out, encoding="utf-8")
+                                    report["boz_mass_probe_rc"] = mass.returncode
+                                    report["boz_mass_probe_hits"] = mass_out.count("[TREE_PROBE]")
                                     report["boz_mass_probe_trace"] = str(mass_trace)
                                     report["boz_mass_probe_analysis"] = analyze_boz_output(mass_out)
-                                    print(mass_out, end="" if mass_out.endswith("\\n") else "\\n", flush=True)
-                                    print(f"[MASS_PROBE_RUN] rc={mass.returncode} hits={report['boz_mass_probe_hits']}", flush=True)
+                                    compare = {
+                                        "baseline_rc": p.returncode,
+                                        "mass_probe_rc": mass.returncode,
+                                        "baseline_analysis": diagnosis,
+                                        "mass_probe_analysis": report["boz_mass_probe_analysis"],
+                                        "tree_probe_hits": report["boz_mass_probe_hits"],
+                                        "same_empty_registry_tree": bool(
+                                            diagnosis.get("empty_registry_tree")
+                                            and report["boz_mass_probe_analysis"].get("empty_registry_tree")
+                                        ),
+                                    }
+                                    compare_path = PUBLIC / "boz-analysis.json"
+                                    compare_path.write_text(
+                                        json.dumps(compare, indent=2) + "\n",
+                                        encoding="utf-8",
+                                    )
+                                    report["boz_analysis_artifact"] = str(compare_path)
+                                    print(
+                                        f"[MASS_PROBE_RUN] rc={mass.returncode} "
+                                        f"hits={report['boz_mass_probe_hits']} "
+                                        f"artifact={mass_trace}",
+                                        flush=True,
+                                    )
+                                    for mass_line in mass_out.splitlines():
+                                        if mass_line.startswith((
+                                            "[MASS_PROBE_PLAN]",
+                                            "[TREE_PROBE]",
+                                            "[D8FF0_",
+                                            "[NULL_OBJECT]",
+                                            "[NULL_FLOW]",
+                                        )):
+                                            print("[MASS_PROBE_RUN] " + mass_line, flush=True)
                                 except subprocess.TimeoutExpired as exc:
                                     report["boz_mass_probe_rc"] = 124
                                     report["boz_mass_probe_hits"] = 0
+                                    report["boz_mass_probe_error"] = "timeout"
+                                    mass_out = exc.stdout or ""
+                                    if isinstance(mass_out, bytes):
+                                        mass_out = mass_out.decode("utf-8", "replace")
+                                    mass_trace = PUBLIC / "boz-mass-probe-trace.log"
+                                    mass_trace.write_text(mass_out, encoding="utf-8")
+                                    report["boz_mass_probe_trace"] = str(mass_trace)
                                     print("[MASS_PROBE_RUN] timed out", flush=True)
-                                    if exc.stdout:
-                                        print(exc.stdout, flush=True)
                         except Exception as exc:
                             report["boz_mass_probe_plan_error"] = repr(exc)
+                            print(f"[MASS_PROBE_PLAN] error={exc!r}", flush=True)
                     print(f"[AUTO_INVESTIGATOR] rc={inv.returncode} json={auto_json} text={auto_txt}", flush=True)
                     if auto_txt.is_file():
                         for inv_line in auto_txt.read_text(encoding="utf-8", errors="replace").splitlines():
