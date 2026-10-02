@@ -5,7 +5,7 @@ A=re.compile(r"^\s*([0-9a-fA-F]+):"); C=re.compile(r"\bblx?\s+(?:0x)?([0-9a-fA-F
 def ad(s):
  m=A.match(s); return int(m.group(1),16) if m else None
 def main():
- p=argparse.ArgumentParser();p.add_argument("disassembly");p.add_argument("--target",action="append",default=[]);p.add_argument("--json-out");p.add_argument("--text-out");p.add_argument("--probe-header");p.add_argument("--probe-limit",type=int,default=32);a=p.parse_args()
+ p=argparse.ArgumentParser();p.add_argument("disassembly");p.add_argument("--target",action="append",default=[]);p.add_argument("--json-out");p.add_argument("--text-out");p.add_argument("--probe-plan");p.add_argument("--probe-limit",type=int,default=512);a=p.parse_args()
  ls=Path(a.disassembly).read_text(errors="replace").splitlines(); targets=[int(x,0) for x in a.target]
  starts=[i for i,x in enumerate(ls) if A.match(x) and "push" in x.lower() and "lr" in x.lower()]
  fs=[]
@@ -21,7 +21,7 @@ def main():
   own=next((f for f in reversed(fs) if f["start"]<=i<=f["end"]),None)
   stores.append({"site":ad(x),"function":own["entry"] if own else None,"line":x.strip()})
  xr={f"{t:x}":[c for c in calls if c["target"]==t] for t in targets}
- r={"functions":len(fs),"calls":len(calls),"store_plus4_sites":stores,"target_xrefs":xr}
+ ranked=[]\n for s in stores:\n  if s["site"] is None or s["site"]&1: continue\n  ranked.append({"off":s["site"],"mode":"thumb16","reason":"store_plus4","function":s["function"],"line":s["line"]})\n ranked=ranked[:max(0,a.probe_limit)]\n r={"functions":len(fs),"calls":len(calls),"store_plus4_sites":stores,"probe_candidates":ranked,"target_xrefs":xr}\n if a.probe_plan:Path(a.probe_plan).write_text(json.dumps({"version":2,"capacity":a.probe_limit,"count":len(ranked),"probes":ranked},indent=2)+"\\n")
  data=json.dumps(r,indent=2)
  if a.json_out:Path(a.json_out).write_text(data+"\n")
  else:print(data)
