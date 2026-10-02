@@ -33,6 +33,8 @@ def analyze_boz_output(output: str) -> dict:
         line = line.strip()
         if line.startswith("[D8FF0_ENTER]"):
             events.append({"type": "lookup", "line": line})
+        elif line.startswith("[D8FF0_HASH]"):
+            events.append({"type": "lookup_tree", "line": line})
         elif line.startswith("[DA6C6_ENTER]"):
             events.append({"type": "da6ac_path", "line": line})
         elif line.startswith("[NULL_OBJECT]"):
@@ -43,6 +45,7 @@ def analyze_boz_output(output: str) -> dict:
     lookups = [e for e in events if e["type"] == "lookup"]
     nulls = [e for e in events if e["type"] == "null_object"]
     da6 = [e for e in events if e["type"] == "da6ac_path"]
+    trees = [e for e in events if e["type"] == "lookup_tree"]
     diagnosis = {
         "version": 1,
         "events": events,
@@ -50,7 +53,13 @@ def analyze_boz_output(output: str) -> dict:
         "confidence": "insufficient",
         "next_action": None,
     }
-    if da6 and lookups and "r0=00000000" in da6[-1]["line"] and "lr=4a0d8ffb" in da6[-1]["line"].lower():
+    if trees and "root=00000000" in trees[-1]["line"]:
+        diagnosis["root_cause_candidate"] = "D8FF0 registry sentinel exists but its root pointer is NULL; the manager tree was never populated before lookup"
+        diagnosis["confidence"] = "high"
+        diagnosis["failed_stage"] = "manager_tree_registration"
+        diagnosis["next_action"] = "identify the insertion/registration path that should write sentinel+4 before D8FF0"
+        diagnosis["empty_registry_tree"] = True
+    elif da6 and lookups and "r0=00000000" in da6[-1]["line"] and "lr=4a0d8ffb" in da6[-1]["line"].lower():
         diagnosis["root_cause_candidate"] = "D8FF0 lookup returned NULL for the observed key; DA6AC then propagated the missing object toward DB31E"
         diagnosis["confidence"] = "high"
         diagnosis["failed_stage"] = "D8FF0"
@@ -359,6 +368,35 @@ def run_boz_diagnostic(report: dict) -> int:
                     text=True, capture_output=True, check=False)
                 print(f"[MAPPED_DISASM] BOZ+0x{off:06x} rc={dis.returncode}", flush=True)
                 print(dis.stdout, flush=True)
+                if off == 0xD8800:
+                    lines = dis.stdout.splitlines()
+                    interesting = []
+                    needles = ("str", "ldr", "bl", "#32", "#36", "#40", "#44", "#72", "24ba2c", "d8ff0")
+                    for i, line in enumerate(lines):
+                        low = line.lower()
+                        if any(n in low for n in needles):
+                            lo, hi = max(0, i - 2), min(len(lines), i + 3)
+                            block = lines[lo:hi]
+                            if block not in interesting:
+                                interesting.append(block)
+                    analysis_lines = [
+                        "BOZ manager registration static analysis",
+                        "region=0xD8800..0xDB800",
+                        "targets=stores/loads/calls and manager collection offsets 0x20/0x24/0x28/0x2c/0x48",
+                        "",
+                    ]
+                    for block in interesting:
+                        analysis_lines.extend(block)
+                        analysis_lines.append("")
+                    analysis_text = "\n".join(analysis_lines) + "\n"
+                    analysis_path = PUBLIC / "manager-registration-analysis.txt"
+                    analysis_path.write_text(analysis_text, encoding="utf-8")
+                    report["manager_registration_analysis"] = str(analysis_path)
+                    report["manager_registration_blocks"] = len(interesting)
+                    print(f"[DEEP_TRACE] manager registration candidate blocks={len(interesting)} artifact={analysis_path}", flush=True)
+                    # Keep the Render log compact while still surfacing candidates.
+                    for line in analysis_lines[:220]:
+                        print("[DEEP_TRACE] " + line, flush=True)
     report["game_run_rc"] = p.returncode
 
     public_trace = PUBLIC / "boz_gl_upload_trace.log"
