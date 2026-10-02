@@ -467,9 +467,9 @@ int main(int argc, char **argv) {
             }
             fp = fopen("/tmp/boz-mapped-d8e80.bin", "wb");
             if (fp) {
-                fwrite(loaded.base + 0x000d8e80u, 1, 0x800, fp);
+                fwrite(loaded.base + 0x000d8800u, 1, 0x3000, fp);
                 fclose(fp);
-                fprintf(stderr, "[MAPPED_DUMP] /tmp/boz-mapped-d8e80.bin base=0x000d8e80 size=0x800\\n");
+                fprintf(stderr, "[MAPPED_DUMP] /tmp/boz-mapped-d8e80.bin base=0x000d8800 size=0x3000\\n");
             }
             fp = fopen("/tmp/boz-mapped-db2e0.bin", "wb");
             if (fp) {
