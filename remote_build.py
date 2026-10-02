@@ -2196,7 +2196,7 @@ def run_boz_diagnostic(report: dict) -> int:
                                                         json.dumps(
                                                             late_writer_caller, indent=2
                                                         )
-                                                        + "\\n",
+                                                        + "\n",
                                                         encoding="utf-8",
                                                     )
                                                     report[
