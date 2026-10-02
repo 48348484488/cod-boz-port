@@ -746,6 +746,43 @@ def run_boz_diagnostic(report: dict) -> int:
                     auto_dis = pathlib.Path("/tmp/boz-investigator.disasm")
                     auto_dis.write_text(dis.stdout, encoding="utf-8")
 
+                    daa_context = []
+                    for static_line in dis.stdout.splitlines():
+                        sm = re.match(
+                            r"^\\s*([0-9a-fA-F]+):\\s+[0-9a-fA-F ]+\\s+(.+)$",
+                            static_line,
+                        )
+                        if not sm:
+                            continue
+                        static_off = int(sm.group(1), 16)
+                        if 0xDAA20 <= static_off <= 0xDAB20:
+                            daa_context.append({
+                                "off": f"0x{static_off:x}",
+                                "op": sm.group(2).strip(),
+                                "line": static_line.strip(),
+                            })
+                    daa_path = PUBLIC / "boz-daa-context.json"
+                    daa_path.write_text(
+                        json.dumps(
+                            {
+                                "range": ["0xdaa20", "0xdab20"],
+                                "instructions": daa_context,
+                            },
+                            indent=2,
+                        ) + "\n",
+                        encoding="utf-8",
+                    )
+                    report["boz_daa_context"] = str(daa_path)
+                    print(
+                        f"[DAA_CTX] instructions={len(daa_context)} artifact={daa_path}",
+                        flush=True,
+                    )
+                    for item in daa_context:
+                        print(
+                            f"[DAA_CTX] {item['off']} {item['op']}",
+                            flush=True,
+                        )
+
                     da46_prefix = []
                     for static_line in dis.stdout.splitlines():
                         sm = re.match(
