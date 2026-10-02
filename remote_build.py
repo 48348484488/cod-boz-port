@@ -548,10 +548,67 @@ def run_boz_diagnostic(report: dict) -> int:
                                         flush=True,
                                     )
 
+                                    # Correlate runtime-confirmed manager sites with the
+                                    # original Thumb disassembly without modifying more code.
+                                    disasm_lines = auto_dis.read_text(
+                                        encoding="utf-8", errors="replace"
+                                    ).splitlines()
+                                    parsed_disasm = []
+                                    addr_re = re.compile(r"^\\s*([0-9a-fA-F]+):\\s+(.+)$")
+                                    for static_line in disasm_lines:
+                                        static_match = addr_re.match(static_line)
+                                        if static_match:
+                                            parsed_disasm.append((
+                                                int(static_match.group(1), 16),
+                                                static_line.strip(),
+                                            ))
+                                    focus_static = []
+                                    hot_values = [
+                                        int(value, 16)
+                                        for value in focus_plan.get("hot_sites", [])
+                                    ]
+                                    for hot in hot_values:
+                                        context = [
+                                            {"off": off, "line": line}
+                                            for off, line in parsed_disasm
+                                            if abs(off - hot) <= 0x30
+                                        ]
+                                        focus_static.append({
+                                            "hot": hot,
+                                            "context": context,
+                                        })
+                                    static_path = PUBLIC / "boz-focus-static.json"
+                                    static_path.write_text(
+                                        json.dumps(focus_static, indent=2) + "\n",
+                                        encoding="utf-8",
+                                    )
+                                    report["boz_focus_static"] = str(static_path)
+                                    for group in focus_static:
+                                        print(
+                                            f"[FOCUS_STATIC] hot=0x{group['hot']:x}",
+                                            flush=True,
+                                        )
+                                        for entry in group["context"]:
+                                            low = entry["line"].lower()
+                                            if (
+                                                entry["off"] == group["hot"]
+                                                or " str" in low
+                                                or "\\tstr" in low
+                                                or " ldr" in low
+                                                or "\\tldr" in low
+                                                or "\\tbl" in low
+                                                or " cmp" in low
+                                                or "\\tcmp" in low
+                                            ):
+                                                print(
+                                                    "[FOCUS_STATIC] " + entry["line"],
+                                                    flush=True,
+                                                )
+
                                     focus_rc = None
                                     focus_hits = 0
                                     focus_analysis = None
-                                    if focus_env_text and os.environ.get("BOZ_AUTO_FOCUS_PROBE", "1") == "1":
+                                    if focus_env_text and os.environ.get("BOZ_AUTO_FOCUS_PROBE", "0") == "1":
                                         focus_env = env.copy()
                                         focus_env["BOZ_MASS_PROBES"] = focus_env_text
                                         print(
