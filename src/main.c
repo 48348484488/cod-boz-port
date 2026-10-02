@@ -143,6 +143,7 @@ static int g_da6c6_trace_armed;
 static int g_d8ffa_trace_armed;
 static int g_d8984_trace_armed;
 static uint32_t g_d8ff0_manager;
+static uint32_t g_trace_sentinel;
 typedef struct { uint32_t off; uint16_t saved; int armed; } boz_probe_t;
 #define BOZ_MAX_MASS_PROBES 512u
 static boz_probe_t g_tree_probes[BOZ_MAX_MASS_PROBES] = {
@@ -219,14 +220,19 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
                 uint32_t p4=uc->uc_mcontext.arm_r4 ? *(uint32_t *)(uintptr_t)(uc->uc_mcontext.arm_r4+4u) : 0;
                 uint32_t p5=uc->uc_mcontext.arm_r5 ? *(uint32_t *)(uintptr_t)(uc->uc_mcontext.arm_r5+4u) : 0;
                 uint32_t p3=0;
-                if (p->off==0x000daa84u && uc->uc_mcontext.arm_r3)
-                    p3=*(uint32_t *)(uintptr_t)(uc->uc_mcontext.arm_r3+4u);
-                fprintf(stderr,"[TREE_PROBE] off=%06x r0=%08lx r1=%08lx r2=%08lx r3=%08lx r3p4=%08x r4=%08lx r5=%08lx r4p4=%08x r5p4=%08x r6=%08lx r7=%08lx r8=%08lx lr=%08lx\n",
+                if (p->off==0x000daa84u && uc->uc_mcontext.arm_r3) {
+                    g_trace_sentinel=(uint32_t)uc->uc_mcontext.arm_r3;
+                    p3=*(uint32_t *)(uintptr_t)(g_trace_sentinel+4u);
+                }
+                uint32_t sentinel_root = g_trace_sentinel
+                    ? *(uint32_t *)(uintptr_t)(g_trace_sentinel+4u) : 0;
+                fprintf(stderr,"[TREE_PROBE] off=%06x r0=%08lx r1=%08lx r2=%08lx r3=%08lx r3p4=%08x r4=%08lx r5=%08lx r4p4=%08x r5p4=%08x r6=%08lx r7=%08lx r8=%08lx sentinel=%08x root=%08x lr=%08lx\n",
                     p->off,(unsigned long)uc->uc_mcontext.arm_r0,(unsigned long)uc->uc_mcontext.arm_r1,
                     (unsigned long)uc->uc_mcontext.arm_r2,(unsigned long)uc->uc_mcontext.arm_r3,p3,
                     (unsigned long)uc->uc_mcontext.arm_r4,(unsigned long)uc->uc_mcontext.arm_r5,p4,p5,
                     (unsigned long)uc->uc_mcontext.arm_r6,(unsigned long)uc->uc_mcontext.arm_r7,
-                    (unsigned long)uc->uc_mcontext.arm_r8,(unsigned long)uc->uc_mcontext.arm_lr);
+                    (unsigned long)uc->uc_mcontext.arm_r8,g_trace_sentinel,sentinel_root,
+                    (unsigned long)uc->uc_mcontext.arm_lr);
                 uc->uc_mcontext.arm_pc=g_loaded_base+p->off; return;
             }
         }
