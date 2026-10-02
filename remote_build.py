@@ -501,7 +501,7 @@ def run_boz_diagnostic(report: dict) -> int:
                         [sys.executable, str(investigator), str(auto_dis),
                          "--target", "0xDA1A0", "--target", "0xDA46C", "--target", "0xDAE62",
                          "--json-out", str(auto_json), "--text-out", str(auto_txt),
-                         "--probe-plan", str(PUBLIC / "boz-probe-plan.json"), "--probe-limit", "256"],
+                         "--probe-plan", str(PUBLIC / "boz-probe-plan.json"), "--probe-limit", "64"],
                         text=True, capture_output=True, check=False)
                     report["boz_investigator_rc"] = inv.returncode
                     report["boz_investigation_json"] = str(auto_json)
@@ -516,7 +516,7 @@ def run_boz_diagnostic(report: dict) -> int:
                                 if p.get("mode") == "thumb16"
                                 and 0xD6000 <= int(p["off"]) < 0xDB800
                                 and int(p["off"]) != 0x254F44
-                            ][:256]
+                            ][:64]
                             report["boz_mass_probe_count"] = len(safe_probes)
                             report["boz_mass_probe_env"] = ",".join(
                                 f"0x{int(p['off']):x}" for p in safe_probes
@@ -732,6 +732,129 @@ def run_boz_diagnostic(report: dict) -> int:
                                         print("[MANAGER_CTOR_CALL] " + call["line"], flush=True)
                                     for caller in constructor_info.get("callers", []):
                                         print("[MANAGER_CTOR_XREF] " + caller["line"], flush=True)
+
+                                    # Narrow transition run: DAA84 captures the
+                                    # sentinel, then only real Thumb instruction starts
+                                    # from DA4DC through DA50A are observed. Keeping this
+                                    # set small avoids the perturbation seen with the
+                                    # previous broad focus pass.
+                                    zoom_static = [
+                                        (off, line) for off, line in parsed_disasm
+                                        if 0xDA4DC <= off <= 0xDA50A
+                                    ]
+                                    zoom_offsets = [0xDAA84] + [
+                                        off for off, _ in zoom_static if off != 0xDAA84
+                                    ]
+                                    zoom_rc = None
+                                    zoom_hits = 0
+                                    if zoom_static and os.environ.get("BOZ_AUTO_ROOT_ZOOM", "1") == "1":
+                                        zoom_env = env.copy()
+                                        zoom_env["BOZ_MASS_PROBES"] = ",".join(
+                                            f"0x{off:x}" for off in zoom_offsets
+                                        )
+                                        print(
+                                            f"[ROOT_ZOOM] launching count={len(zoom_offsets)}",
+                                            flush=True,
+                                        )
+                                        try:
+                                            zoom = subprocess.run(
+                                                cmd,
+                                                cwd=ROOT,
+                                                env=zoom_env,
+                                                text=True,
+                                                stdout=subprocess.PIPE,
+                                                stderr=subprocess.STDOUT,
+                                                timeout=int(os.environ.get("BOZ_ROOT_ZOOM_TIMEOUT", "60")),
+                                            )
+                                            zoom_out = (zoom.stdout or "").replace("\\n", "\n")
+                                            zoom_rc = zoom.returncode
+                                            zoom_hits = zoom_out.count("[TREE_PROBE]")
+                                            static_by_off = {off: line for off, line in zoom_static}
+                                            zoom_events = []
+                                            for runtime_line in zoom_out.splitlines():
+                                                pm = re.match(
+                                                    r"^\[TREE_PROBE\] off=0*([0-9a-fA-F]+) (.*)$",
+                                                    runtime_line.strip(),
+                                                )
+                                                if not pm:
+                                                    continue
+                                                off = int(pm.group(1), 16)
+                                                if off != 0xDAA84 and not (0xDA4DC <= off <= 0xDA50A):
+                                                    continue
+                                                root_match = re.search(
+                                                    r"\broot=([0-9a-fA-F]{8})\b",
+                                                    pm.group(2),
+                                                )
+                                                sentinel_match_zoom = re.search(
+                                                    r"\bsentinel=([0-9a-fA-F]{8})\b",
+                                                    pm.group(2),
+                                                )
+                                                zoom_events.append({
+                                                    "off": f"0x{off:x}",
+                                                    "root": (
+                                                        f"0x{int(root_match.group(1), 16):08x}"
+                                                        if root_match else None
+                                                    ),
+                                                    "sentinel": (
+                                                        f"0x{int(sentinel_match_zoom.group(1), 16):08x}"
+                                                        if sentinel_match_zoom else None
+                                                    ),
+                                                    "line": static_by_off.get(off),
+                                                })
+
+                                            transition = None
+                                            previous = None
+                                            for event in zoom_events:
+                                                if event["off"] == "0xdaa84":
+                                                    continue
+                                                if (
+                                                    previous is not None
+                                                    and previous.get("root") == "0x00000000"
+                                                    and event.get("root") not in (None, "0x00000000")
+                                                ):
+                                                    transition = {
+                                                        "write_candidate": previous,
+                                                        "first_observed_nonzero": event,
+                                                    }
+                                                    break
+                                                previous = event
+
+                                            zoom_result = {
+                                                "rc": zoom_rc,
+                                                "hits": zoom_hits,
+                                                "offsets": [f"0x{x:x}" for x in zoom_offsets],
+                                                "events": zoom_events,
+                                                "transition": transition,
+                                            }
+                                            zoom_path = PUBLIC / "boz-root-zoom.json"
+                                            zoom_trace = PUBLIC / "boz-root-zoom-trace.log"
+                                            zoom_path.write_text(
+                                                json.dumps(zoom_result, indent=2) + "\n",
+                                                encoding="utf-8",
+                                            )
+                                            zoom_trace.write_text(zoom_out, encoding="utf-8")
+                                            report["boz_root_zoom"] = str(zoom_path)
+                                            report["boz_root_zoom_trace"] = str(zoom_trace)
+                                            report["boz_root_zoom_rc"] = zoom_rc
+                                            report["boz_root_zoom_hits"] = zoom_hits
+                                            report["boz_root_zoom_transition"] = transition
+                                            print(
+                                                f"[ROOT_ZOOM] rc={zoom_rc} hits={zoom_hits} "
+                                                f"transition={json.dumps(transition, separators=(',', ':'))}",
+                                                flush=True,
+                                            )
+                                            for event in zoom_events:
+                                                print(
+                                                    f"[ROOT_ZOOM] off={event['off']} "
+                                                    f"root={event['root']} "
+                                                    f"insn={event['line']}",
+                                                    flush=True,
+                                                )
+                                        except subprocess.TimeoutExpired:
+                                            zoom_rc = 124
+                                            report["boz_root_zoom_rc"] = 124
+                                            report["boz_root_zoom_error"] = "timeout"
+                                            print("[ROOT_ZOOM] timed out", flush=True)
 
                                     focus_rc = None
                                     focus_hits = 0
