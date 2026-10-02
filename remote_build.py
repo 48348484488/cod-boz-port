@@ -389,6 +389,58 @@ def run_boz_diagnostic(report: dict) -> int:
                         analysis_lines.extend(block)
                         analysis_lines.append("")
                     analysis_text = "\n".join(analysis_lines) + "\n"
+
+                    # Rank likely tree insertion/root-update sites. A red/black-tree style
+                    # node in this BOZ region uses +4/+8/+12 links and +16/+20 key/payload.
+                    # Give the highest score to stores at +4 surrounded by node navigation.
+                    ranked = []
+                    for i, line in enumerate(lines):
+                        low = line.lower()
+                        if "str" not in low or "#4]" not in low:
+                            continue
+                        lo, hi = max(0, i - 8), min(len(lines), i + 9)
+                        ctx = lines[lo:hi]
+                        joined = "\n".join(ctx).lower()
+                        score = 10
+                        reasons = ["store_plus_4"]
+                        for token, pts, reason in (
+                            ("#8]", 4, "node_left"),
+                            ("#12]", 4, "node_right"),
+                            ("#16]", 5, "node_key"),
+                            ("#20]", 5, "node_payload"),
+                            ("bl", 2, "near_call"),
+                            ("cmp", 1, "near_compare"),
+                            ("d8ff0", 8, "near_lookup"),
+                            ("24ba2c", 8, "near_hash"),
+                        ):
+                            if token in joined:
+                                score += pts
+                                reasons.append(reason)
+                        ranked.append((score, line.strip(), reasons, ctx))
+                    ranked.sort(key=lambda x: (-x[0], x[1]))
+                    # Deduplicate heavily-overlapping candidates by instruction address.
+                    shortlist = ranked[:32]
+                    shortlist_lines = [
+                        "BOZ tree registration ranked shortlist",
+                        "region=0xD8800..0xDB800",
+                        f"candidates={len(ranked)} shortlist={len(shortlist)}",
+                        "",
+                    ]
+                    for rank, (score, site, reasons, ctx) in enumerate(shortlist, 1):
+                        shortlist_lines.append(f"RANK {rank:02d} SCORE {score:02d} SITE {site}")
+                        shortlist_lines.append("REASONS " + ",".join(reasons))
+                        shortlist_lines.extend(ctx)
+                        shortlist_lines.append("")
+                    shortlist_text = "\n".join(shortlist_lines) + "\n"
+                    shortlist_path = PUBLIC / "manager-tree-shortlist.txt"
+                    shortlist_path.write_text(shortlist_text, encoding="utf-8")
+                    report["manager_tree_shortlist"] = str(shortlist_path)
+                    report["manager_tree_candidate_count"] = len(ranked)
+                    report["manager_tree_shortlist_count"] = len(shortlist)
+                    print(f"[DEEP_RANK] tree candidates={len(ranked)} shortlist={len(shortlist)} artifact={shortlist_path}", flush=True)
+                    for line in shortlist_lines[:260]:
+                        print("[DEEP_RANK] " + line, flush=True)
+
                     analysis_path = PUBLIC / "manager-registration-analysis.txt"
                     analysis_path.write_text(analysis_text, encoding="utf-8")
                     report["manager_registration_analysis"] = str(analysis_path)
