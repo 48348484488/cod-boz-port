@@ -392,12 +392,12 @@ def run_boz_diagnostic(report: dict) -> int:
                             probes = plan.get("probes", [])
                             report["boz_mass_probe_count"] = len(probes)
                             report["boz_mass_probe_env"] = ",".join(f"{int(p['off']):x}" for p in probes)
-                            print(f"[MASS_PROBE_PLAN] count={len(probes)} artifact={probe_plan}", flush=True)
+                            print(f"[MASS_PROBE_PLAN] count={len(safe_probes)} artifact={probe_plan}", flush=True)
                             print("[MASS_PROBE_PLAN] " + report["boz_mass_probe_env"], flush=True)
-                            if probes:
+                            if safe_probes:
                                 mass_env = env.copy()
                                 mass_env["BOZ_MASS_PROBES"] = report["boz_mass_probe_env"]
-                                print(f"[MASS_PROBE_RUN] launching count={len(probes)}", flush=True)
+                                print(f"[MASS_PROBE_RUN] launching count={len(safe_probes)}", flush=True)
                                 try:
                                     mass = subprocess.run(cmd, cwd=ROOT, env=mass_env, text=True,
                                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -405,6 +405,10 @@ def run_boz_diagnostic(report: dict) -> int:
                                     mass_out = mass.stdout or ""
                                     report["boz_mass_probe_rc"] = mass.returncode
                                     report["boz_mass_probe_hits"] = mass_out.count("[TREE_PROBE]")
+                                    mass_trace = PUBLIC / "boz-mass-probe-trace.log"
+                                    mass_trace.write_text(mass_out, encoding="utf-8")
+                                    report["boz_mass_probe_trace"] = str(mass_trace)
+                                    report["boz_mass_probe_analysis"] = analyze_boz_output(mass_out)
                                     print(mass_out, end="" if mass_out.endswith("\\n") else "\\n", flush=True)
                                     print(f"[MASS_PROBE_RUN] rc={mass.returncode} hits={report['boz_mass_probe_hits']}", flush=True)
                                 except subprocess.TimeoutExpired as exc:
