@@ -155,34 +155,139 @@ static int g_d8ffa_trace_armed;
 static int g_d8984_trace_armed;
 static uint32_t g_d8ff0_manager;
 static uint32_t g_trace_sentinel;
-typedef struct { uint32_t off; uint16_t saved; int armed; } boz_probe_t;
+enum {
+    BOZ_PROBE_THUMB16 = 1,
+    BOZ_PROBE_ARM32 = 2,
+};
+
+typedef struct {
+    uint32_t off;
+    uint32_t saved;
+    uint8_t mode;
+    int armed;
+} boz_probe_t;
+
 #define BOZ_MAX_MASS_PROBES 512u
 static boz_probe_t g_tree_probes[BOZ_MAX_MASS_PROBES] = {
-    {0x000da228u,0,0},{0x000da50au,0,0},{0x000da50cu,0,0},{0x000da50eu,0,0},{0x000da510u,0,0},{0x000da816u,0,0},{0x000daef2u,0,0}
+    {0x000da228u, 0, BOZ_PROBE_THUMB16, 0},
+    {0x000da50au, 0, BOZ_PROBE_THUMB16, 0},
+    {0x000da50cu, 0, BOZ_PROBE_THUMB16, 0},
+    {0x000da50eu, 0, BOZ_PROBE_THUMB16, 0},
+    {0x000da510u, 0, BOZ_PROBE_THUMB16, 0},
+    {0x000da816u, 0, BOZ_PROBE_THUMB16, 0},
+    {0x000daef2u, 0, BOZ_PROBE_THUMB16, 0},
 };
 static unsigned g_tree_probe_count = 7u;
-static void load_mass_probe_env(void) {
-    const char *s=getenv("BOZ_MASS_PROBES");
-    if (!s || !*s) return;
-    while (*s && g_tree_probe_count<BOZ_MAX_MASS_PROBES) {
-        char *end=NULL; unsigned long off=strtoul(s,&end,16);
-        if (end==s) { while (*s && *s!=',') ++s; if (*s==',') ++s; continue; }
-        if (off<0x41d970u && !(off&1u)) {
-            bool dup=false;
-            for (unsigned i=0;i<g_tree_probe_count;++i) if (g_tree_probes[i].off==(uint32_t)off) { dup=true; break; }
-            if (!dup) g_tree_probes[g_tree_probe_count++]=(boz_probe_t){(uint32_t)off,0,0};
-        }
-        s=end; while (*s && *s!=',') ++s; if (*s==',') ++s;
-    }
-    fprintf(stderr,"[MASS_PROBE] candidates=%u capacity=%u\\n",g_tree_probe_count,BOZ_MAX_MASS_PROBES);
+
+static const char *probe_mode_name(uint8_t mode) {
+    return mode == BOZ_PROBE_ARM32 ? "arm32" : "thumb16";
 }
+
+static bool probe_mode_allowed(uint32_t off, uint8_t mode) {
+    if (mode == BOZ_PROBE_THUMB16) {
+        /* Confirmed by runtime CPSR at D8FF0/DA6C6/DAA84/DA4DC. */
+        return !(off & 1u) && off >= 0x000d6000u && off < 0x000db800u;
+    }
+    if (mode == BOZ_PROBE_ARM32) {
+        /* Confirmed ARM-state windows from the 0x254fxx and 0x34c1xx traces. */
+        return !(off & 3u) &&
+               ((off >= 0x00250000u && off < 0x00260000u) ||
+                (off >= 0x0034b000u && off < 0x0034f000u));
+    }
+    return false;
+}
+
+static void load_mass_probe_env(void) {
+    const char *s = getenv("BOZ_MASS_PROBES");
+    if (!s || !*s) {
+        return;
+    }
+    unsigned rejected = 0;
+    while (*s && g_tree_probe_count < BOZ_MAX_MASS_PROBES) {
+        while (*s == ',' || *s == ' ' || *s == '\t') {
+            ++s;
+        }
+        if (!*s) {
+            break;
+        }
+
+        uint8_t mode = 0;
+        if ((s[0] == 't' || s[0] == 'T') && s[1] == ':') {
+            mode = BOZ_PROBE_THUMB16;
+            s += 2;
+        } else if ((s[0] == 'a' || s[0] == 'A') && s[1] == ':') {
+            mode = BOZ_PROBE_ARM32;
+            s += 2;
+        }
+
+        char *end = NULL;
+        unsigned long parsed = strtoul(s, &end, 0);
+        if (end == s || parsed > UINT32_MAX) {
+            ++rejected;
+            while (*s && *s != ',') {
+                ++s;
+            }
+            continue;
+        }
+        uint32_t off = (uint32_t)parsed;
+
+        /* Backward compatibility is intentionally narrow: an untyped offset
+         * is accepted only inside the runtime-confirmed Thumb window. */
+        if (!mode && !(off & 1u) && off >= 0x000d6000u && off < 0x000db800u) {
+            mode = BOZ_PROBE_THUMB16;
+        }
+
+        if (!probe_mode_allowed(off, mode)) {
+            ++rejected;
+        } else {
+            bool dup = false;
+            for (unsigned i = 0; i < g_tree_probe_count; ++i) {
+                if (g_tree_probes[i].off == off) {
+                    dup = true;
+                    break;
+                }
+            }
+            if (!dup) {
+                g_tree_probes[g_tree_probe_count++] =
+                    (boz_probe_t){off, 0, mode, 0};
+            }
+        }
+
+        s = end;
+        while (*s && *s != ',') {
+            ++s;
+        }
+    }
+    fprintf(stderr,
+            "[MASS_PROBE] candidates=%u rejected=%u capacity=%u\n",
+            g_tree_probe_count, rejected, BOZ_MAX_MASS_PROBES);
+}
+
 static void arm_tree_probes(void) {
     load_mass_probe_env();
-    for (unsigned i=0;i<g_tree_probe_count;++i) {
-        uint16_t *site=(uint16_t *)(uintptr_t)(g_loaded_base+g_tree_probes[i].off);
-        g_tree_probes[i].saved=*site; *site=0xbe00u;
-        __builtin___clear_cache((char *)site,(char *)(site+1)); g_tree_probes[i].armed=1;
+    unsigned armed = 0;
+    for (unsigned i = 0; i < g_tree_probe_count; ++i) {
+        boz_probe_t *p = &g_tree_probes[i];
+        if (!probe_mode_allowed(p->off, p->mode)) {
+            continue;
+        }
+        if (p->mode == BOZ_PROBE_THUMB16) {
+            uint16_t *site =
+                (uint16_t *)(uintptr_t)(g_loaded_base + p->off);
+            p->saved = *site;
+            *site = 0xbe00u;
+            __builtin___clear_cache((char *)site, (char *)(site + 1));
+        } else {
+            uint32_t *site =
+                (uint32_t *)(uintptr_t)(g_loaded_base + p->off);
+            p->saved = *site;
+            *site = 0xe1200070u; /* ARM-state BKPT #0 */
+            __builtin___clear_cache((char *)site, (char *)(site + 1));
+        }
+        p->armed = 1;
+        ++armed;
     }
+    fprintf(stderr, "[MASS_PROBE_ARMED] count=%u\n", armed);
 }
 
 static void arm_dispatch_trace(void) {
@@ -349,30 +454,58 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
         uc->uc_mcontext.arm_pc = g_loaded_base + 0x00254f04u;
         return;
     }
-    if (sig == SIGTRAP) {
-        for (unsigned i=0;i<sizeof(g_tree_probes)/sizeof(g_tree_probes[0]);++i) {
-            boz_probe_t *p=&g_tree_probes[i];
-            if (p->armed && (uc->uc_mcontext.arm_pc==g_loaded_base+p->off ||
-                             uc->uc_mcontext.arm_pc==g_loaded_base+p->off+2u)) {
-                uint16_t *site=(uint16_t *)(uintptr_t)(g_loaded_base+p->off);
-                *site=p->saved; __builtin___clear_cache((char *)site,(char *)(site+1)); p->armed=0;
-                uint32_t p4=uc->uc_mcontext.arm_r4 ? *(uint32_t *)(uintptr_t)(uc->uc_mcontext.arm_r4+4u) : 0;
-                uint32_t p5=uc->uc_mcontext.arm_r5 ? *(uint32_t *)(uintptr_t)(uc->uc_mcontext.arm_r5+4u) : 0;
-                uint32_t p3=0;
-                if (p->off==0x000daa84u && uc->uc_mcontext.arm_r3) {
-                    g_trace_sentinel=(uint32_t)uc->uc_mcontext.arm_r3;
-                    p3=*(uint32_t *)(uintptr_t)(g_trace_sentinel+4u);
+    if (sig == SIGTRAP || sig == SIGILL) {
+        for (unsigned i = 0; i < g_tree_probe_count; ++i) {
+            boz_probe_t *p = &g_tree_probes[i];
+            uint32_t step = p->mode == BOZ_PROBE_ARM32 ? 4u : 2u;
+            if (p->armed &&
+                (uc->uc_mcontext.arm_pc == g_loaded_base + p->off ||
+                 uc->uc_mcontext.arm_pc == g_loaded_base + p->off + step)) {
+                if (p->mode == BOZ_PROBE_THUMB16) {
+                    uint16_t *site =
+                        (uint16_t *)(uintptr_t)(g_loaded_base + p->off);
+                    *site = (uint16_t)p->saved;
+                    __builtin___clear_cache((char *)site, (char *)(site + 1));
+                } else {
+                    uint32_t *site =
+                        (uint32_t *)(uintptr_t)(g_loaded_base + p->off);
+                    *site = p->saved;
+                    __builtin___clear_cache((char *)site, (char *)(site + 1));
                 }
-                uint32_t sentinel_root = g_trace_sentinel
-                    ? *(uint32_t *)(uintptr_t)(g_trace_sentinel+4u) : 0;
-                fprintf(stderr,"[TREE_PROBE] off=%06x r0=%08lx r1=%08lx r2=%08lx r3=%08lx r3p4=%08x r4=%08lx r5=%08lx r4p4=%08x r5p4=%08x r6=%08lx r7=%08lx r8=%08lx sentinel=%08x root=%08x lr=%08lx\n",
-                    p->off,(unsigned long)uc->uc_mcontext.arm_r0,(unsigned long)uc->uc_mcontext.arm_r1,
-                    (unsigned long)uc->uc_mcontext.arm_r2,(unsigned long)uc->uc_mcontext.arm_r3,p3,
-                    (unsigned long)uc->uc_mcontext.arm_r4,(unsigned long)uc->uc_mcontext.arm_r5,p4,p5,
-                    (unsigned long)uc->uc_mcontext.arm_r6,(unsigned long)uc->uc_mcontext.arm_r7,
-                    (unsigned long)uc->uc_mcontext.arm_r8,g_trace_sentinel,sentinel_root,
-                    (unsigned long)uc->uc_mcontext.arm_lr);
-                uc->uc_mcontext.arm_pc=g_loaded_base+p->off; return;
+                p->armed = 0;
+                uint32_t p4 = uc->uc_mcontext.arm_r4
+                                  ? *(uint32_t *)(uintptr_t)(uc->uc_mcontext.arm_r4 + 4u)
+                                  : 0;
+                uint32_t p5 = uc->uc_mcontext.arm_r5
+                                  ? *(uint32_t *)(uintptr_t)(uc->uc_mcontext.arm_r5 + 4u)
+                                  : 0;
+                uint32_t p3 = 0;
+                if (p->off == 0x000daa84u && uc->uc_mcontext.arm_r3) {
+                    g_trace_sentinel = (uint32_t)uc->uc_mcontext.arm_r3;
+                    p3 = *(uint32_t *)(uintptr_t)(g_trace_sentinel + 4u);
+                }
+                uint32_t sentinel_root =
+                    g_trace_sentinel
+                        ? *(uint32_t *)(uintptr_t)(g_trace_sentinel + 4u)
+                        : 0;
+                fprintf(stderr,
+                        "[TREE_PROBE] mode=%s off=%06x r0=%08lx r1=%08lx r2=%08lx "
+                        "r3=%08lx r3p4=%08x r4=%08lx r5=%08lx r4p4=%08x r5p4=%08x "
+                        "r6=%08lx r7=%08lx r8=%08lx sentinel=%08x root=%08x lr=%08lx\n",
+                        probe_mode_name(p->mode), p->off,
+                        (unsigned long)uc->uc_mcontext.arm_r0,
+                        (unsigned long)uc->uc_mcontext.arm_r1,
+                        (unsigned long)uc->uc_mcontext.arm_r2,
+                        (unsigned long)uc->uc_mcontext.arm_r3, p3,
+                        (unsigned long)uc->uc_mcontext.arm_r4,
+                        (unsigned long)uc->uc_mcontext.arm_r5, p4, p5,
+                        (unsigned long)uc->uc_mcontext.arm_r6,
+                        (unsigned long)uc->uc_mcontext.arm_r7,
+                        (unsigned long)uc->uc_mcontext.arm_r8,
+                        g_trace_sentinel, sentinel_root,
+                        (unsigned long)uc->uc_mcontext.arm_lr);
+                uc->uc_mcontext.arm_pc = g_loaded_base + p->off;
+                return;
             }
         }
     }
