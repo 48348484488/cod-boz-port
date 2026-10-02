@@ -330,6 +330,17 @@ int main(int argc, char **argv) {
     fprintf(stderr, "mapped S3E at %p, entry=%p\n", (void *)loaded.base,
             (void *)(loaded.base + loaded.entry_offset));
 #if defined(__arm__)
+    {
+        const uint32_t probes[] = {0x000da680u, 0x000da6acu, 0x000db300u, 0x000db31eu, 0x00255e60u};
+        for (size_t p = 0; p < sizeof(probes) / sizeof(probes[0]); ++p) {
+            const unsigned char *q = loaded.base + probes[p];
+            fprintf(stderr, "[CODE_DUMP] +0x%08x:", probes[p]);
+            for (int j = 0; j < 64; ++j) fprintf(stderr, " %02x", q[j]);
+            fprintf(stderr, "\n");
+        }
+    }
+#endif
+#if defined(__arm__)
     g_loaded_base = (uintptr_t)loaded.base;
 #endif
     if (run) {
