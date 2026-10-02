@@ -909,20 +909,58 @@ def run_boz_diagnostic(report: dict) -> int:
                                                 focus_center = int(off_match.group(1), 16)
 
                                     if focus_center is not None:
-                                        instruction_offsets = []
+                                        focus_lines = []
+                                        decoded = []
+                                        ins_re = re.compile(
+                                            r"^\\s*([0-9a-fA-F]+):\\s+[0-9a-fA-F ]+\\s+([a-zA-Z0-9.]+)"
+                                        )
                                         for dis_line in auto_dis.read_text(
                                             encoding="utf-8", errors="replace"
                                         ).splitlines():
-                                            addr_match = re.match(
-                                                r"^\\s*([0-9a-fA-F]+):",
-                                                dis_line,
-                                            )
-                                            if not addr_match:
+                                            m = ins_re.match(dis_line)
+                                            if not m:
                                                 continue
-                                            ins_off = int(addr_match.group(1), 16)
-                                            if focus_center - 0x50 <= ins_off <= focus_center + 0x50:
-                                                instruction_offsets.append(ins_off)
-                                        focus_offsets = sorted(set(instruction_offsets))[:64]
+                                            ins_off = int(m.group(1), 16)
+                                            if focus_center - 0x60 <= ins_off <= focus_center + 0x60:
+                                                focus_lines.append(dis_line)
+                                                decoded.append((ins_off, m.group(2).lower(), dis_line))
+
+                                        focus_disasm = PUBLIC / "boz-focus-disasm.txt"
+                                        focus_disasm.write_text(
+                                            "\n".join(focus_lines) + "\n",
+                                            encoding="utf-8",
+                                        )
+                                        report["boz_focus_disasm"] = str(focus_disasm)
+                                        print(
+                                            f"[FOCUS_DISASM] center=0x{focus_center:x} "
+                                            f"lines={len(focus_lines)} artifact={focus_disasm}",
+                                            flush=True,
+                                        )
+                                        for line in focus_lines:
+                                            print("[FOCUS_DISASM] " + line, flush=True)
+
+                                        # Conservative focus probes: avoid dense single-step-like
+                                        # coverage because exceptions inside Thumb IT blocks can
+                                        # perturb condition state. Probe stores plus the first
+                                        # instruction after calls, outside IT blocks.
+                                        focus_offsets = []
+                                        conditional_left = 0
+                                        previous_was_call = False
+                                        for ins_off, mnemonic, dis_line in decoded:
+                                            in_it = conditional_left > 0
+                                            if mnemonic.startswith("it"):
+                                                conditional_left = max(1, len(mnemonic) - 1)
+                                                previous_was_call = False
+                                                continue
+                                            if in_it:
+                                                conditional_left -= 1
+                                                previous_was_call = False
+                                                continue
+                                            choose = mnemonic.startswith("str") or previous_was_call
+                                            if choose:
+                                                focus_offsets.append(ins_off)
+                                            previous_was_call = mnemonic in ("bl", "blx", "bl.w", "blx.w")
+                                        focus_offsets = sorted(set(focus_offsets))[:24]
                                         if focus_offsets:
                                             focus_env = env.copy()
                                             focus_env["BOZ_MASS_PROBES"] = ",".join(
