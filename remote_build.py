@@ -593,15 +593,30 @@ def run_boz_diagnostic(report: dict) -> int:
             arm34_txt.write_text(arm34_dis.stdout, encoding="utf-8")
             arm34_parsed = []
             for line in arm34_dis.stdout.splitlines():
-                m = re.match(r"^\\s*([0-9a-fA-F]+):\\s+[0-9a-fA-F]+\\s+(.+)$", line)
-                if m:
-                    arm34_parsed.append(
-                        (int(m.group(1), 16), m.group(2).strip(), line.strip())
-                    )
+                m = re.match(r"^\\s*([0-9a-fA-F]+):\\s*(.*)$", line)
+                if not m:
+                    continue
+                rest = m.group(2).strip()
+                # objdump may render ARM words as one 8-hex token or as
+                # several byte/halfword tokens. Strip only the leading
+                # machine-code columns and keep the mnemonic/operands.
+                op_match = re.match(
+                    r"^(?:(?:[0-9a-fA-F]{2,8})\\s+)+(.+)$",
+                    rest,
+                )
+                if not op_match:
+                    continue
+                op = op_match.group(1).strip()
+                arm34_parsed.append(
+                    (int(m.group(1), 16), op, line.strip())
+                )
 
             return_off = 0x34C1C0
+            # LR points at the instruction after BL/BLX. Prefer an exact
+            # address, but tolerate objdump formatting/decoding gaps by
+            # selecting the first decoded instruction at or after LR.
             return_i = next(
-                (i for i, (off, _, _) in enumerate(arm34_parsed) if off == return_off),
+                (i for i, (off, _, _) in enumerate(arm34_parsed) if off >= return_off),
                 None,
             )
             arm34_info = {
