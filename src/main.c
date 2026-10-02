@@ -526,7 +526,7 @@ int main(int argc, char **argv) {
             (void *)(loaded.base + loaded.entry_offset));
 #if defined(__arm__)
     {
-        const uint32_t probes[] = {0x000da680u, 0x000da6acu, 0x000db300u, 0x000db31eu, 0x00255e60u};
+        const uint32_t probes[] = {0x000da680u, 0x000da6acu, 0x000db300u, 0x000db31eu, 0x00254f20u, 0x00255e60u};
         for (size_t p = 0; p < sizeof(probes) / sizeof(probes[0]); ++p) {
             const unsigned char *q = loaded.base + probes[p];
             fprintf(stderr, "[CODE_DUMP] +0x%08x:", probes[p]);
@@ -557,6 +557,12 @@ int main(int argc, char **argv) {
                 fwrite(loaded.base + 0x000db2e0u, 1, 0x120, fp);
                 fclose(fp);
                 fprintf(stderr, "[MAPPED_DUMP] /tmp/boz-mapped-db2e0.bin base=0x000db2e0 size=0x120\n");
+            }
+            fp = fopen("/tmp/boz-mapped-254e80.bin", "wb");
+            if (fp) {
+                fwrite(loaded.base + 0x00254e80u, 1, 0x300, fp);
+                fclose(fp);
+                fprintf(stderr, "[MAPPED_DUMP] /tmp/boz-mapped-254e80.bin base=0x00254e80 size=0x300\n");
             }
         }
     }
