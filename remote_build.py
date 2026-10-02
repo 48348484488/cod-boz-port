@@ -916,7 +916,7 @@ def run_boz_diagnostic(report: dict) -> int:
                                     reg_rc = None
                                     reg_hits = 0
                                     reg_analysis = None
-                                    if os.environ.get("BOZ_AUTO_REG_TRACE", "1") == "1":
+                                    if os.environ.get("BOZ_AUTO_REG_TRACE", "0") == "1":
                                         reg_env = env.copy()
                                         reg_env["BOZ_MASS_PROBES"] = ",".join(
                                             f"0x{off:x}" for off in reg_offsets
