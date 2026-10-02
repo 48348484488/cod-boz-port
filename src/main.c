@@ -165,6 +165,7 @@ static void load_mass_probe_env(void) {
     fprintf(stderr,"[MASS_PROBE] candidates=%u\\n",g_tree_probe_count);
 }
 static void arm_tree_probes(void) {
+    load_mass_probe_env();
     for (unsigned i=0;i<g_tree_probe_count;++i) {
         uint16_t *site=(uint16_t *)(uintptr_t)(g_loaded_base+g_tree_probes[i].off);
         g_tree_probes[i].saved=*site; *site=0xbe00u;
