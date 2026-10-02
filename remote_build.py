@@ -892,6 +892,85 @@ def run_boz_diagnostic(report: dict) -> int:
                                         r"\[D8FF0_HASH\].*sentinel=([0-9a-fA-F]+)",
                                         mass_norm,
                                     )
+
+                                    sentinel_writes = []
+                                    if sentinel_match:
+                                        sentinel_value = int(sentinel_match.group(1), 16)
+                                        plan_by_off = {
+                                            int(p["off"]): p for p in probes if "off" in p
+                                        }
+                                        pre_lookup_text = mass_norm.split("[D8FF0_ENTER]", 1)[0]
+                                        probe_re = re.compile(
+                                            r"^\[TREE_PROBE\] off=0*([0-9a-fA-F]+) (.*)$"
+                                        )
+                                        reg_re = re.compile(
+                                            r"\b(r(?:1[0-2]|[0-9]))=([0-9a-fA-F]{8})"
+                                        )
+                                        store_re = re.compile(
+                                            r"\bstr(?:\.[a-z0-9]+)?\s+(r(?:1[0-2]|[0-9])),\s*"
+                                            r"\[(r(?:1[0-2]|[0-9])),\s*#4\]",
+                                            re.I,
+                                        )
+                                        for runtime_line in pre_lookup_text.splitlines():
+                                            pm = probe_re.match(runtime_line.strip())
+                                            if not pm:
+                                                continue
+                                            off = int(pm.group(1), 16)
+                                            candidate = plan_by_off.get(off)
+                                            if not candidate:
+                                                continue
+                                            static_line = candidate.get("line", "")
+                                            sm = store_re.search(static_line)
+                                            if not sm:
+                                                continue
+                                            regs = {
+                                                name.lower(): int(value, 16)
+                                                for name, value in reg_re.findall(pm.group(2))
+                                            }
+                                            src_reg = sm.group(1).lower()
+                                            base_reg = sm.group(2).lower()
+                                            if regs.get(base_reg) != sentinel_value:
+                                                continue
+                                            sentinel_writes.append({
+                                                "off": f"0x{off:x}",
+                                                "static": static_line,
+                                                "base_register": base_reg,
+                                                "source_register": src_reg,
+                                                "source_value": (
+                                                    f"0x{regs[src_reg]:08x}"
+                                                    if src_reg in regs else None
+                                                ),
+                                                "sentinel": f"0x{sentinel_value:08x}",
+                                                "phase": "before_D8FF0",
+                                            })
+                                        writes_path = PUBLIC / "boz-sentinel-writes.json"
+                                        writes_path.write_text(
+                                            json.dumps({
+                                                "sentinel": f"0x{sentinel_value:08x}",
+                                                "writes_before_lookup": sentinel_writes,
+                                                "nonzero_write_seen": any(
+                                                    w.get("source_value") not in (None, "0x00000000")
+                                                    for w in sentinel_writes
+                                                ),
+                                            }, indent=2) + "\n",
+                                            encoding="utf-8",
+                                        )
+                                        report["boz_sentinel_writes"] = str(writes_path)
+                                        report["boz_sentinel_write_count"] = len(sentinel_writes)
+                                        print(
+                                            f"[SENTINEL_FLOW] writes_before_lookup={len(sentinel_writes)} "
+                                            f"artifact={writes_path}",
+                                            flush=True,
+                                        )
+                                        for item in sentinel_writes:
+                                            print(
+                                                f"[SENTINEL_FLOW] off={item['off']} "
+                                                f"src={item['source_register']} "
+                                                f"value={item['source_value']} "
+                                                f"base={item['base_register']}",
+                                                flush=True,
+                                            )
+
                                     focus_center = None
                                     if sentinel_match:
                                         sentinel_hex = sentinel_match.group(1).lower()
