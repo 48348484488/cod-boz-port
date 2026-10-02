@@ -140,8 +140,11 @@ static uint16_t g_d8ffa_saved;
 static uint16_t g_d8984_saved;
 static uint32_t g_arm_dispatch_saved;
 static uint32_t g_arm_callsite_saved;
+static uint32_t g_arm_return_saved;
+static unsigned g_arm_dispatch_call_seq;
 static int g_arm_dispatch_trace_armed;
 static int g_arm_callsite_trace_armed;
+static int g_arm_return_trace_armed;
 static int g_d8ff0_trace_armed;
 static int g_da6c6_trace_armed;
 static int g_d8ffa_trace_armed;
@@ -230,6 +233,23 @@ static void arm_da6c6_trace(void) {
 static void crash_handler(int sig, siginfo_t *info, void *context) {
 #if defined(__arm__)
     ucontext_t *uc = (ucontext_t *)context;
+    if ((sig == SIGTRAP || sig == SIGILL) && g_arm_return_trace_armed &&
+        (uc->uc_mcontext.arm_pc == g_loaded_base + 0x00254f44u ||
+         uc->uc_mcontext.arm_pc == g_loaded_base + 0x00254f48u)) {
+        uint32_t *ret_site = (uint32_t *)(uintptr_t)(g_loaded_base + 0x00254f44u);
+        *ret_site = g_arm_return_saved;
+        __builtin___clear_cache((char *)ret_site, (char *)ret_site + sizeof(*ret_site));
+        g_arm_return_trace_armed = 0;
+        if (g_arm_dispatch_call_seq < 24u) {
+            uint32_t *call_site = (uint32_t *)(uintptr_t)(g_loaded_base + 0x00254f40u);
+            g_arm_callsite_saved = *call_site;
+            *call_site = 0xe1200070u;
+            __builtin___clear_cache((char *)call_site, (char *)call_site + sizeof(*call_site));
+            g_arm_callsite_trace_armed = 1;
+        }
+        uc->uc_mcontext.arm_pc = g_loaded_base + 0x00254f44u;
+        return;
+    }
     if ((sig == SIGTRAP || sig == SIGILL) && g_arm_callsite_trace_armed &&
         (uc->uc_mcontext.arm_pc == g_loaded_base + 0x00254f40u ||
          uc->uc_mcontext.arm_pc == g_loaded_base + 0x00254f44u)) {
@@ -237,9 +257,11 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
         *site = g_arm_callsite_saved;
         __builtin___clear_cache((char *)site, (char *)site + sizeof(*site));
         g_arm_callsite_trace_armed = 0;
+        ++g_arm_dispatch_call_seq;
         fprintf(stderr,
-                "[ARM_DISPATCH_CALL] target=%08lx object=%08lx arg1=%08lx arg2=%08lx "
+                "[ARM_DISPATCH_CALL] seq=%u target=%08lx object=%08lx arg1=%08lx arg2=%08lx "
                 "r0=%08lx r1=%08lx r2=%08lx lr=%08lx cpsr=%08lx\n",
+                g_arm_dispatch_call_seq,
                 (unsigned long)uc->uc_mcontext.arm_r3,
                 (unsigned long)uc->uc_mcontext.arm_r4,
                 (unsigned long)uc->uc_mcontext.arm_r7,
@@ -249,6 +271,13 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
                 (unsigned long)uc->uc_mcontext.arm_r2,
                 (unsigned long)uc->uc_mcontext.arm_lr,
                 (unsigned long)uc->uc_mcontext.arm_cpsr);
+        if (g_arm_dispatch_call_seq < 24u) {
+            uint32_t *ret_site = (uint32_t *)(uintptr_t)(g_loaded_base + 0x00254f44u);
+            g_arm_return_saved = *ret_site;
+            *ret_site = 0xe1200070u;
+            __builtin___clear_cache((char *)ret_site, (char *)ret_site + sizeof(*ret_site));
+            g_arm_return_trace_armed = 1;
+        }
         uc->uc_mcontext.arm_pc = g_loaded_base + 0x00254f40u;
         return;
     }
