@@ -492,6 +492,12 @@ int main(int argc, char **argv) {
                 fclose(fp);
                 fprintf(stderr, "[MAPPED_DUMP] /tmp/boz-mapped-da680.bin base=0x000da680 size=0x180\n");
             }
+            fp = fopen("/tmp/boz-mapped-d6000.bin", "wb");
+            if (fp) {
+                fwrite(loaded.base + 0x000d6000u, 1, 0x5800, fp);
+                fclose(fp);
+                fprintf(stderr, "[MAPPED_DUMP] /tmp/boz-mapped-d6000.bin base=0x000d6000 size=0x5800\n");
+            }
             fp = fopen("/tmp/boz-mapped-d8e80.bin", "wb");
             if (fp) {
                 fwrite(loaded.base + 0x000d8800u, 1, 0x3000, fp);
