@@ -92,6 +92,31 @@ def write_report(report: dict) -> None:
     temporary.replace(out)
 
 
+def probe_env_token(item: dict) -> str:
+    off = int(item["off"])
+    mode = item.get("mode")
+    if mode == "thumb16":
+        return f"t:0x{off:x}"
+    if mode == "arm32":
+        return f"a:0x{off:x}"
+    raise ValueError(f"unsupported probe mode: {mode!r}")
+
+
+def probe_is_arch_safe(item: dict) -> bool:
+    try:
+        off = int(item["off"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    mode = item.get("mode")
+    if mode == "thumb16":
+        return not (off & 1) and 0xD6000 <= off < 0xDB800
+    if mode == "arm32":
+        return not (off & 3) and (
+            0x250000 <= off < 0x260000 or 0x34B000 <= off < 0x34F000
+        )
+    return False
+
+
 def build_focus_probe_plan(disassembly: str, trace: str, limit: int = 64) -> dict:
     lookup_pos = trace.find("[D8FF0_ENTER]")
     if lookup_pos < 0:
@@ -106,7 +131,7 @@ def build_focus_probe_plan(disassembly: str, trace: str, limit: int = 64) -> dic
     before_lookup = trace[:lookup_pos]
     hot_sites = []
     hit_re = re.compile(
-        r"\[TREE_PROBE\]\s+off=([0-9a-fA-F]+).*?"
+        r"\[TREE_PROBE\](?:\s+mode=[^\s]+)?\s+off=([0-9a-fA-F]+).*?"
         r"r4=([0-9a-fA-F]+).*?r5=([0-9a-fA-F]+)"
     )
     for hit in hit_re.finditer(before_lookup):
@@ -167,6 +192,7 @@ def build_focus_probe_plan(disassembly: str, trace: str, limit: int = 64) -> dic
             ranked.append({
                 "off": off,
                 "mode": "thumb16",
+                "mode_source": "runtime_confirmed_thumb_window",
                 "score": score,
                 "distance": distance,
                 "reasons": reasons,
@@ -843,14 +869,15 @@ def run_boz_diagnostic(report: dict) -> int:
                             plan = json.loads(probe_plan.read_text(encoding="utf-8"))
                             probes = plan.get("probes", [])
                             safe_probes = [
-                                p for p in probes
-                                if p.get("mode") == "thumb16"
-                                and 0xD6000 <= int(p["off"]) < 0xDB800
-                                and int(p["off"]) != 0x254F44
+                                p for p in probes if probe_is_arch_safe(p)
                             ][:64]
                             report["boz_mass_probe_count"] = len(safe_probes)
+                            report["boz_mass_probe_modes"] = {
+                                "thumb16": sum(p.get("mode") == "thumb16" for p in safe_probes),
+                                "arm32": sum(p.get("mode") == "arm32" for p in safe_probes),
+                            }
                             report["boz_mass_probe_env"] = ",".join(
-                                f"0x{int(p['off']):x}" for p in safe_probes
+                                probe_env_token(p) for p in safe_probes
                             )
                             print(
                                 f"[MASS_PROBE_PLAN] count={len(safe_probes)} artifact={probe_plan}",
@@ -898,8 +925,11 @@ def run_boz_diagnostic(report: dict) -> int:
                                     report["boz_focus_plan"] = str(focus_path)
                                     report["boz_focus_hot_sites"] = focus_plan.get("hot_sites", [])
                                     focus_probes = focus_plan.get("probes", [])
+                                    focus_probes = [
+                                        item for item in focus_probes if probe_is_arch_safe(item)
+                                    ]
                                     focus_env_text = ",".join(
-                                        f"0x{int(item['off']):x}" for item in focus_probes
+                                        probe_env_token(item) for item in focus_probes
                                     )
                                     print(
                                         f"[FOCUS_PLAN] manager={focus_plan.get('manager')} "
@@ -1117,7 +1147,7 @@ def run_boz_diagnostic(report: dict) -> int:
                                     if zoom_static and os.environ.get("BOZ_AUTO_ROOT_ZOOM", "0") == "1":
                                         zoom_env = env.copy()
                                         zoom_env["BOZ_MASS_PROBES"] = ",".join(
-                                            f"0x{off:x}" for off in zoom_offsets
+                                            f"t:0x{off:x}" for off in zoom_offsets
                                         )
                                         print(
                                             f"[ROOT_ZOOM] launching count={len(zoom_offsets)}",
@@ -1140,7 +1170,7 @@ def run_boz_diagnostic(report: dict) -> int:
                                             zoom_events = []
                                             for runtime_line in zoom_out.splitlines():
                                                 pm = re.match(
-                                                    r"^\[TREE_PROBE\] off=0*([0-9a-fA-F]+) (.*)$",
+                                                    r"^\[TREE_PROBE\](?: mode=[^ ]+)? off=0*([0-9a-fA-F]+) (.*)$",
                                                     runtime_line.strip(),
                                                 )
                                                 if not pm:
@@ -1392,7 +1422,7 @@ def run_boz_diagnostic(report: dict) -> int:
                                         mass_norm.splitlines()
                                     ):
                                         pm = re.match(
-                                            r"^\\[TREE_PROBE\\] off=0*([0-9a-fA-F]+) (.*)$",
+                                            r"^\\[TREE_PROBE\\](?: mode=[^ ]+)? off=0*([0-9a-fA-F]+) (.*)$",
                                             runtime_line.strip(),
                                         )
                                         if not pm:
@@ -1468,7 +1498,7 @@ def run_boz_diagnostic(report: dict) -> int:
                                         }
                                         pre_lookup_text = mass_norm.split("[D8FF0_ENTER]", 1)[0]
                                         probe_re = re.compile(
-                                            r"^\[TREE_PROBE\] off=0*([0-9a-fA-F]+) (.*)$"
+                                            r"^\[TREE_PROBE\](?: mode=[^ ]+)? off=0*([0-9a-fA-F]+) (.*)$"
                                         )
                                         reg_re = re.compile(
                                             r"\b(r(?:1[0-2]|[0-9]))=([0-9a-fA-F]{8})"
