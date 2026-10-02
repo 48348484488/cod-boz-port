@@ -50,7 +50,12 @@ def analyze_boz_output(output: str) -> dict:
         "confidence": "insufficient",
         "next_action": None,
     }
-    if nulls:
+    if da6 and lookups and "r0=00000000" in da6[-1]["line"] and "lr=4a0d8ffb" in da6[-1]["line"].lower():
+        diagnosis["root_cause_candidate"] = "D8FF0 lookup returned NULL for the observed key; DA6AC then propagated the missing object toward DB31E"
+        diagnosis["confidence"] = "high"
+        diagnosis["failed_stage"] = "D8FF0"
+        diagnosis["next_action"] = "trace hash 0x24BA2C and inspect manager+0x20 tree registration for the failed key"
+    elif nulls:
         diagnosis["root_cause_candidate"] = "BOZ+0xDB31E dereferenced a NULL object returned by the DA6AC dispatch path"
         diagnosis["confidence"] = "high"
         if da6:
