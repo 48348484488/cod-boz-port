@@ -2699,6 +2699,17 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                         f"count={len(owner_probes)}",
                                                                                         flush=True,
                                                                                     )
+                                                                                    for owner_off, owner_line in parsed_disasm:
+                                                                                        if (
+                                                                                            great_function_start
+                                                                                            <= owner_off
+                                                                                            <= great_callsite + 8
+                                                                                        ):
+                                                                                            print(
+                                                                                                "[OWNER_DISASM] "
+                                                                                                + owner_line.strip(),
+                                                                                                flush=True,
+                                                                                            )
                                                                                     for owner_probe in owner_probes:
                                                                                         print(
                                                                                             "[OWNER_PLAN] "
