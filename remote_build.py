@@ -2905,6 +2905,191 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                                 flush=True,
                                                                                             )
 
+                                                                                crash_bridge_result = None
+                                                                                if os.environ.get(
+                                                                                    "BOZ_AUTO_CRASH_BRIDGE", "1"
+                                                                                ) == "1":
+                                                                                    crash_bridge_probes = [
+                                                                                        {"off": 0x255D70, "mode": "arm32", "label": "arm_callee_entry"},
+                                                                                        {"off": 0x255E7C, "mode": "arm32", "label": "arm_callsite"},
+                                                                                        {"off": 0x255E80, "mode": "arm32", "label": "arm_return"},
+                                                                                        {"off": 0xDA6AC, "mode": "thumb16", "label": "owner_entry"},
+                                                                                        {"off": 0xDA6C2, "mode": "thumb16", "label": "lookup_call"},
+                                                                                        {"off": 0xDA6C6, "mode": "thumb16", "label": "lookup_return"},
+                                                                                        {"off": 0xDA6D2, "mode": "thumb16", "label": "lookup_result_test"},
+                                                                                        {"off": 0xDA6D4, "mode": "thumb16", "label": "existing_value_branch"},
+                                                                                        {"off": 0xDA70A, "mode": "thumb16", "label": "create_primary_call"},
+                                                                                        {"off": 0xDA70E, "mode": "thumb16", "label": "create_primary_return"},
+                                                                                        {"off": 0xDA712, "mode": "thumb16", "label": "primary_null_branch"},
+                                                                                        {"off": 0xDA728, "mode": "thumb16", "label": "create_fallback_call"},
+                                                                                        {"off": 0xDA72C, "mode": "thumb16", "label": "create_fallback_return"},
+                                                                                        {"off": 0xDA730, "mode": "thumb16", "label": "fallback_null_branch"},
+                                                                                        {"off": 0xDA792, "mode": "thumb16", "label": "tree_insert_call"},
+                                                                                        {"off": 0xDA79A, "mode": "thumb16", "label": "owner_return_value"},
+                                                                                        {"off": 0xDB31A, "mode": "thumb16", "label": "before_owner_dispatch"},
+                                                                                        {"off": 0xDB31C, "mode": "thumb16", "label": "owner_dispatch"},
+                                                                                        {"off": 0xDB31E, "mode": "thumb16", "label": "null_deref"},
+                                                                                    ]
+                                                                                    crash_bridge_probes = [
+                                                                                        item
+                                                                                        for item in crash_bridge_probes
+                                                                                        if probe_is_arch_safe(item)
+                                                                                    ]
+                                                                                    bridge_by_off = {
+                                                                                        item["off"]: item
+                                                                                        for item in crash_bridge_probes
+                                                                                    }
+                                                                                    print(
+                                                                                        "[CRASH_BRIDGE] launching "
+                                                                                        f"count={len(crash_bridge_probes)} "
+                                                                                        "typed="
+                                                                                        + ",".join(
+                                                                                            probe_env_token(item)
+                                                                                            for item in crash_bridge_probes
+                                                                                        ),
+                                                                                        flush=True,
+                                                                                    )
+                                                                                    bridge_env = env.copy()
+                                                                                    bridge_env["BOZ_MASS_PROBES"] = ",".join(
+                                                                                        probe_env_token(item)
+                                                                                        for item in crash_bridge_probes
+                                                                                    )
+                                                                                    try:
+                                                                                        bridge_run = subprocess.run(
+                                                                                            cmd,
+                                                                                            cwd=ROOT,
+                                                                                            env=bridge_env,
+                                                                                            text=True,
+                                                                                            stdout=subprocess.PIPE,
+                                                                                            stderr=subprocess.STDOUT,
+                                                                                            timeout=int(
+                                                                                                os.environ.get(
+                                                                                                    "BOZ_CRASH_BRIDGE_TIMEOUT",
+                                                                                                    "60",
+                                                                                                )
+                                                                                            ),
+                                                                                        )
+                                                                                        bridge_out = bridge_run.stdout or ""
+                                                                                        bridge_events = []
+                                                                                        for bridge_index, bridge_line in enumerate(
+                                                                                            bridge_out.replace("\\\\n", "\\n").splitlines()
+                                                                                        ):
+                                                                                            stripped = bridge_line.strip()
+                                                                                            if stripped.startswith("[TREE_PROBE]"):
+                                                                                                off_match = re.search(
+                                                                                                    r"\\boff=0*([0-9a-fA-F]+)\\b",
+                                                                                                    stripped,
+                                                                                                )
+                                                                                                if not off_match:
+                                                                                                    continue
+                                                                                                off = int(off_match.group(1), 16)
+                                                                                                item = bridge_by_off.get(off, {})
+                                                                                                event = {
+                                                                                                    "index": bridge_index,
+                                                                                                    "type": "probe",
+                                                                                                    "off": f"0x{off:x}",
+                                                                                                    "label": item.get("label"),
+                                                                                                    "mode": item.get("mode"),
+                                                                                                    "line": stripped,
+                                                                                                }
+                                                                                                for field in (
+                                                                                                    "r0", "r1", "r2", "r3",
+                                                                                                    "r4", "r5", "r6", "r7",
+                                                                                                    "r8", "r9", "r10", "fp",
+                                                                                                    "ip", "lr", "sentinel", "root",
+                                                                                                ):
+                                                                                                    field_match = re.search(
+                                                                                                        rf"\\b{field}=([0-9a-fA-F]{{8}})\\b",
+                                                                                                        stripped,
+                                                                                                    )
+                                                                                                    if field_match:
+                                                                                                        event[field] = "0x" + field_match.group(1).lower()
+                                                                                                bridge_events.append(event)
+                                                                                                print(
+                                                                                                    "[CRASH_BRIDGE] "
+                                                                                                    f"label={item.get('label','unknown')} "
+                                                                                                    f"mode={item.get('mode','unknown')} "
+                                                                                                    + stripped,
+                                                                                                    flush=True,
+                                                                                                )
+                                                                                            elif stripped.startswith((
+                                                                                                "[D8FF0_",
+                                                                                                "[NULL_OBJECT]",
+                                                                                                "[NULL_FLOW]",
+                                                                                                "signal 11",
+                                                                                            )):
+                                                                                                bridge_events.append({
+                                                                                                    "index": bridge_index,
+                                                                                                    "type": "diagnostic",
+                                                                                                    "line": stripped,
+                                                                                                })
+                                                                                                print(
+                                                                                                    "[CRASH_BRIDGE] " + stripped,
+                                                                                                    flush=True,
+                                                                                                )
+
+                                                                                        dispatch_events = [
+                                                                                            event for event in bridge_events
+                                                                                            if event.get("type") == "probe"
+                                                                                            and event.get("off") in (
+                                                                                                "0xdb31a", "0xdb31c", "0xdb31e"
+                                                                                            )
+                                                                                        ]
+                                                                                        owner_returns = [
+                                                                                            event for event in bridge_events
+                                                                                            if event.get("type") == "probe"
+                                                                                            and event.get("off") == "0xda79a"
+                                                                                        ]
+                                                                                        null_owner_returns = [
+                                                                                            event for event in owner_returns
+                                                                                            if event.get("r4") == "0x00000000"
+                                                                                        ]
+                                                                                        crash_bridge_result = {
+                                                                                            "rc": bridge_run.returncode,
+                                                                                            "probes": crash_bridge_probes,
+                                                                                            "events": bridge_events,
+                                                                                            "dispatch_events": dispatch_events,
+                                                                                            "owner_returns": owner_returns,
+                                                                                            "null_owner_returns": null_owner_returns,
+                                                                                            "analysis": analyze_boz_output(bridge_out),
+                                                                                        }
+                                                                                        bridge_trace = PUBLIC / "boz-crash-bridge-trace.log"
+                                                                                        bridge_json = PUBLIC / "boz-crash-bridge.json"
+                                                                                        bridge_trace.write_text(
+                                                                                            bridge_out,
+                                                                                            encoding="utf-8",
+                                                                                        )
+                                                                                        bridge_json.write_text(
+                                                                                            json.dumps(
+                                                                                                crash_bridge_result,
+                                                                                                indent=2,
+                                                                                            ) + "\\n",
+                                                                                            encoding="utf-8",
+                                                                                        )
+                                                                                        crash_bridge_result["trace"] = str(bridge_trace)
+                                                                                        crash_bridge_result["artifact"] = str(bridge_json)
+                                                                                        report["boz_crash_bridge"] = str(bridge_json)
+                                                                                        report["boz_crash_bridge_trace"] = str(bridge_trace)
+                                                                                        print(
+                                                                                            "[CRASH_BRIDGE] "
+                                                                                            f"rc={bridge_run.returncode} "
+                                                                                            f"events={len(bridge_events)} "
+                                                                                            f"owner_returns={len(owner_returns)} "
+                                                                                            f"null_owner_returns={len(null_owner_returns)} "
+                                                                                            f"artifact={bridge_json}",
+                                                                                            flush=True,
+                                                                                        )
+                                                                                    except subprocess.TimeoutExpired:
+                                                                                        crash_bridge_result = {
+                                                                                            "rc": 124,
+                                                                                            "error": "timeout",
+                                                                                            "probes": crash_bridge_probes,
+                                                                                        }
+                                                                                        print(
+                                                                                            "[CRASH_BRIDGE] timed out",
+                                                                                            flush=True,
+                                                                                        )
+
                                                                                 parent_focus_result = {
                                                                                     "rc": parent_run.returncode,
                                                                                     "tree_probe_hits": parent_out.count(
@@ -2913,6 +3098,7 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                     "entry": grandparent_entry,
                                                                                     "parent_resolution": great_parent_resolution,
                                                                                     "owner_flow": owner_flow_result,
+                                                                                    "crash_bridge": crash_bridge_result,
                                                                                     "analysis": analyze_boz_output(
                                                                                         parent_out
                                                                                     ),
