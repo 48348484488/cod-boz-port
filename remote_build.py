@@ -2977,7 +2977,7 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                             stripped = bridge_line.strip()
                                                                                             if stripped.startswith("[TREE_PROBE]"):
                                                                                                 off_match = re.search(
-                                                                                                    r"\\boff=0*([0-9a-fA-F]+)\\b",
+                                                                                                    r"\boff=0*([0-9a-fA-F]+)\b",
                                                                                                     stripped,
                                                                                                 )
                                                                                                 if not off_match:
@@ -2999,7 +2999,7 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                                     "ip", "lr", "sentinel", "root",
                                                                                                 ):
                                                                                                     field_match = re.search(
-                                                                                                        rf"\\b{field}=([0-9a-fA-F]{{8}})\\b",
+                                                                                                        rf"\b{field}=([0-9a-fA-F]{{8}})\b",
                                                                                                         stripped,
                                                                                                     )
                                                                                                     if field_match:
