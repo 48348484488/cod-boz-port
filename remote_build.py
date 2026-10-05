@@ -2699,6 +2699,22 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                         f"count={len(owner_probes)}",
                                                                                         flush=True,
                                                                                     )
+                                                                                    for owner_probe in owner_probes:
+                                                                                        print(
+                                                                                            "[OWNER_PLAN] "
+                                                                                            f"off=0x{owner_probe['off']:x} "
+                                                                                            "reasons="
+                                                                                            + ",".join(
+                                                                                                owner_probe.get(
+                                                                                                    "reasons", []
+                                                                                                )
+                                                                                            )
+                                                                                            + " insn="
+                                                                                            + owner_probe.get(
+                                                                                                "line", ""
+                                                                                            ).strip(),
+                                                                                            flush=True,
+                                                                                        )
                                                                                     if owner_probes:
                                                                                         owner_env = env.copy()
                                                                                         owner_env["BOZ_MASS_PROBES"] = ",".join(
