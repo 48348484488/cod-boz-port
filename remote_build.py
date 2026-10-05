@@ -219,6 +219,123 @@ def build_focus_probe_plan(disassembly: str, trace: str, limit: int = 64) -> dic
     }
 
 
+def build_owner_flow_probe_plan(
+    parsed_disasm: list[tuple[int, str]],
+    function_start: int,
+    late_registration_callsite: int,
+    limit: int = 64,
+) -> dict:
+    """Build a conservative Thumb-only control-flow probe batch for the D8FF0 owner."""
+    ins_re = re.compile(
+        r"^\s*([0-9a-fA-F]+):\s+[0-9a-fA-F ]+\s+([a-zA-Z0-9.]+)"
+    )
+    lookup_callsite = None
+    ranked = []
+    seen = set()
+    conditional_left = 0
+    previous_was_call = False
+    window_end = late_registration_callsite + 8
+
+    for off, line in parsed_disasm:
+        if off < function_start:
+            continue
+        if off > window_end:
+            break
+        match = ins_re.match(line)
+        if not match:
+            continue
+        mnemonic = match.group(2).lower()
+        low = line.lower()
+        is_call = mnemonic in ("bl", "blx", "bl.w", "blx.w")
+        direct = re.search(
+            r"\bblx?(?:\.w)?\s+(?:0x)?([0-9a-fA-F]+)\b",
+            low,
+        )
+        if direct and int(direct.group(1), 16) == 0xD8FF0:
+            lookup_callsite = off
+
+        in_it = conditional_left > 0
+        if mnemonic.startswith("it"):
+            conditional_left = max(1, len(mnemonic) - 1)
+            previous_was_call = False
+            continue
+        if in_it:
+            conditional_left -= 1
+            previous_was_call = False
+            continue
+
+        score = 0
+        reasons = []
+        if off == function_start:
+            score += 200
+            reasons.append("owner_entry")
+        if off == late_registration_callsite:
+            score += 220
+            reasons.append("late_registration_call")
+        if is_call:
+            score += 100
+            reasons.append("call")
+        if mnemonic.startswith("str"):
+            score += 75
+            reasons.append("store")
+        if (
+            mnemonic.startswith("b")
+            or mnemonic in ("cbz", "cbnz")
+        ):
+            score += 70
+            reasons.append("branch")
+        if mnemonic.startswith("cmp") or mnemonic.startswith("tst"):
+            score += 35
+            reasons.append("condition")
+        if previous_was_call:
+            score += 90
+            reasons.append("after_call")
+
+        item = {"off": off, "mode": "thumb16"}
+        if reasons and off not in seen and probe_is_arch_safe(item):
+            seen.add(off)
+            ranked.append({
+                "off": off,
+                "mode": "thumb16",
+                "mode_source": "confirmed_thumb_owner_window",
+                "score": score,
+                "reasons": reasons,
+                "line": line.strip(),
+            })
+        previous_was_call = is_call
+
+    if lookup_callsite is not None and lookup_callsite not in seen:
+        lookup_item = {"off": lookup_callsite, "mode": "thumb16"}
+        if probe_is_arch_safe(lookup_item):
+            line = next(
+                (line for off, line in parsed_disasm if off == lookup_callsite),
+                "",
+            )
+            ranked.append({
+                "off": lookup_callsite,
+                "mode": "thumb16",
+                "mode_source": "confirmed_thumb_owner_window",
+                "score": 250,
+                "reasons": ["d8ff0_lookup_call"],
+                "line": line.strip(),
+            })
+
+    ranked.sort(key=lambda item: (-item["score"], item["off"]))
+    selected = ranked[:limit]
+    selected.sort(key=lambda item: item["off"])
+    return {
+        "version": 1,
+        "function_start": f"0x{function_start:x}",
+        "window_end": f"0x{window_end:x}",
+        "lookup_callsite": (
+            f"0x{lookup_callsite:x}" if lookup_callsite is not None else None
+        ),
+        "late_registration_callsite": f"0x{late_registration_callsite:x}",
+        "count": len(selected),
+        "probes": selected,
+    }
+
+
 class ArtifactRequestHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(PUBLIC), **kwargs)
@@ -2547,6 +2664,220 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                             flush=True,
                                                                                         )
 
+                                                                                owner_flow_result = None
+                                                                                if (
+                                                                                    great_parent_resolution is not None
+                                                                                    and great_function_start == 0xDA6AC
+                                                                                    and os.environ.get(
+                                                                                        "BOZ_AUTO_OWNER_FLOW", "1"
+                                                                                    )
+                                                                                    == "1"
+                                                                                ):
+                                                                                    owner_plan = build_owner_flow_probe_plan(
+                                                                                        parsed_disasm,
+                                                                                        great_function_start,
+                                                                                        great_callsite,
+                                                                                        limit=int(
+                                                                                            os.environ.get(
+                                                                                                "BOZ_OWNER_FLOW_LIMIT",
+                                                                                                "64",
+                                                                                            )
+                                                                                        ),
+                                                                                    )
+                                                                                    owner_probes = [
+                                                                                        item
+                                                                                        for item in owner_plan["probes"]
+                                                                                        if probe_is_arch_safe(item)
+                                                                                    ]
+                                                                                    owner_plan["probes"] = owner_probes
+                                                                                    owner_plan["count"] = len(owner_probes)
+                                                                                    print(
+                                                                                        "[OWNER_FLOW] "
+                                                                                        f"function=0x{great_function_start:x} "
+                                                                                        f"lookup={owner_plan['lookup_callsite']} "
+                                                                                        f"late_call=0x{great_callsite:x} "
+                                                                                        f"count={len(owner_probes)}",
+                                                                                        flush=True,
+                                                                                    )
+                                                                                    if owner_probes:
+                                                                                        owner_env = env.copy()
+                                                                                        owner_env["BOZ_MASS_PROBES"] = ",".join(
+                                                                                            probe_env_token(item)
+                                                                                            for item in owner_probes
+                                                                                        )
+                                                                                        try:
+                                                                                            owner_run = subprocess.run(
+                                                                                                cmd,
+                                                                                                cwd=ROOT,
+                                                                                                env=owner_env,
+                                                                                                text=True,
+                                                                                                stdout=subprocess.PIPE,
+                                                                                                stderr=subprocess.STDOUT,
+                                                                                                timeout=int(
+                                                                                                    os.environ.get(
+                                                                                                        "BOZ_OWNER_FLOW_TIMEOUT",
+                                                                                                        "60",
+                                                                                                    )
+                                                                                                ),
+                                                                                            )
+                                                                                            owner_out = owner_run.stdout or ""
+                                                                                            owner_lines = owner_out.replace(
+                                                                                                "\\\\n", "\\n"
+                                                                                            ).splitlines()
+                                                                                            owner_events = []
+                                                                                            lookup_index = None
+                                                                                            for owner_index, owner_line in enumerate(
+                                                                                                owner_lines
+                                                                                            ):
+                                                                                                stripped = owner_line.strip()
+                                                                                                if stripped.startswith(
+                                                                                                    "[D8FF0_ENTER]"
+                                                                                                ):
+                                                                                                    lookup_index = owner_index
+                                                                                                    owner_events.append({
+                                                                                                        "index": owner_index,
+                                                                                                        "type": "lookup",
+                                                                                                        "line": stripped,
+                                                                                                    })
+                                                                                                    print(
+                                                                                                        "[OWNER_FLOW] " + stripped,
+                                                                                                        flush=True,
+                                                                                                    )
+                                                                                                    continue
+                                                                                                if not stripped.startswith(
+                                                                                                    "[TREE_PROBE]"
+                                                                                                ):
+                                                                                                    continue
+                                                                                                off_match = re.search(
+                                                                                                    r"\boff=0*([0-9a-fA-F]+)\b",
+                                                                                                    stripped,
+                                                                                                )
+                                                                                                if not off_match:
+                                                                                                    continue
+                                                                                                event = {
+                                                                                                    "index": owner_index,
+                                                                                                    "type": "probe",
+                                                                                                    "off": f"0x{int(off_match.group(1), 16):x}",
+                                                                                                    "line": stripped,
+                                                                                                }
+                                                                                                for field in (
+                                                                                                    "sentinel",
+                                                                                                    "root",
+                                                                                                    "r0",
+                                                                                                    "r1",
+                                                                                                    "r2",
+                                                                                                    "r3",
+                                                                                                    "r4",
+                                                                                                    "r5",
+                                                                                                    "r6",
+                                                                                                    "r7",
+                                                                                                    "r8",
+                                                                                                    "lr",
+                                                                                                ):
+                                                                                                    field_match = re.search(
+                                                                                                        rf"\b{field}=([0-9a-fA-F]{{8}})\b",
+                                                                                                        stripped,
+                                                                                                    )
+                                                                                                    if field_match:
+                                                                                                        event[field] = (
+                                                                                                            "0x"
+                                                                                                            + field_match.group(1).lower()
+                                                                                                        )
+                                                                                                owner_events.append(event)
+                                                                                                print(
+                                                                                                    "[OWNER_FLOW] " + stripped,
+                                                                                                    flush=True,
+                                                                                                )
+
+                                                                                            probe_events = [
+                                                                                                event
+                                                                                                for event in owner_events
+                                                                                                if event["type"] == "probe"
+                                                                                            ]
+                                                                                            last_before_lookup = None
+                                                                                            first_after_lookup = None
+                                                                                            if lookup_index is not None:
+                                                                                                last_before_lookup = next(
+                                                                                                    (
+                                                                                                        event
+                                                                                                        for event in reversed(
+                                                                                                            probe_events
+                                                                                                        )
+                                                                                                        if event["index"]
+                                                                                                        < lookup_index
+                                                                                                    ),
+                                                                                                    None,
+                                                                                                )
+                                                                                                first_after_lookup = next(
+                                                                                                    (
+                                                                                                        event
+                                                                                                        for event in probe_events
+                                                                                                        if event["index"]
+                                                                                                        > lookup_index
+                                                                                                    ),
+                                                                                                    None,
+                                                                                                )
+                                                                                            owner_flow_result = {
+                                                                                                "rc": owner_run.returncode,
+                                                                                                "plan": owner_plan,
+                                                                                                "lookup_line_index": lookup_index,
+                                                                                                "last_probe_before_lookup": last_before_lookup,
+                                                                                                "first_probe_after_lookup": first_after_lookup,
+                                                                                                "events": owner_events,
+                                                                                                "analysis": analyze_boz_output(
+                                                                                                    owner_out
+                                                                                                ),
+                                                                                            }
+                                                                                            owner_trace = (
+                                                                                                PUBLIC
+                                                                                                / "boz-owner-flow-trace.log"
+                                                                                            )
+                                                                                            owner_json = (
+                                                                                                PUBLIC
+                                                                                                / "boz-owner-flow.json"
+                                                                                            )
+                                                                                            owner_trace.write_text(
+                                                                                                owner_out,
+                                                                                                encoding="utf-8",
+                                                                                            )
+                                                                                            owner_json.write_text(
+                                                                                                json.dumps(
+                                                                                                    owner_flow_result,
+                                                                                                    indent=2,
+                                                                                                )
+                                                                                                + "\n",
+                                                                                                encoding="utf-8",
+                                                                                            )
+                                                                                            owner_flow_result[
+                                                                                                "trace"
+                                                                                            ] = str(owner_trace)
+                                                                                            owner_flow_result[
+                                                                                                "artifact"
+                                                                                            ] = str(owner_json)
+                                                                                            report[
+                                                                                                "boz_owner_flow"
+                                                                                            ] = str(owner_json)
+                                                                                            report[
+                                                                                                "boz_owner_flow_trace"
+                                                                                            ] = str(owner_trace)
+                                                                                            print(
+                                                                                                "[OWNER_FLOW] "
+                                                                                                f"rc={owner_run.returncode} "
+                                                                                                f"hits={len(probe_events)} "
+                                                                                                f"artifact={owner_json}",
+                                                                                                flush=True,
+                                                                                            )
+                                                                                        except subprocess.TimeoutExpired:
+                                                                                            owner_flow_result = {
+                                                                                                "rc": 124,
+                                                                                                "error": "timeout",
+                                                                                                "plan": owner_plan,
+                                                                                            }
+                                                                                            print(
+                                                                                                "[OWNER_FLOW] timed out",
+                                                                                                flush=True,
+                                                                                            )
+
                                                                                 parent_focus_result = {
                                                                                     "rc": parent_run.returncode,
                                                                                     "tree_probe_hits": parent_out.count(
@@ -2554,6 +2885,7 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                     ),
                                                                                     "entry": grandparent_entry,
                                                                                     "parent_resolution": great_parent_resolution,
+                                                                                    "owner_flow": owner_flow_result,
                                                                                     "analysis": analyze_boz_output(
                                                                                         parent_out
                                                                                     ),
