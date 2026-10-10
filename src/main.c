@@ -618,7 +618,9 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
                 uint32_t stack_word28 = 0;
                 /* These sites use a validated stack frame; avoid arbitrary
                  * pointer dereferences at unrelated probe addresses. */
-                if (p->off == 0x000db2fau ||
+                if (p->off == 0x000db294u ||
+                    p->off == 0x000db298u ||
+                    p->off == 0x000db2fau ||
                     p->off == 0x000db2feu ||
                     p->off == 0x000db306u ||
                     p->off == 0x000db31cu) {
