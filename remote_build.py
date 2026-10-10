@@ -3295,6 +3295,14 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                         observations = selector_provenance["observations"]
                                                                                         stream = selector_provenance["matched_selector_stream"]
                                                                                         print(
+                                                                                            "[SERIALIZER_OPEN_RESULT] "
+                                                                                            f"arm_entries={len(selector_provenance['arm_open_entries'])} "
+                                                                                            f"arm_failed={selector_provenance['arm_open_failed_assignment_count']} "
+                                                                                            f"arm_success={selector_provenance['arm_open_successful_assignment_count']} "
+                                                                                            f"opens={selector_provenance['file_open_attempt_count']}",
+                                                                                            flush=True,
+                                                                                        )
+                                                                                        print(
                                                                                             "[SELECTOR_STREAM_RESULT] "
                                                                                             f"matched={stream is not None} "
                                                                                             f"file_null={selector_provenance['serializer_file_handle_is_null']} "
