@@ -556,21 +556,26 @@ int32_t s3eFileGetSize(void *file) {
 int32_t s3eFileCheckExists(const char *name) {
     char path[1200];
     const char *safe_name = name ? name : "";
+    int32_t exists = 0;
     if (is_user_file_name(safe_name)) {
         make_user_path(path, sizeof(path), safe_name);
-        return access(path, F_OK) == 0 ? 1 : 0;
+        exists = access(path, F_OK) == 0;
+    } else if (dtrz_prefer_entry(safe_name) && dtrz_entry_exists(safe_name)) {
+        exists = 1;
+    } else if (resolve_read_path(safe_name, path, sizeof(path))) {
+        exists = 1;
+    } else {
+        snprintf(path, sizeof(path), "%s/assets/%s", g_root, safe_name);
+        exists = access(path, F_OK) == 0 || dtrz_entry_exists(safe_name);
     }
-    if (dtrz_prefer_entry(safe_name) && dtrz_entry_exists(safe_name)) {
-        return 1;
+    const char *trace = getenv("BOZ_FILE_RW_TRACE");
+    if (trace && strcmp(trace, "1") == 0 &&
+        (strcmp(base_name(safe_name), "console.bin") == 0 ||
+         !exists)) {
+        fprintf(stderr, "[S3E_FILE_EXISTS] name=%s exists=%d root=%s\n",
+                safe_name, exists, g_root);
     }
-    if (resolve_read_path(safe_name, path, sizeof(path))) {
-        return 1;
-    }
-    snprintf(path, sizeof(path), "%s/assets/%s", g_root, safe_name);
-    if (access(path, F_OK) == 0) {
-        return 1;
-    }
-    return dtrz_entry_exists(safe_name) ? 1 : 0;
+    return exists;
 }
 
 int32_t s3eFileGetError(void) {
