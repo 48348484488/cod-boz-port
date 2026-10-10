@@ -614,6 +614,19 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
                     g_trace_sentinel = (uint32_t)uc->uc_mcontext.arm_r3;
                     p3 = *(uint32_t *)(uintptr_t)(g_trace_sentinel + 4u);
                 }
+                uint32_t stack_word0 = 0;
+                uint32_t stack_word28 = 0;
+                /* These sites use a validated stack frame; avoid arbitrary
+                 * pointer dereferences at unrelated probe addresses. */
+                if (p->off == 0x000db2fau ||
+                    p->off == 0x000db2feu ||
+                    p->off == 0x000db306u ||
+                    p->off == 0x000db31cu) {
+                    const uint32_t *stack_frame =
+                        (const uint32_t *)(uintptr_t)uc->uc_mcontext.arm_sp;
+                    stack_word0 = stack_frame[0];
+                    stack_word28 = stack_frame[7];
+                }
                 uint32_t sentinel_root =
                     g_trace_sentinel
                         ? *(uint32_t *)(uintptr_t)(g_trace_sentinel + 4u)
@@ -621,7 +634,8 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
                 fprintf(stderr,
                         "[TREE_PROBE] mode=%s off=%06x r0=%08lx r1=%08lx r2=%08lx "
                         "r3=%08lx r3p4=%08x r4=%08lx r5=%08lx r4p4=%08x r5p4=%08x "
-                        "r6=%08lx r7=%08lx r8=%08lx sentinel=%08x root=%08x lr=%08lx\n",
+                        "r6=%08lx r7=%08lx r8=%08lx sentinel=%08x root=%08x lr=%08lx "
+                        "sp=%08lx sp0=%08x sp28=%08x\n",
                         probe_mode_name(p->mode), p->off,
                         (unsigned long)uc->uc_mcontext.arm_r0,
                         (unsigned long)uc->uc_mcontext.arm_r1,
@@ -633,7 +647,9 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
                         (unsigned long)uc->uc_mcontext.arm_r7,
                         (unsigned long)uc->uc_mcontext.arm_r8,
                         g_trace_sentinel, sentinel_root,
-                        (unsigned long)uc->uc_mcontext.arm_lr);
+                        (unsigned long)uc->uc_mcontext.arm_lr,
+                        (unsigned long)uc->uc_mcontext.arm_sp,
+                        stack_word0, stack_word28);
                 uc->uc_mcontext.arm_pc = g_loaded_base + p->off;
                 return;
             }
