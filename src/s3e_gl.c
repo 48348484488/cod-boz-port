@@ -481,7 +481,63 @@ static void frontend_overlay_gl_present(void) {
     }
 }
 
+/* Diagnostic-only, opt-in real framebuffer capture before a swap.
+ * PPM is intentionally used here so the ARM loader needs no PNG dependency. */
+static void boz_capture_swap_frame(unsigned frame) {
+    const char *dir = getenv("BOZ_FRAME_CAPTURE_DIR");
+    if (!dir || !*dir || (frame != 1u && frame != 15u && frame != 60u)) return;
+    void (*read_pixels)(GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, void *) =
+        lookup_gl("glReadPixels");
+    if (!read_pixels) {
+        fprintf(stderr, "[BOZ_FRAME_CAPTURE] n=%u error=no_glReadPixels\n", frame);
+        return;
+    }
+    const size_t width = REFERENCE_SURFACE_WIDTH;
+    const size_t height = REFERENCE_SURFACE_HEIGHT;
+    const size_t n_pixels = width * height;
+    uint8_t *rgba = malloc(n_pixels * 4u);
+    uint8_t *rgb = malloc(n_pixels * 3u);
+    if (!rgba || !rgb) {
+        free(rgba);
+        free(rgb);
+        fprintf(stderr, "[BOZ_FRAME_CAPTURE] n=%u error=allocation\n", frame);
+        return;
+    }
+    read_pixels(0, 0, (GLsizei)width, (GLsizei)height, 0x1908u, 0x1401u, rgba);
+    uint32_t hash = 2166136261u;
+    for (size_t y = 0; y < height; ++y) {
+        const size_t src_row = height - 1u - y;
+        for (size_t x = 0; x < width; ++x) {
+            const size_t src = (src_row * width + x) * 4u;
+            const size_t dst = (y * width + x) * 3u;
+            for (size_t k = 0; k < 3u; ++k) {
+                rgb[dst + k] = rgba[src + k];
+                hash = (hash ^ rgb[dst + k]) * 16777619u;
+            }
+        }
+    }
+    char filename[512];
+    int len = snprintf(filename, sizeof(filename), "%s/boz-swap-%05u.ppm", dir, frame);
+    FILE *fp = len > 0 && (size_t)len < sizeof(filename) ? fopen(filename, "wb") : NULL;
+    if (fp) {
+        fprintf(fp, "P6\n%zu %zu\n255\n", width, height);
+        size_t wrote = fwrite(rgb, 1, n_pixels * 3u, fp);
+        fclose(fp);
+        fprintf(stderr,
+                "[BOZ_FRAME_CAPTURE] n=%u pixels=%zu hash=%08x write_ok=%d file=%s\n",
+                frame, n_pixels, hash, wrote == n_pixels * 3u, filename);
+    } else {
+        fprintf(stderr, "[BOZ_FRAME_CAPTURE] n=%u error=failed_to_open\n", frame);
+    }
+    free(rgb);
+    free(rgba);
+}
+
 static EGLBoolean host_eglSwapBuffers(EGLDisplay display, EGLSurface surface) {
+    static unsigned swap_count;
+    const char *trace_swap = getenv("BOZ_SWAP_PROGRESS");
+    const bool trace_enabled = trace_swap && strcmp(trace_swap, "1") == 0;
+    ++swap_count;
     input_pump();
     dispatch_due_timers();
     GLuint previous_framebuffer = g_bound_framebuffer;
@@ -489,10 +545,15 @@ static EGLBoolean host_eglSwapBuffers(EGLDisplay display, EGLSurface surface) {
         driver_bind_framebuffer(0);
     }
     frontend_overlay_gl_present();
+    if (trace_enabled) boz_capture_swap_frame(swap_count);
     if (previous_framebuffer) {
         driver_bind_framebuffer(previous_framebuffer);
     }
     EGLBoolean result = egl_backend_swap_buffers(display, surface);
+    if (trace_enabled && (swap_count <= 5u || swap_count % 30u == 0u)) {
+        fprintf(stderr, "[BOZ_SWAP_PROGRESS] n=%u ok=%d fbo=%u\n",
+                swap_count, (int)result, (unsigned)previous_framebuffer);
+    }
     pace_frame();
     return result;
 }
