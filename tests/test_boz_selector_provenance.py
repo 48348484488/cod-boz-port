@@ -85,5 +85,38 @@ class SelectorProvenanceTests(unittest.TestCase):
 
 
 
+    def test_matched_runtime_arm_serializer_null_file(self):
+        raw = "\n".join([
+            "[TREE_PROBE] off=0db2fa r0=3ffff084 sp28=40b35c10",
+            "[SELECTOR_STREAM_ARM] at=0xdb2fa ok=1",
+            "[SELECTOR_STREAM] off=257bd4 buffer=3ffff084 file=00000000 "
+            "global=4a45a000 read_flag=00000001 element_size=00000004 "
+            "count=00000001",
+            "[S3E_FILE_RW] op=read buffer=3ffff084 file=00000000 elem=4 "
+            "count=1 result=0 before=-1 after=-1 eof=0 error=0",
+            "[S3E_FILE_OPEN] name=example.dat mode=rb resolved= file=00000000",
+            "[S3E_FILE_MEMORY_OPEN] buffer=40500000 size=100 file=40b30000",
+        ])
+        output = mod.summarize(raw)
+        self.assertEqual(output["file_open_attempt_count"], 2)
+        self.assertEqual(output["file_open_success_count"], 1)
+        self.assertEqual(output["file_open_failed_count"], 1)
+        self.assertTrue(output["serializer_file_handle_is_null"])
+        self.assertEqual(output["matched_selector_stream"]["global"], "0x4a45a000")
+        self.assertEqual(output["matching_stream_io"]["result"], 0)
+
+    def test_arm_stream_not_matched_to_other_destination(self):
+        raw = "\n".join([
+            "[TREE_PROBE] off=0db2fa r0=3ffff084",
+            "[SELECTOR_STREAM] off=257bd4 buffer=3ffff088 file=40b34000 "
+            "global=4a45a000 read_flag=00000001 element_size=00000004 "
+            "count=00000001",
+        ])
+        output = mod.summarize(raw)
+        self.assertIsNone(output["serializer_file_handle_is_null"])
+        self.assertIsNone(output["matched_selector_stream"])
+        self.assertIsNone(output["matching_stream_io"])
+
+
 if __name__ == "__main__":
     unittest.main()
