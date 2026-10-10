@@ -25,6 +25,7 @@ from tools.boz_bridge_diagnosis import (
 )
 from tools.boz_handler_pairs import summarize_handler_pairs
 from tools.boz_selector_provenance import summarize as summarize_selector_provenance
+from tools.boz_new_crash_regs import summarize_crash_registers
 
 ROOT = pathlib.Path(__file__).resolve().parent
 PUBLIC = ROOT / "public"
@@ -3407,7 +3408,19 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                             ], separators=(",", ":")),
                                                                                             flush=True,
                                                                                         )
+                                                                                        crash_registers = summarize_crash_registers(
+                                                                                            bridge_out.replace("\\n", "\n")
+                                                                                        )
+                                                                                        print(
+                                                                                            "[NEW_CRASH_REGS] "
+                                                                                            f"faults={crash_registers['crash_at_2fe0a8_count']} "
+                                                                                            f"r4_null={crash_registers['r4_null_at_crash_count']} "
+                                                                                            f"unknown={crash_registers['r4_at_crash_unknown_count']} "
+                                                                                            f"probe_count={len(crash_registers['probe_samples'])}",
+                                                                                            flush=True,
+                                                                                        )
                                                                                         crash_bridge_result = {
+                                                                                            "new_crash_registers": crash_registers,
                                                                                             "new_arm_crash_events": new_crash_events,
                                                                                             "selector_provenance": selector_provenance,
                                                                                             "handler_pairs": pair_summary,
