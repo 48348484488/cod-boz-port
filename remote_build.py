@@ -669,6 +669,10 @@ def run_boz_diagnostic(report: dict) -> int:
         )
         quick_env["BOZ_DEFER_OWNER_SECOND"] = "0"
         quick_env["BOZ_TRACE_HANDLER_PAIRS"] = "0"
+        # Periodically sample guest ARM state after the null registration guard.
+        quick_env["BOZ_PC_SAMPLE_INTERVAL"] = os.environ.get(
+            "BOZ_PC_SAMPLE_INTERVAL", "4"
+        )
         print("[FAST_PROPERTY] QEMU A/B run without 60+ unrelated probes", flush=True)
         # Stream the process output to disk so a timeout cannot discard the
         # critical pre-fault register trace. Kill the entire Xvfb/QEMU process
@@ -697,9 +701,9 @@ def run_boz_diagnostic(report: dict) -> int:
         # publish bounded evidence to logs for remote, reproducible diagnosis.
         from collections import Counter
         phase_counts = Counter(
-            re.match(r"^(\\[[A-Za-z0-9_]+\\])", line).group(1)
+            line.split("]", 1)[0] + "]"
             for line in trial_lines
-            if re.match(r"^(\\[[A-Za-z0-9_]+\\])", line)
+            if line.startswith("[") and "]" in line
         )
         print("[FAST_TRACE_SUMMARY] " + json.dumps({
             "lines": len(trial_lines),
@@ -715,6 +719,7 @@ def run_boz_diagnostic(report: dict) -> int:
             if line.startswith((
                 "[BOZ_COMPAT]", "[BOZ_NULL_CHILD_SKIP]",
                 "[BOZ_NULL_REGISTRATION_SKIP]", "[MASS_PROBE]",
+                "[BOZ_PC_SAMPLE]", "[BOZ_PC_SAMPLER]",
                 "[BOZ_NULL_PROPERTY_ORIGIN]", "signal 11 ", "stack:",
                 "[S3E_FILE_EXISTS]",
             )) and not line.startswith("[S3E_FILE_EXISTS]"):
@@ -777,6 +782,10 @@ def run_boz_diagnostic(report: dict) -> int:
                 line.startswith("[TREE_PROBE]") and "off=20fe6e" in line
                 for line in trial_lines
             ),
+            "pc_samples": [
+                line[:500] for line in trial_lines
+                if line.startswith("[BOZ_PC_SAMPLE]")
+            ],
             "parent_lr": hex(saved_parent) if saved_parent is not None else None,
             "parent": parent_label,
             "grandparent_lr": (
