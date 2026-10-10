@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Reconstruct the observed BOZ owner/null-dispatch path from crash-bridge probes.
+"""Analyze BOZ crash-bridge register samples with pre/post-instruction semantics.
 
-No game bytes or offsets are patched. A result is evidence about one trace,
-not a claim of full C++ decompilation or proof of correctness on other paths.
+Each breakpoint captures registers before the instruction at its offset.
+DA79A contains MOV r0,r4; DA79C can confirm that instruction's effect.
+Single-shot probes need not capture the invocation responsible for a crash.
 """
 from __future__ import annotations
 
@@ -11,20 +12,21 @@ import json
 import re
 from pathlib import Path
 
-PROBE = re.compile(r"\[TREE_PROBE\].*?\boff=0*([0-9a-fA-F]+)\b")
-REG = re.compile(r"\b(r0|r4)=([0-9a-fA-F]{8})\b")
+PROBE = re.compile(r"\[TREE_PROBE\].*?\boff=0*([0-9a-fA-F]+)\b", re.I)
+REG = re.compile(r"\b(r0|r4)=([0-9a-fA-F]{8})\b", re.I)
 SITES = {
-    0xDA70E: "primary_return",
-    0xDA72C: "fallback_return",
-    0xDA79A: "owner_return",
-    0xDB31C: "dispatch",
-    0xDB31E: "null_deref",
+    0xDA70E: "primary_result_before_mov",
+    0xDA72C: "fallback_result_before_mov",
+    0xDA792: "insert_call_before_bl",
+    0xDA79A: "owner_before_mov_r0_r4",
+    0xDA79C: "owner_after_mov_r0_r4",
+    0xDB31C: "dispatch_before_blx",
+    0xDB31E: "null_deref_before_instruction",
 }
 
 
 def parse_trace(text: str) -> list[dict]:
-    """Return only execution probes; unrelated messages never become evidence."""
-    result = []
+    events = []
     for line_number, line in enumerate(text.splitlines(), 1):
         match = PROBE.search(line)
         if not match:
@@ -32,72 +34,77 @@ def parse_trace(text: str) -> list[dict]:
         offset = int(match.group(1), 16)
         if offset not in SITES:
             continue
-        regs = {name: int(value, 16) for name, value in REG.findall(line)}
-        result.append({"line": line_number, "off": hex(offset), "label": SITES[offset], **regs})
-    return result
+        regs = {name.lower(): int(value, 16) for name, value in REG.findall(line)}
+        events.append({"line": line_number, "off": hex(offset),
+                       "label": SITES[offset], **regs})
+    return events
+
+
+def _number(value):
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        return int(value, 16) if isinstance(value, str) else int(value)
+    except (ValueError, TypeError):
+        return None
 
 
 def analyze(events: list[dict]) -> dict:
-    """Correlate only chronological probes; distinguish missing from zero."""
-    normalized = []
+    ordered = []
     for index, event in enumerate(events):
-        try:
-            offset = int(str(event.get("off", "")), 16)
-        except ValueError:
+        off = _number(event.get("off"))
+        if off not in SITES or event.get("type", "probe") != "probe":
             continue
-        if offset not in SITES:
-            continue
-        registers = {}
-        for name in ("r0", "r4"):
-            value = event.get(name)
-            if value is not None:
-                try:
-                    registers[name] = int(str(value), 16) if isinstance(value, str) else int(value)
-                except ValueError:
-                    pass
-        normalized.append({"index": index, "off": hex(offset), "label": SITES[offset], **registers})
+        registers = {k: v for k in ("r0", "r4") if (v := _number(event.get(k))) is not None}
+        ordered.append({"index": index, "off": hex(off), "label": SITES[off], **registers})
 
-    by_label = {label: [e for e in normalized if e["label"] == label]
-                for label in SITES.values()}
-    zero_returns = [e for e in by_label["owner_return"] if e.get("r0") == 0]
-    false_negatives_r4 = [e for e in zero_returns if e.get("r4", 0) != 0]
-    # This is a temporal correlation, not proof that an allocation was lost.
-    chains = []
-    for owner in zero_returns:
-        preceding = [e for e in by_label["fallback_return"]
-                     if e["index"] < owner["index"] and e.get("r0", 0) != 0]
-        later = [e for e in by_label["null_deref"]
-                 if e["index"] > owner["index"] and e.get("r0") == 0]
-        if preceding and later:
-            chains.append({"fallback": preceding[-1], "owner": owner,
-                           "null_deref": later[0]})
+    def at(offset):
+        return [e for e in ordered if e["off"] == hex(offset)]
+
+    pre = at(0xDA79A)
+    post = at(0xDA79C)
+    verified = []
+    for p in post:
+        earlier = [q for q in pre if q["index"] < p["index"] and "r4" in q]
+        if not earlier or "r0" not in p:
+            continue
+        q = earlier[-1]
+        verified.append({"pre_mov_r4": hex(q["r4"]), "post_mov_r0": hex(p["r0"]),
+                         "matches": q["r4"] == p["r0"]})
+
+    nulls = at(0xDB31E)
     return {
-        "probe_count": len(normalized),
-        "owner_return_count": len(by_label["owner_return"]),
-        "owner_r0_zero_count": len(zero_returns),
-        "r4_based_detection_missed": len(false_negatives_r4),
-        "observed_null_dispatch_chains": len(chains),
-        "chains": chains,
+        "probe_count": len(ordered),
+        "owner_pre_mov_samples": len(pre),
+        "owner_pre_mov_r0_zero_count": sum(e.get("r0") == 0 for e in pre),
+        "owner_pre_mov_r4_nonzero_count": sum(e.get("r4", 0) != 0 for e in pre),
+        "owner_after_mov_samples": len(post),
+        "post_mov_checks": verified,
+        "post_mov_matches": sum(e["matches"] for e in verified),
+        "post_mov_nonzero_r0_count": sum(e.get("r0", 0) != 0 for e in post),
+        "post_mov_zero_r0_count": sum(e.get("r0") == 0 for e in post),
+        "crash_site_zero_r0_count": sum(e.get("r0") == 0 for e in nulls),
+        "fallback_nonzero_r0_count": sum(e.get("r0", 0) != 0 for e in at(0xDA72C)),
         "interpretation": (
-            "A non-null fallback return preceded a zero owner result and "
-            "a zero r0 at the null-dereference probe; correlation is not "
-            "proof of a missing memory write."
-            if chains else "Insufficient chronological probe evidence for this chain."
+            "DA79A probes observe registers BEFORE mov r0,r4, not a function "
+            "return. DA79C probes observe its effect. Breakpoints are one-shot; "
+            "temporal proximity alone does not establish that the sampled owner "
+            "invocation is the one that later faults at DB31E."
         ),
     }
 
 
-def main() -> None:
+def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("trace", type=Path, help="raw [TREE_PROBE] trace or crash-bridge JSON")
+    parser.add_argument("trace", type=Path, help="raw [TREE_PROBE] log or crash-bridge JSON")
     parser.add_argument("--out", type=Path)
     args = parser.parse_args()
-    payload = args.trace.read_text(encoding="utf-8", errors="replace")
+    data = args.trace.read_text(encoding="utf-8", errors="replace")
     if args.trace.suffix.lower() == ".json":
-        source = json.loads(payload)
-        events = source.get("events", source) if isinstance(source, dict) else source
+        source = json.loads(data)
+        events = source.get("events", []) if isinstance(source, dict) else source
     else:
-        events = parse_trace(payload)
+        events = parse_trace(data)
     result = analyze(events)
     formatted = json.dumps(result, indent=2) + "\n"
     if args.out:
