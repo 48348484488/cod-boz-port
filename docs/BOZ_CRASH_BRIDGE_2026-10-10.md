@@ -281,3 +281,47 @@ document refer to the same uncompressed executable across these
 recovered builds. APK runtime wrappers, resource bundles, and original
 game assets may still differ; this verification does not prove that
 complete BOZ gameplay has been restored.
+
+
+## ARM 2FE0A8 proof from restored XE3U (2026-10-10)
+
+Static disassembly was performed on the locally restored
+`boz.s3e.unpacked` with verified XE3U code offset 0x39483,
+using clang's ARM backend and llvm-objdump. This is from the
+same 4,550,559-byte game image whose SHA-256 is recorded above.
+
+Selected real instructions:
+
+| BOZ offset | ARM instruction | Effect |
+| --- | --- | --- |
+| 2FE088 | push {r0,r1,r4,r5,r6,lr} | Save caller registers |
+| 2FE08C | mov r4,r0 | Copy input object into r4 |
+| 2FE090 | mov r5,r1 | Copy second argument |
+| 2FE094 | bl 30CB4C | Call initializer/global supplier |
+| 2FE098 | add r6,sp,#4 | Prepare stack result buffer |
+| 2FE0A4 | blx 20F26C | Call Thumb helper |
+| 2FE0A8 | ldrh r3,[r4,#44] | Read 16-bit field from object |
+| 2FE0AC | tst r3,#64 | Check object flag |
+
+The QEMU failure had PC=BOZ+0x2FE0A8, fault address
+0x0000002C (44), and SIGSEGV. On this exact LDRH this
+proves the effective base r4 was 0 for the crashing
+invocation. The first-shot probes in an earlier run did not
+capture that invocation reliably: a pre-instruction sample at
+2FE0A8 had nonzero r4, so it must not be treated as the
+same failing call.
+
+The Thumb helper at 0x20F26C performs
+PUSH {r3,r4,r5,lr} and returns with POP {r3,r4,r5,pc};
+therefore it appears to preserve r4 as required by the ARM
+calling convention. This does **not** rule out other
+implementation or runtime corruption; it narrows the
+question to the caller-supplied object pointer and the
+remaining nested calls.
+
+The updated crash handler now logs full fault-time ARM
+registers; tools/boz_new_crash_regs.py and its regressions
+separate definitive SIGSEGV state from unrelated one-shot
+probes. Next step is correlate the object argument to its
+caller at BOZ+2FFA30 or BOZ+300444, without patching
+a fake non-null pointer or claiming the gameplay works.
