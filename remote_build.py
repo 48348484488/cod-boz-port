@@ -703,26 +703,32 @@ def run_boz_diagnostic(report: dict) -> int:
         for trace_line in trial_lines:
             if not trace_line.startswith("[BOZ_MODULE_MAP]"):
                 continue
-            match = re.match(
-                r"^\\[BOZ_MODULE_MAP\\]\\s+([0-9a-f]+)-([0-9a-f]+)\\s+\\S+"
-                r"\\s+([0-9a-f]+)\\s+\\S+\\s+\\d+\\s+(/\\S+)",
-                trace_line,
-            )
-            if match:
+            fields = trace_line.partition("]")[2].split()
+            if len(fields) < 6 or not fields[5].startswith("/"):
+                continue
+            bounds = fields[0].split("-", 1)
+            if len(bounds) != 2:
+                continue
+            try:
                 arm_maps.append({
-                    "start": int(match.group(1), 16),
-                    "end": int(match.group(2), 16),
-                    "file_offset": int(match.group(3), 16),
-                    "file": match.group(4),
+                    "start": int(bounds[0], 16),
+                    "end": int(bounds[1], 16),
+                    "file_offset": int(fields[2], 16),
+                    "file": fields[5],
                 })
+            except ValueError:
+                continue
         sampled_addrs = set()
         for trace_line in trial_lines:
             if not trace_line.startswith("[BOZ_PC_SAMPLE]"):
                 continue
-            for key in ("pc", "lr"):
-                m = re.search(rf"\\b{key}=([0-9a-fA-F]{{8}})\\b", trace_line)
-                if m:
-                    sampled_addrs.add(int(m.group(1), 16) & ~1)
+            for field in trace_line.split():
+                if not (field.startswith("pc=") or field.startswith("lr=")):
+                    continue
+                try:
+                    sampled_addrs.add(int(field.split("=", 1)[1], 16) & ~1)
+                except ValueError:
+                    continue
         elf_samples = []
         sym_cache = {}
         for addr in sorted(sampled_addrs)[:10]:
