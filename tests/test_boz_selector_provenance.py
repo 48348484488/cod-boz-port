@@ -62,5 +62,28 @@ class SelectorProvenanceTests(unittest.TestCase):
         self.assertFalse(mod.summarize(raw)["chronological_chain_complete"])
 
 
+    def test_serializer_io_matches_destination(self):
+        log = "\n".join([
+            record(0xDB2FA, r0=0x3ffff0b4, sp28=0x40b34b20),
+            "[S3E_FILE_RW] op=read buffer=3ffff0b4 file=40000010 "
+            "elem=4 count=1 result=0 before=12 after=12 eof=1 error=0 word=00000000",
+            record(0xDB2FE, sp28=0x40b34b20, r0=4),
+        ])
+        summary = mod.summarize(log)
+        self.assertEqual(summary["helper_destination"], "0x3ffff0b4")
+        self.assertEqual(len(summary["matching_io_calls"]), 1)
+        self.assertEqual(summary["matching_failed_io_calls"], 1)
+
+    def test_serializer_io_other_destination(self):
+        log = "\n".join([
+            record(0xDB2FA, r0=0x3ffff0b4),
+            "[S3E_FILE_RW] op=read buffer=3ffff000 file=40000010 "
+            "elem=4 count=1 result=0 before=12 after=12 eof=1 error=0 word=00000000",
+        ])
+        summary = mod.summarize(log)
+        self.assertEqual(summary["matching_io_calls"], [])
+
+
+
 if __name__ == "__main__":
     unittest.main()
