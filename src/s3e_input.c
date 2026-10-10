@@ -462,6 +462,31 @@ static void pointer_dispatch_motion(void) {
     pointer_dispatch(3, &touch_event);
 }
 
+/* QEMU-only experiment: generate a genuine S3E pointer press/release at
+ * screen center, using the same callbacks/polled state as a controller tap. */
+void input_diagnostic_tap_step(int pressed) {
+    const int32_t x = window_width() / 2;
+    const int32_t y = window_height() / 2;
+    g_pointer_x = clamp_pointer_x(x);
+    g_pointer_y = clamp_pointer_y(y);
+    if (pressed) {
+        if (!g_pointer_down) {
+            pointer_dispatch_motion();
+            pointer_set_down(1);
+            pointer_dispatch_button(0, 1);
+        }
+    } else if (g_pointer_down) {
+        pointer_set_down(0);
+        pointer_dispatch_button(0, 0);
+    }
+    fprintf(stderr,
+            "[BOZ_DIAGNOSTIC_TAP] pressed=%d x=%d y=%d pointer_down=%d"
+            " button_callback=%d touch_callback=%d cursor_active=%d\n",
+            pressed ? 1 : 0, g_pointer_x, g_pointer_y, g_pointer_down,
+            g_pointer_callbacks[0].callback != NULL,
+            g_pointer_callbacks[2].callback != NULL, g_cursor_active);
+}
+
 static void input_release_pointer(void) {
     if (g_pointer_down) {
         pointer_set_down(0);
