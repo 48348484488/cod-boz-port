@@ -677,6 +677,9 @@ def run_boz_diagnostic(report: dict) -> int:
             "BOZ_PC_SAMPLE_INTERVAL", "4"
         )
         quick_env["BOZ_SWAP_PROGRESS"] = "1"
+        quick_env["BOZ_DIAGNOSTIC_AUTO_TAP"] = os.environ.get(
+            "BOZ_DIAGNOSTIC_AUTO_TAP", "1"
+        )
         quick_env["BOZ_FRAME_CAPTURE_DIR"] = str(PUBLIC)
         print("[FAST_PROPERTY] QEMU A/B run without 60+ unrelated probes", flush=True)
         # Stream the process output to disk so a timeout cannot discard the
@@ -894,6 +897,7 @@ def run_boz_diagnostic(report: dict) -> int:
                 "[BOZ_PC_SAMPLE]", "[BOZ_PC_SAMPLER]",
                 "[BOZ_MODULE_MAP]", "[egl]", "[GL_UPLOAD_TRACE]",
                 "[BOZ_SWAP_PROGRESS]", "[BOZ_FRAME_CAPTURE]",
+                "[BOZ_DIAGNOSTIC_TAP]",
                 "[BOZ_NULL_PROPERTY_ORIGIN]", "signal 11 ", "stack:",
                 "[S3E_FILE_EXISTS]",
             )) and not line.startswith("[S3E_FILE_EXISTS]"):
@@ -965,6 +969,10 @@ def run_boz_diagnostic(report: dict) -> int:
                 if line.startswith("[BOZ_SWAP_PROGRESS]")
             ][-12:],
             "captured_pngs": frame_outputs,
+            "diagnostic_tap_events": [
+                line for line in trial_lines
+                if line.startswith("[BOZ_DIAGNOSTIC_TAP]")
+            ],
             "gl_upload_line_count": len(upload_lines),
             "parent_lr": hex(saved_parent) if saved_parent is not None else None,
             "parent": parent_label,
