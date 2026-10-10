@@ -654,7 +654,18 @@ def run_boz_diagnostic(report: dict) -> int:
         quick_env = env.copy()
         quick_env["BOZ_COMPAT_NULL_CHILD_SKIP"] = "1"
         quick_env["BOZ_CLEAR_DEFAULT_MASS_PROBES"] = "1"
-        quick_env["BOZ_MASS_PROBES"] = ""
+        # Dedicated, reversible registration-guard experiment. The paired
+        # Thumb probes are alternated by src/main.c, never armed together.
+        # BOZ_FAST_SKIP_NULL_REGISTRATION=0 restores the previous fast lane.
+        registration_guard = os.environ.get(
+            "BOZ_FAST_SKIP_NULL_REGISTRATION", "1"
+        ) == "1"
+        quick_env["BOZ_COMPAT_SKIP_NULL_REGISTRATION"] = (
+            "1" if registration_guard else "0"
+        )
+        quick_env["BOZ_MASS_PROBES"] = (
+            "t:0x20fe6e,t:0x20fe72" if registration_guard else ""
+        )
         quick_env["BOZ_DEFER_OWNER_SECOND"] = "0"
         quick_env["BOZ_TRACE_HANDLER_PAIRS"] = "0"
         print("[FAST_PROPERTY] QEMU A/B run without 60+ unrelated probes", flush=True)
@@ -675,6 +686,7 @@ def run_boz_diagnostic(report: dict) -> int:
         for line in trial_lines:
             if line.startswith((
                 "[BOZ_COMPAT]", "[BOZ_NULL_CHILD_SKIP]",
+                "[BOZ_NULL_REGISTRATION_SKIP]", "[MASS_PROBE]",
                 "[BOZ_NULL_PROPERTY_ORIGIN]", "signal 11 ", "stack:",
                 "[S3E_FILE_EXISTS]",
             )) and not line.startswith("[S3E_FILE_EXISTS]"):
@@ -731,7 +743,11 @@ def run_boz_diagnostic(report: dict) -> int:
             ),
             "grandparent": grandparent_label,
             "null_child_skips": trial_out.count("[BOZ_NULL_CHILD_SKIP]"),
-            "caveat": "Opt-in diagnostic control-flow skip, not functional fix",
+            "registration_guard_enabled": registration_guard,
+            "null_registration_skips": trial_out.count(
+                "[BOZ_NULL_REGISTRATION_SKIP]"
+            ),
+            "caveat": "Experimental control-flow bypass, not a confirmed functional fix",
         }
         report["fast_property"] = result
         print("[FAST_PROPERTY_RESULT] " + json.dumps(result, sort_keys=True), flush=True)
