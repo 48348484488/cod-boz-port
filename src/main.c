@@ -226,6 +226,7 @@ static bool probe_mode_allowed(uint32_t off, uint8_t mode) {
         /* Confirmed ARM-state windows from the 0x254fxx and 0x34c1xx traces. */
         return !(off & 3u) &&
                ((off >= 0x00250000u && off < 0x00260000u) ||
+                (off >= 0x002fe000u && off < 0x00300500u) ||
                 (off >= 0x0034b000u && off < 0x0034f000u));
     }
     return false;
