@@ -434,3 +434,48 @@ the loader DTRZ but no frontend.group.bin, fixed.group.bin or
 splash.group.bin in its tracked tree (checked 2026-10-10).
 The original data packages still must be provided or downloaded
 through the authorized game resource pipeline.
+
+
+## Offline ARM call graph for new null-property crash
+
+Static disassembly from the recovered XE3U image
+(SHA-256: dbf342663fcd8c7f8fcedced1693eb532cbea8053ef472c0cb837323f3b57d95)
+shows:
+
+- 2FE7D0: STR r1,[r0,#0x90]. A zero r0 faults at address 0x90.
+- 301ECC: PUSH {r3,r4,r5,lr}; MOV r5,r1 (301ED4).
+  301EE0: MOV r0,r5; 301F00: BL 2FE7D0. Thus its input
+  argument r1 is carried directly into the faulting setter.
+- Exactly two direct ARM BL candidates target 301ECC:
+  - 3064FC (function 3064D8): calls with r1 copied from
+    the function input r1 at 3064EC, without a null guard here.
+    It was called by ARM BLs at 30A598,30C6C0,31AC44,
+    31DE20,323280.
+  - 30AE10 (function 30ADC8): calls with r1=r4, the
+    r4 input had already been dereferenced at 30ADF4
+    in the relevant path; this source seems less likely
+    but is not ruled out by static analysis alone.
+
+The QEMU crash confirms LR=BOZ+301F04, r0=0, r5=0, and
+fault address 0x90, but the previously exposed log alone
+did not distinguish the two parents.
+
+New diagnostic code inspects 301ECC's saved LR at
+the fatal stack [sp+12] to determine whether the actual
+caller was 3064FC or 30AE10. If 3064FC is confirmed,
+the fast stack parser also inspects the saved grandparent
+at [sp+44] to distinguish its five known callers.
+This analysis only reads crash state and does not patch
+or allocate game objects.
+
+For repeated offline investigations, tools/boz_arm_callgraph.py
+searches candidate ARM BL instructions directly in the
+uncompressed XE3U code in one pass. Its results require
+instruction-mode verification because raw 32-bit pairs in
+Thumb regions/data can resemble ARM instructions.
+
+A short experimental QEMU runner mode, BOZ_FAST_NULL_PROPERTY=1,
+reduces repeated diagnostic passes and emits
+public/boz-fast-property.log and the report field fast_property.
+The original game loader's null-child skip stays **OFF by
+default** outside this explicit diagnostic A/B test.
