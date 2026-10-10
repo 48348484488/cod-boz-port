@@ -704,7 +704,7 @@ def run_boz_diagnostic(report: dict) -> int:
         frame_outputs = []
         for ppm in sorted(PUBLIC.glob("boz-swap-*.ppm")):
             try:
-                parts = ppm.read_bytes().split(b"\\n", 3)
+                parts = ppm.read_bytes().split(bytes([10]), 3)
                 if len(parts) != 4 or parts[0] != b"P6" or parts[2] != b"255":
                     raise ValueError("invalid PPM header")
                 width, height = (int(v) for v in parts[1].split())
@@ -715,7 +715,7 @@ def run_boz_diagnostic(report: dict) -> int:
                 if len(raw) != stride * height:
                     raise ValueError("incomplete capture pixels")
                 scanlines = b"".join(
-                    b"\\x00" + raw[y*stride:(y+1)*stride]
+                    bytes([0]) + raw[y*stride:(y+1)*stride]
                     for y in range(height)
                 )
                 def png_chunk(tag, data):
@@ -723,7 +723,7 @@ def run_boz_diagnostic(report: dict) -> int:
                     return (struct.pack(">I", len(data)) + payload +
                             struct.pack(">I", zlib.crc32(payload) & 0xffffffff))
                 image = (
-                    b"\\x89PNG\\r\\n\\x1a\\n" +
+                    bytes.fromhex("89504e470d0a1a0a") +
                     png_chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)) +
                     png_chunk(b"IDAT", zlib.compress(scanlines, 4)) +
                     png_chunk(b"IEND", b"")
