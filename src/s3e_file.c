@@ -470,12 +470,56 @@ int32_t s3eFileClose(void *file) {
     return fclose((FILE *)file);
 }
 
+/* Observational file-I/O tracing for the BOZ serializer investigation.
+ * Off by default. Never alters the FILE* position beyond the requested I/O.
+ * Keep a limit to avoid excessive logs while booting a game. */
+static unsigned g_file_rw_trace_events;
+
+static int file_rw_trace_enabled(void) {
+    const char *flag = getenv("BOZ_FILE_RW_TRACE");
+    return flag && strcmp(flag, "1") == 0 &&
+           g_file_rw_trace_events < 512u;
+}
+
 uint32_t s3eFileRead(void *buffer, uint32_t elem_size, uint32_t count, void *file) {
-    return file ? (uint32_t)fread(buffer, elem_size, count, (FILE *)file) : 0;
+    int traced = file_rw_trace_enabled();
+    long start = traced && file ? ftell((FILE *)file) : -1;
+    uint32_t result = file ? (uint32_t)fread(buffer, elem_size, count, (FILE *)file) : 0;
+    if (traced) {
+        unsigned word = 0;
+        if (result && elem_size == 4u && buffer) {
+            memcpy(&word, buffer, sizeof(word));
+        }
+        fprintf(stderr, "[S3E_FILE_RW] op=read buffer=%08lx file=%08lx "
+                "elem=%u count=%u result=%u before=%ld after=%ld "
+                "eof=%d error=%d word=%08x\n",
+                (unsigned long)(uintptr_t)buffer,
+                (unsigned long)(uintptr_t)file,
+                elem_size, count, result, start,
+                file ? ftell((FILE *)file) : -1L,
+                file ? feof((FILE *)file) : 0,
+                file ? ferror((FILE *)file) : 0, word);
+        ++g_file_rw_trace_events;
+    }
+    return result;
 }
 
 uint32_t s3eFileWrite(const void *buffer, uint32_t elem_size, uint32_t count, void *file) {
-    return file ? (uint32_t)fwrite(buffer, elem_size, count, (FILE *)file) : 0;
+    int traced = file_rw_trace_enabled();
+    long start = traced && file ? ftell((FILE *)file) : -1;
+    uint32_t result = file ? (uint32_t)fwrite(buffer, elem_size, count, (FILE *)file) : 0;
+    if (traced) {
+        fprintf(stderr, "[S3E_FILE_RW] op=write buffer=%08lx file=%08lx "
+                "elem=%u count=%u result=%u before=%ld after=%ld "
+                "error=%d\n",
+                (unsigned long)(uintptr_t)buffer,
+                (unsigned long)(uintptr_t)file,
+                elem_size, count, result, start,
+                file ? ftell((FILE *)file) : -1L,
+                file ? ferror((FILE *)file) : 0);
+        ++g_file_rw_trace_events;
+    }
+    return result;
 }
 
 int32_t s3eFileGetChar(void *file) {
