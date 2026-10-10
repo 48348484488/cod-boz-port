@@ -72,6 +72,28 @@ enum {
 };
 
 static GLuint g_bound_framebuffer;
+static unsigned g_boz_gl_clear_count;
+static unsigned g_boz_gl_draw_arrays_count;
+static unsigned g_boz_gl_draw_elements_count;
+
+/* Count actual GL commands, not merely successful window swaps. */
+static S3E_SOFTFP void host_glClear(GLbitfield mask) {
+    ++g_boz_gl_clear_count;
+    void (*real)(GLbitfield) = lookup_gl("glClear");
+    if (real) real(mask);
+}
+
+static S3E_SOFTFP void host_glDrawArrays(GLenum mode, GLint first, GLsizei count) {
+    ++g_boz_gl_draw_arrays_count;
+    void (*real)(GLenum, GLint, GLsizei) = lookup_gl("glDrawArrays");
+    if (real) real(mode, first, count);
+}
+
+static S3E_SOFTFP void host_glDrawElements(GLenum mode, GLsizei count, GLenum type, const void *indices) {
+    ++g_boz_gl_draw_elements_count;
+    void (*real)(GLenum, GLsizei, GLenum, const void *) = lookup_gl("glDrawElements");
+    if (real) real(mode, count, type, indices);
+}
 
 static void driver_bind_framebuffer(GLuint framebuffer) {
     void (*real)(GLenum, GLuint) = lookup_gl("glBindFramebuffer");
@@ -551,8 +573,10 @@ static EGLBoolean host_eglSwapBuffers(EGLDisplay display, EGLSurface surface) {
     }
     EGLBoolean result = egl_backend_swap_buffers(display, surface);
     if (trace_enabled && (swap_count <= 5u || swap_count % 30u == 0u)) {
-        fprintf(stderr, "[BOZ_SWAP_PROGRESS] n=%u ok=%d fbo=%u\n",
-                swap_count, (int)result, (unsigned)previous_framebuffer);
+        fprintf(stderr,
+                "[BOZ_SWAP_PROGRESS] n=%u ok=%d fbo=%u gl_clear=%u gl_draw_arrays=%u gl_draw_elements=%u\n",
+                swap_count, (int)result, (unsigned)previous_framebuffer,
+                g_boz_gl_clear_count, g_boz_gl_draw_arrays_count, g_boz_gl_draw_elements_count);
     }
     pace_frame();
     return result;
@@ -727,6 +751,7 @@ static const struct host_symbol WRAPPED_SYMBOLS[] = {
     WRAPPED(glBindFramebuffer),
     WRAPPED(glBindFramebufferOES),
     WRAPPED(glBlendColor),
+    WRAPPED(glClear),
     WRAPPED(glClearColor),
     WRAPPED(glClearDepthf),
     WRAPPED(glClearDepthfOES),
@@ -735,6 +760,8 @@ static const struct host_symbol WRAPPED_SYMBOLS[] = {
     WRAPPED(glCopyTexSubImage2D),
     WRAPPED(glDepthRangef),
     WRAPPED(glDepthRangefOES),
+    WRAPPED(glDrawArrays),
+    WRAPPED(glDrawElements),
     WRAPPED(glDrawTexfOES),
     WRAPPED(glFogf),
     WRAPPED(glFrustumf),
