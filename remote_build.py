@@ -3145,6 +3145,7 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                     bridge_env = env.copy()
                                                                                     bridge_env["BOZ_DEFER_OWNER_SECOND"] = "1"
                                                                                     bridge_env["BOZ_TRACE_HANDLER_PAIRS"] = "1"
+                                                                                    bridge_env["BOZ_FILE_RW_TRACE"] = "1"
                                                                                     bridge_env["BOZ_CLEAR_DEFAULT_MASS_PROBES"] = "1"
                                                                                     bridge_env["BOZ_MASS_PROBES"] = ",".join(
                                                                                         probe_env_token(item)
@@ -3209,6 +3210,12 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                                     + stripped,
                                                                                                     flush=True,
                                                                                                 )
+                                                                                            elif stripped.startswith("[S3E_FILE_RW]"):
+                                                                                                bridge_events.append({
+                                                                                                    "index": bridge_index,
+                                                                                                    "type": "file_io",
+                                                                                                    "line": stripped,
+                                                                                                })
                                                                                             elif stripped.startswith((
                                                                                                 "[D8FF0_",
                                                                                                 "[NULL_OBJECT]",
@@ -3257,6 +3264,12 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                             bridge_out.replace("\\n", "\n")
                                                                                         )
                                                                                         observations = selector_provenance["observations"]
+                                                                                        print(
+                                                                                            "[SELECTOR_FILE_IO] "
+                                                                                            f"matched={len(selector_provenance['matching_io_calls'])} "
+                                                                                            f"incomplete={selector_provenance['matching_failed_io_calls']}",
+                                                                                            flush=True,
+                                                                                        )
                                                                                         print(
                                                                                             "[SELECTOR_PROVENANCE] "
                                                                                             f"complete={selector_provenance['chronological_chain_complete']} "
