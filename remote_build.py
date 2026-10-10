@@ -1121,6 +1121,34 @@ def run_boz_diagnostic(report: dict) -> int:
                                                 "[PRIMARY_FACTORY_DISASM] " + item["instruction"],
                                                 flush=True,
                                             )
+                                    # Inspect the immediate caller of DA6AC to find
+                                    # the instruction supplying its null r2 parameter.
+                                    caller_window = [
+                                        {"off": f"0x{off:x}", "instruction": raw_line}
+                                        for off, raw_line in parsed_disasm
+                                        if 0xDB280 <= off < 0xDB340
+                                    ]
+                                    if caller_window:
+                                        caller_path = PUBLIC / "boz-owner-caller-disasm.json"
+                                        caller_path.write_text(
+                                            json.dumps({
+                                                "callsite": "0xdb31c",
+                                                "window_start": "0xdb280",
+                                                "window_end_exclusive": "0xdb340",
+                                                "instructions": caller_window,
+                                            }, indent=2) + "\n",
+                                            encoding="utf-8",
+                                        )
+                                        report["boz_owner_caller_disasm"] = str(caller_path)
+                                        print(
+                                            f"[OWNER_CALLER] instructions={len(caller_window)} "
+                                            f"artifact={caller_path}", flush=True,
+                                        )
+                                        for item in caller_window:
+                                            print(
+                                                "[OWNER_CALLER_DISASM] " + item["instruction"],
+                                                flush=True,
+                                            )
                                     focus_static = []
                                     hot_values = [
                                         int(value, 16)
