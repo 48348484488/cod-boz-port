@@ -39,6 +39,29 @@ def is_owner_after_mov_safe(disassembly_rows: list[tuple[int, str]]) -> bool:
     return False
 
 
+
+def verify_primary_factory_null_path(disassembly_rows: list[tuple[int, str]]) -> dict:
+    """Proof only for the r2==0 branch of D94E4; not full function recovery."""
+    rows = {off: instruction.lower() for off, instruction in disassembly_rows}
+    requirements = {
+        0xD94EE: r"\bmov\s+r4,\s*r2\b",
+        0xD94F2: r"\bcmp\s+r2,\s*#0\b",
+        0xD94F4: r"\bbeq(?:\.n)?\s+(?:0x)?d95bc\b",
+        0xD95BC: r"\bmov\s+r0,\s*r4\b",
+        0xD95BE: r"\b(?:pop|ldmia(?:\.w)?)\b.*\bpc\b",
+    }
+    matches = {
+        hex(off): re.search(pattern, rows.get(off, "")) is not None
+        for off, pattern in requirements.items()
+    }
+    return {
+        "entry": "0xd94e4",
+        "r2_zero_short_circuit_verified": all(matches.values()),
+        "instruction_checks": matches,
+        "cxx_equivalent_for_this_path_only": "if (arg_r2 == nullptr) return nullptr;",
+    }
+
+
 def parse_trace(text: str) -> list[dict]:
     events = []
     for line_number, line in enumerate(text.splitlines(), 1):
