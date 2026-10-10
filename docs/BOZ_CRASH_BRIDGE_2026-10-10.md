@@ -217,3 +217,44 @@ from [sp,#28] and stores it to its fifth argument slot at DB30E.
 The preceding call to 0x257B98 and registration writes to the
 manager's tree at +0x2c are the next static/runtime investigation
 targets. Do not invent a callback pointer or bypass the null check.
+
+
+## 2026-10-10 selector provenance and S3E file-I/O
+
+The recovered, unpacked S3E (SHA-256 of unpacked image:
+dbf342663fcd8c7f8fcedced1693eb532cbea8053ef472c0cb837323f3b57d95)
+has a header-defined code offset 0x39483. No proprietary bytes are
+included in this repository. Offline ARM/Thumb disassembly was verified
+against the runtime-emitted instructions using clang and llvm-objdump;
+tools/boz_s3e_disasm.py reproduces it for locally supplied S3E images.
+
+The actual S3E fixup/symbol relocation table resolves these ARM PLT stubs:
+- BOZ+0x6B4 -> s3eFileWrite (GOT 0x411214)
+- BOZ+0x77C -> s3eFileRead (GOT 0x411254)
+
+The S3E ARM routines 0x257B98 and 0x257CA4 use these imported
+serialization operations according to mode flags. The meaning of the
+mode **must be measured at runtime**, not guessed. The new
+tools/boz_s3e_imports.py computes the symbol names from fixups.
+
+A real Render run (dep-db54iu7lk1mc738nlnag, 2026-10-10)
+recorded before/after 0x257CA4 (DB294 -> DB298), before/after 0x257B98
+(DB2FA -> DB2FE), before DB306 and at DB31C. The selector's
+stack word [sp,#28] stayed 0x40B35AC0 throughout; the fifth
+argument at DB31C and D8F0E key were also 0x40B35AC0.
+The new analyzer confirmed a complete preserved chain.
+
+Crucially, that run logged
+[SELECTOR_FILE_IO] matched=1 incomplete=1:
+an emulated S3E read/write call targeting the precise input buffer
+at DB2FA transferred fewer elements than requested.
+This is an **observation** and does not yet prove a missing game file,
+because the operation kind, handle and EOF/error details were
+not included in that run's summary. The next deployment logs
+the exact operation, return count, EOF/error and file open path,
+without modifying in-game behavior.
+
+A nonzero stale pointer in a serializer destination is not proof
+that that pointer is a valid registered type. Work must first identify
+which file/stream call was incomplete and whether the real game
+resource was available. Do not fabricate a registry entry.
