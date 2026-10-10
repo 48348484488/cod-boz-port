@@ -65,3 +65,27 @@ O runner atual usa um S3E de referencia e nao inclui
 necessariamente todos os recursos proprietarios do jogo.
 Um resultado de recurso ausente neste ambiente nao deve ser
 atribuido automaticamente ao APK original.
+
+## Referencia cruzada de abertura: cache de shader
+
+A varredura dos BL ARM diretos alinhados encontrou a chamada
+`0x2BA3D0 -> 0x25812C`, dentro da rotina ARM iniciada em
+`0x2BA324`. Essa rotina:
+
+- `2BA360`: prepara um buffer de nome na pilha.
+- `2BA364`: usa a string real `shader_bin/%08x.bin`,
+  localizada no S3E em `0x3CAC00`.
+- `2BA3C4`: seleciona modo leitura (r1=1).
+- `2BA3D0`: chama a abertura do serializador.
+- `2BA3D4`: testa o campo FILE* global em +8.
+- `2BA460`: referencia `Could not load shader binary %s`.
+
+O exame dos APKs recuperados `COD_BOZ 1.0.12.apk` e
+`COD_BOZ_OpenBOZ_v0.2.4_first_open_method_signed(1).apk`
+nao encontrou uma entrada `shader_bin/`. Eles podem depender de
+outros pacotes, cache local gerado em runtime ou caminhos diferentes.
+
+**Cuidado:** nao e prova de que a falha em DB31E resulte da
+ausencia do cache de shaders. A chamada de abertura pode ser
+condicional e pode nem ter sido executada antes da leitura em
+DB2FA. A instrumentacao em 25812C/258170 vai discriminar isso.
