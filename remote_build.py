@@ -2998,10 +2998,15 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                         {"off": 0xDA70A, "mode": "thumb16", "label": "create_primary_call"},
                                                                                         {"off": 0xDA70E, "mode": "thumb16", "label": "create_primary_return"},
                                                                                         {"off": 0xDA712, "mode": "thumb16", "label": "primary_null_branch"},
-                                                                                        {"off": 0xDA71C, "mode": "thumb16", "label": "type_selector_comparison"},
-                                                                                        {"off": 0xDA728, "mode": "thumb16", "label": "create_fallback_call"},
-                                                                                        {"off": 0xDA72C, "mode": "thumb16", "label": "create_fallback_return"},
-                                                                                        {"off": 0xDA730, "mode": "thumb16", "label": "fallback_null_branch"},
+                                                                                        {"off": 0xDA716, "mode": "thumb16", "label": "second_selector_global_load"},
+                                                                                        {"off": 0xDA71A, "mode": "thumb16", "label": "second_selector_value_load"},
+                                                                                        {"off": 0xDA71C, "mode": "thumb16", "label": "second_selector_comparison"},
+                                                                                        {"off": 0xDA71E, "mode": "thumb16", "label": "second_selector_branch"},
+                                                                                        {"off": 0xDA720, "mode": "thumb16", "label": "second_fallback_setup"},
+                                                                                        {"off": 0xDA728, "mode": "thumb16", "label": "second_fallback_call"},
+                                                                                        {"off": 0xDA72C, "mode": "thumb16", "label": "second_fallback_return"},
+                                                                                        {"off": 0xDA72E, "mode": "thumb16", "label": "second_fallback_result_test"},
+                                                                                        {"off": 0xDA730, "mode": "thumb16", "label": "second_fallback_null_branch"},
                                                                                         {"off": 0xDA792, "mode": "thumb16", "label": "tree_insert_call"},
                                                                                         {"off": 0xDA79A, "mode": "thumb16", "label": "owner_before_mov_r0_r4"},
                                                                                         {"off": 0xD94E4, "mode": "thumb16", "label": "primary_factory_entry"},
@@ -3042,6 +3047,7 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                         flush=True,
                                                                                     )
                                                                                     bridge_env = env.copy()
+                                                                                    bridge_env["BOZ_DEFER_OWNER_SECOND"] = "1"
                                                                                     bridge_env["BOZ_MASS_PROBES"] = ",".join(
                                                                                         probe_env_token(item)
                                                                                         for item in crash_bridge_probes
