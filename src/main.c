@@ -181,6 +181,12 @@ static boz_probe_t g_tree_probes[BOZ_MAX_MASS_PROBES] = {
 };
 static unsigned g_tree_probe_count = 9u;
 static int g_defer_owner_second_enabled;
+static int g_handler_pairs_enabled;
+static int g_handler_pairs_started;
+static int g_handler_pair_pending;
+static unsigned g_handler_pair_count;
+static uint32_t g_handler_pair_target;
+#define BOZ_HANDLER_PAIR_LIMIT 48u
 
 /* One-shot probes armed only after the DB31C dispatch. This avoids
  * consuming the fallback probes on the earlier successful invocation. */
@@ -191,6 +197,8 @@ static bool is_deferred_owner_second_site(uint32_t off) {
     case 0x000d8f2au: /* search completed */
     case 0x000d8f36u: /* compare selected node with sentinel */
     case 0x000d8f3au: /* handler candidate */
+    case 0x000d8f40u: /* callback BLX, captured before instruction */
+    case 0x000d8f42u: /* return instruction, deferred until BLX trap */
     case 0x000d8f44u: /* no match: move zero to r0 */
     case 0x000da716u:
     case 0x000da71cu:
@@ -292,17 +300,43 @@ static void load_mass_probe_env(void) {
             g_tree_probe_count, rejected, BOZ_MAX_MASS_PROBES);
 }
 
+/* Re-arm only a confirmed 16-bit instruction address. The pair probes are
+ * mutually exclusive: never patch BLX and its immediately following POP
+ * at the same time (PC-after-breakpoint ambiguity). */
+static bool arm_one_thumb_probe(uint32_t off) {
+    if (!probe_mode_allowed(off, BOZ_PROBE_THUMB16)) {
+        return false;
+    }
+    for (unsigned i = 0; i < g_tree_probe_count; ++i) {
+        boz_probe_t *p = &g_tree_probes[i];
+        if (p->off != off || p->mode != BOZ_PROBE_THUMB16 || p->armed) {
+            continue;
+        }
+        uint16_t *site = (uint16_t *)(uintptr_t)(g_loaded_base + off);
+        p->saved = *site;
+        *site = 0xbe00u;
+        __builtin___clear_cache((char *)site, (char *)(site + 1));
+        p->armed = 1;
+        return true;
+    }
+    return false;
+}
+
 static void arm_tree_probes(void) {
     load_mass_probe_env();
     const char *defer = getenv("BOZ_DEFER_OWNER_SECOND");
     g_defer_owner_second_enabled = defer && strcmp(defer, "1") == 0;
+    const char *pairs = getenv("BOZ_TRACE_HANDLER_PAIRS");
+    g_handler_pairs_enabled = g_defer_owner_second_enabled &&
+                              pairs && strcmp(pairs, "1") == 0;
     unsigned armed = 0;
     for (unsigned i = 0; i < g_tree_probe_count; ++i) {
         boz_probe_t *p = &g_tree_probes[i];
         if (!probe_mode_allowed(p->off, p->mode)) {
             continue;
         }
-        if (g_defer_owner_second_enabled && is_deferred_owner_second_site(p->off)) {
+        if ((g_defer_owner_second_enabled && is_deferred_owner_second_site(p->off)) ||
+            (g_handler_pairs_enabled && p->off == 0x000d8f42u)) {
             continue;
         }
         if (p->mode == BOZ_PROBE_THUMB16) {
@@ -510,9 +544,13 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
                 if (p->off == 0x000db31cu && g_defer_owner_second_enabled) {
                     unsigned deferred_armed = 0;
                     g_defer_owner_second_enabled = 0;
+                    if (g_handler_pairs_enabled) {
+                        g_handler_pairs_started = 1;
+                    }
                     for (unsigned j = 0; j < g_tree_probe_count; ++j) {
                         boz_probe_t *q = &g_tree_probes[j];
                         if (!is_deferred_owner_second_site(q->off) ||
+                            (g_handler_pairs_enabled && q->off == 0x000d8f42u) ||
                             q->mode != BOZ_PROBE_THUMB16 || q->armed ||
                             !probe_mode_allowed(q->off, q->mode)) {
                             continue;
@@ -532,6 +570,36 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
                             (unsigned long)uc->uc_mcontext.arm_r0,
                             (unsigned long)uc->uc_mcontext.arm_r2,
                             (unsigned long)uc->uc_mcontext.arm_r8);
+                }
+                /* One call probe arms the following return probe; the return
+                 * probe then re-arms the call. Every pair belongs to one
+                 * specific BLX invocation, including its actual r0 result. */
+                if (g_handler_pairs_started &&
+                    p->off == 0x000d8f40u &&
+                    !g_handler_pair_pending &&
+                    g_handler_pair_count < BOZ_HANDLER_PAIR_LIMIT) {
+                    ++g_handler_pair_count;
+                    g_handler_pair_target = (uint32_t)uc->uc_mcontext.arm_r2;
+                    g_handler_pair_pending = arm_one_thumb_probe(0x000d8f42u);
+                    fprintf(stderr,
+                            "[HANDLER_PAIR_CALL] seq=%u target=%08x r0=%08lx "
+                            "r1=%08lx r2=%08lx armed_return=%d\n",
+                            g_handler_pair_count, g_handler_pair_target,
+                            (unsigned long)uc->uc_mcontext.arm_r0,
+                            (unsigned long)uc->uc_mcontext.arm_r1,
+                            (unsigned long)uc->uc_mcontext.arm_r2,
+                            g_handler_pair_pending);
+                } else if (g_handler_pairs_started &&
+                           p->off == 0x000d8f42u &&
+                           g_handler_pair_pending) {
+                    fprintf(stderr,
+                            "[HANDLER_PAIR_RET] seq=%u target=%08x result=%08lx\n",
+                            g_handler_pair_count, g_handler_pair_target,
+                            (unsigned long)uc->uc_mcontext.arm_r0);
+                    g_handler_pair_pending = 0;
+                    if (g_handler_pair_count < BOZ_HANDLER_PAIR_LIMIT) {
+                        (void)arm_one_thumb_probe(0x000d8f40u);
+                    }
                 }
                 /*
                  * Mass probes can stop at dozens of unrelated instructions.
