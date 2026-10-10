@@ -109,5 +109,24 @@ class TestCrashBridge(unittest.TestCase):
 
 
 
+    def test_type_selector_r8_equals_r3_leads_to_primary_path(self):
+        log = "\n".join([
+            "[TREE_PROBE] off=0da702 r0=4065e0c8 r2=00000000 r3=40b34bd0 r8=40b34bd0",
+            "[TREE_PROBE] off=0d94e4 r0=4065e0c8 r2=00000000 r4=00000000",
+            "[TREE_PROBE] off=0d95be r0=00000000 r2=00000000 r4=00000000",
+            "[TREE_PROBE] off=0db31e r0=00000000 r2=00000001",
+        ])
+        result = module.analyze(module.parse_trace(log))
+        self.assertEqual(result["special_type_selector_match_count"], 1)
+        self.assertEqual(result["primary_factory_null_arg_count"], 1)
+        self.assertEqual(result["primary_factory_null_exit_count"], 1)
+
+    def test_type_selector_unknown_does_not_count_as_equality(self):
+        log = "[TREE_PROBE] off=0da702 r8=00000000"
+        result = module.analyze(module.parse_trace(log))
+        self.assertEqual(result["special_type_selector_match_count"], 0)
+
+
+
 if __name__ == "__main__":
     unittest.main()
