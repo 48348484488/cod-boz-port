@@ -188,23 +188,15 @@ static bool is_deferred_owner_second_site(uint32_t off) {
     switch (off) {
     case 0x000d8f0eu: /* handler lookup entry */
     case 0x000d8f14u: /* after loading registry sentinel and root */
-    case 0x000d8f16u: /* start of search */
     case 0x000d8f2au: /* search completed */
     case 0x000d8f36u: /* compare selected node with sentinel */
-    case 0x000d8f38u: /* no-handler branch */
     case 0x000d8f3au: /* handler candidate */
-    case 0x000d8f40u: /* indirect handler call */
-    case 0x000d8f42u: /* result of indirect call */
     case 0x000d8f44u: /* no match: move zero to r0 */
-    case 0x000d8f46u: /* return after zero */
     case 0x000da716u:
-    case 0x000da71au:
     case 0x000da71cu:
-    case 0x000da71eu:
     case 0x000da720u:
     case 0x000da728u:
     case 0x000da72cu:
-    case 0x000da72eu:
     case 0x000da730u:
         return true;
     default:
@@ -231,6 +223,10 @@ static bool probe_mode_allowed(uint32_t off, uint8_t mode) {
 }
 
 static void load_mass_probe_env(void) {
+    const char *fresh = getenv("BOZ_CLEAR_DEFAULT_MASS_PROBES");
+    if (fresh && strcmp(fresh, "1") == 0) {
+        g_tree_probe_count = 0u;
+    }
     const char *s = getenv("BOZ_MASS_PROBES");
     if (!s || !*s) {
         return;
