@@ -181,6 +181,9 @@ static boz_probe_t g_tree_probes[BOZ_MAX_MASS_PROBES] = {
 };
 static unsigned g_tree_probe_count = 9u;
 static int g_defer_owner_second_enabled;
+static int g_compat_null_child_skip;
+static volatile sig_atomic_t g_compat_null_child_skip_count;
+#define BOZ_NULL_CHILD_SKIP_MAX 128
 static int g_handler_pairs_enabled;
 static int g_defer_selector_stream_enabled;
 static int g_handler_pairs_started;
@@ -837,6 +840,29 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
         uc->uc_mcontext.arm_pc = g_loaded_base + 0x000d8ff0u;
         return;
     }
+    /*
+     * Opt-in diagnostic A/B only. If the missing child pointer reaches the
+     * *verified* ARM LDRH r3,[r4,#44], do not synthesize an object. Instead
+     * run the routine's own temporary-object cleanup (MOV r0,r6 at 2FE0F8
+     * followed by its destructor and normal epilogue). This is NOT a
+     * gameplay fix: it tests whether the missing optional child alone is
+     * preventing further boot progress. The unmodified run remains default.
+     */
+    if (sig == SIGSEGV && g_compat_null_child_skip &&
+        uc->uc_mcontext.arm_pc == g_loaded_base + 0x002fe0a8u &&
+        uc->uc_mcontext.arm_r4 == 0 &&
+        (uc->uc_mcontext.arm_cpsr & 0x20u) == 0 &&
+        g_compat_null_child_skip_count < BOZ_NULL_CHILD_SKIP_MAX) {
+        ++g_compat_null_child_skip_count;
+        fprintf(stderr,
+                "[BOZ_NULL_CHILD_SKIP] n=%d pc=2fe0a8 r4=%08lx "
+                "cleanup_pc=2fe0f8 lr=%08lx\n",
+                (int)g_compat_null_child_skip_count,
+                (unsigned long)uc->uc_mcontext.arm_r4,
+                (unsigned long)uc->uc_mcontext.arm_lr);
+        uc->uc_mcontext.arm_pc = g_loaded_base + 0x002fe0f8u;
+        return;
+    }
     if (sig == SIGSEGV && recover_bucket_allocator_fault(uc)) return;
     if (sig == SIGSEGV && recover_null_buffer_write(uc)) return;
     if (sig == SIGSEGV && recover_null_buffer_slot(uc)) return;
@@ -1118,6 +1144,12 @@ int main(int argc, char **argv) {
 #endif
 #if defined(__arm__)
     g_loaded_base = (uintptr_t)loaded.base;
+    const char *null_child_flag = getenv("BOZ_COMPAT_NULL_CHILD_SKIP");
+    g_compat_null_child_skip =
+        null_child_flag && strcmp(null_child_flag, "1") == 0;
+    if (g_compat_null_child_skip) {
+        fprintf(stderr, "[BOZ_COMPAT] experimental null-child cleanup skip enabled\n");
+    }
     if (getenv("BOZ_NULL_OBJECT_TRACE")) {
         arm_d8ff0_trace();
         arm_da6c6_trace();
