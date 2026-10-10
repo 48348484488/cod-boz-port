@@ -512,7 +512,7 @@ static void frontend_overlay_gl_present(void) {
  * PPM is intentionally used here so the ARM loader needs no PNG dependency. */
 static void boz_capture_swap_frame(unsigned frame) {
     const char *dir = getenv("BOZ_FRAME_CAPTURE_DIR");
-    if (!dir || !*dir || (frame != 1u && frame != 5u && frame != 15u && frame != 60u)) return;
+    if (!dir || !*dir || (frame != 1u && frame != 5u && frame != 10u && frame != 15u && frame != 60u)) return;
     void (*read_pixels)(GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, void *) =
         lookup_gl("glReadPixels");
     if (!read_pixels) {
@@ -579,7 +579,7 @@ static EGLBoolean host_eglSwapBuffers(EGLDisplay display, EGLSurface surface) {
         driver_bind_framebuffer(previous_framebuffer);
     }
     EGLBoolean result = egl_backend_swap_buffers(display, surface);
-    if (trace_enabled && (swap_count <= 5u || swap_count % 30u == 0u)) {
+    if (trace_enabled && (swap_count <= 5u || swap_count % 5u == 0u)) {
         fprintf(stderr,
                 "[BOZ_SWAP_PROGRESS] n=%u ok=%d fbo=%u elapsed_ms=%llu gl_clear=%u gl_draw_arrays=%u gl_draw_elements=%u gl_draw_tex=%u\n",
                 swap_count, (int)result, (unsigned)previous_framebuffer,
