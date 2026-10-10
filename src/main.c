@@ -186,6 +186,17 @@ static int g_defer_owner_second_enabled;
  * consuming the fallback probes on the earlier successful invocation. */
 static bool is_deferred_owner_second_site(uint32_t off) {
     switch (off) {
+    case 0x000d8f0eu: /* handler lookup entry */
+    case 0x000d8f14u: /* after loading registry sentinel and root */
+    case 0x000d8f16u: /* start of search */
+    case 0x000d8f2au: /* search completed */
+    case 0x000d8f36u: /* compare selected node with sentinel */
+    case 0x000d8f38u: /* no-handler branch */
+    case 0x000d8f3au: /* handler candidate */
+    case 0x000d8f40u: /* indirect handler call */
+    case 0x000d8f42u: /* result of indirect call */
+    case 0x000d8f44u: /* no match: move zero to r0 */
+    case 0x000d8f46u: /* return after zero */
     case 0x000da716u:
     case 0x000da71au:
     case 0x000da71cu:
