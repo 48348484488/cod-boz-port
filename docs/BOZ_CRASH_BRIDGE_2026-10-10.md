@@ -258,3 +258,26 @@ A nonzero stale pointer in a serializer destination is not proof
 that that pointer is a valid registered type. Work must first identify
 which file/stream call was incomplete and whether the real game
 resource was available. Do not fabricate a registry entry.
+
+
+## Byte-level confirmation from locally recovered APKs
+
+On 2026-10-10 we read actual `assets/boz.s3e` from three recovered APKs:
+- `COD_BOZ 1.0.12.apk`
+- `COD_BOZ_ReviveOS_v0.2.5_ASLR_FIX.apk`
+- `COD_BOZ_OpenBOZ_v0.2.4_first_open_method_signed(1).apk`
+
+All three embed the **same compressed S3E bytes**:
+- Size: 1,902,539 bytes
+- SHA-256: `f458c15a7111779ad320af377d0bb751294119788ba06d430bee0cc977539fee`
+
+LZMA FORMAT_ALONE decompression of each produced identical XE3U images:
+- Size: 4,550,559 bytes
+- SHA-256: `dbf342663fcd8c7f8fcedced1693eb532cbea8053ef472c0cb837323f3b57d95`
+
+The restored `boz.s3e.unpacked` file matches all three decompressed
+images byte-for-byte. Thus, the function offsets discussed in this
+document refer to the same uncompressed executable across these
+recovered builds. APK runtime wrappers, resource bundles, and original
+game assets may still differ; this verification does not prove that
+complete BOZ gameplay has been restored.
