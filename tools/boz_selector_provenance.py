@@ -12,6 +12,10 @@ import sys
 
 PROBE = re.compile(r"\[TREE_PROBE\].*?\boff=0*([0-9a-fA-F]+)\b", re.I)
 VALUE = re.compile(r"\b(r0|r2|sp0|sp28)=([0-9a-fA-F]{8})\b", re.I)
+IO_EVENT = re.compile(
+    r"\[S3E_FILE_RW\]\s+op=(read|write)\s+buffer=([0-9a-fA-F]{8})"
+    r".*?elem=(\d+)\s+count=(\d+)\s+result=(\d+)"
+)
 TARGETS = {
     0xDB2FA: "key_helper_before_blx",
     0xDB2FE: "key_helper_after_blx",
@@ -78,9 +82,26 @@ def summarize(raw: str) -> dict:
         and fallback is not None and lookup is not None
         and loaded["index"] < dispatch["index"] < fallback["index"] < lookup["index"]
     )
+    helper_dest = None if before is None else before.get("r0")
+    stream_io = []
+    for match in IO_EVENT.finditer(raw):
+        operation, buffer, elem_size, count, result = match.groups()
+        buffer_addr = int(buffer, 16)
+        if helper_dest is not None and buffer_addr == helper_dest:
+            stream_io.append({
+                "op": operation, "buffer": f"0x{buffer_addr:08x}",
+                "element_size": int(elem_size), "count": int(count),
+                "result": int(result),
+            })
+
     return {
         "events": events,
         "observations": observations,
+        "helper_destination": None if helper_dest is None else f"0x{helper_dest:08x}",
+        "matching_io_calls": stream_io,
+        "matching_failed_io_calls": sum(
+            item["result"] < item["count"] for item in stream_io
+        ),
         "chronological_chain_complete": in_order and len(observed) == 4,
         "key_value_preserved_across_observed_chain": (
             in_order and len(observed) == 4 and len(set(observed)) == 1
