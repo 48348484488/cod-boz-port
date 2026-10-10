@@ -923,6 +923,40 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
         return;
     }
 
+    /*
+     * Fault-proven provenance for BOZ+2FE7D0 (STR r1,[r0,#0x90]).
+     * 301ECC saves {r3,r4,r5,lr} and calls 2FE7D0 from 301F00.
+     * At the fault, the callee has no prologue: the saved LR lives at
+     * [sp+12]. This classifies the *crashing invocation*, unlike BKPTs
+     * which may have sampled an earlier successful one.
+     * 3064FC calls 301ECC with original r1; 30AE10 calls it with r4
+     * after r4 was dereferenced successfully at 30ADF4.
+     */
+    if (sig == SIGSEGV &&
+        uc->uc_mcontext.arm_pc == g_loaded_base + 0x002fe7d0u &&
+        uc->uc_mcontext.arm_r0 == 0 &&
+        (uc->uc_mcontext.arm_cpsr & 0x20u) == 0 &&
+        uc->uc_mcontext.arm_lr == g_loaded_base + 0x00301f04u) {
+        const uint32_t *caller_stack =
+            (const uint32_t *)(uintptr_t)uc->uc_mcontext.arm_sp;
+        uint32_t constructor_parent_lr = caller_stack[3];
+        const char *parent_class = "unknown";
+        if (constructor_parent_lr == (uint32_t)(g_loaded_base + 0x00306500u)) {
+            parent_class = "3064d8_r1_unchecked";
+        } else if (constructor_parent_lr ==
+                   (uint32_t)(g_loaded_base + 0x0030ae14u)) {
+            parent_class = "30adc8_r4_prevalidated";
+        }
+        fprintf(stderr,
+                "[BOZ_NULL_PROPERTY_ORIGIN] pc=2fe7d0 "
+                "constructor=301ecc parent_lr=%08x "
+                "path=%s constructor_r5=%08lx target_r4=%08lx "
+                "stack_r5_saved=%08x\n",
+                constructor_parent_lr, parent_class,
+                (unsigned long)uc->uc_mcontext.arm_r5,
+                (unsigned long)uc->uc_mcontext.arm_r4,
+                caller_stack[2]);
+    }
     uintptr_t crash_pc = (uintptr_t)uc->uc_mcontext.arm_pc;
     uintptr_t crash_lr = (uintptr_t)uc->uc_mcontext.arm_lr;
     uintptr_t pc_offset = crash_pc >= g_loaded_base ? crash_pc - g_loaded_base : UINTPTR_MAX;
