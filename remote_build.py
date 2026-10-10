@@ -38,9 +38,11 @@ ACTIVE_REPORT: dict | None = None
 
 CONFIRMED_THUMB_RANGES = (
     (0x000D6000, 0x000DB800),
+    (0x0020FE1C, 0x0020FE76),
 )
 CONFIRMED_ARM_RANGES = (
     (0x00250000, 0x00260000),
+    (0x002FD500, 0x002FD580),
     (0x002FE000, 0x00300500),
     (0x0034B000, 0x0034F000),
 )
@@ -3143,6 +3145,11 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                         {"off": 0xDB298, "mode": "thumb16", "label": "seed_helper_after_blx"},
                                                                                         {"off": 0x2FFA30, "mode": "arm32", "label": "new_crash_caller_array"},
                                                                                         {"off": 0x300444, "mode": "arm32", "label": "new_crash_caller_list"},
+                                                                                        {"off": 0x20FE3C, "mode": "thumb16", "label": "child_lookup_result_before_store"},
+                                                                                        {"off": 0x20FE4E, "mode": "thumb16", "label": "child_copy_call_with_pointer"},
+                                                                                        {"off": 0x2FD518, "mode": "arm32", "label": "child_lookup_entry"},
+                                                                                        {"off": 0x2FD568, "mode": "arm32", "label": "child_lookup_return_check"},
+                                                                                        {"off": 0x302020, "mode": "arm32", "label": "child_pointer_slot_read"},
                                                                                         {"off": 0x2FE088, "mode": "arm32", "label": "new_crash_entry"},
                                                                                         {"off": 0x2FE098, "mode": "arm32", "label": "new_crash_after_initializer"},
                                                                                         {"off": 0x2FE0A4, "mode": "arm32", "label": "new_crash_before_helper"},
@@ -3182,6 +3189,8 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                     # DB31C -> D8F0E tree lookup.
                                                                                     pair_focus = {
                                                                                         0x2FFA30, 0x300444,
+                                                                                        0x20FE3C, 0x20FE4E,
+                                                                                        0x2FD518, 0x2FD568, 0x302020,
                                                                                         0x2FE088, 0x2FE098, 0x2FE0A4, 0x2FE0A8,
                                                                                         0x25812C, 0x258170,
                                                                                         0x257BD4, 0xDB294, 0xDB298,
