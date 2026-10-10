@@ -693,6 +693,24 @@ def run_boz_diagnostic(report: dict) -> int:
                 print("[FAST_PROPERTY] QEMU timed out; partial trace preserved", flush=True)
         trial_out = fast_trace.read_text(encoding="utf-8", errors="replace")
         trial_lines = trial_out.replace("\\n", "\n").splitlines()
+        # Render does not expose the public artifact through its logs API;
+        # publish bounded evidence to logs for remote, reproducible diagnosis.
+        from collections import Counter
+        phase_counts = Counter(
+            re.match(r"^(\\[[A-Za-z0-9_]+\\])", line).group(1)
+            for line in trial_lines
+            if re.match(r"^(\\[[A-Za-z0-9_]+\\])", line)
+        )
+        print("[FAST_TRACE_SUMMARY] " + json.dumps({
+            "lines": len(trial_lines),
+            "bytes": len(trial_out.encode("utf-8", errors="replace")),
+            "categories": phase_counts.most_common(24),
+            "timed_out": timed_out,
+        }), flush=True)
+        for index, line in enumerate(trial_lines[:35]):
+            print(f"[FAST_TRACE_HEAD] {index}: {line[:600]}", flush=True)
+        for index, line in enumerate(trial_lines[-65:]):
+            print(f"[FAST_TRACE_TAIL] {len(trial_lines)-65+index}: {line[:600]}", flush=True)
         for line in trial_lines:
             if line.startswith((
                 "[BOZ_COMPAT]", "[BOZ_NULL_CHILD_SKIP]",
