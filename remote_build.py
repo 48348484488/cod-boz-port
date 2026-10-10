@@ -18,7 +18,10 @@ import urllib.request
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import threading
 
-from tools.boz_bridge_diagnosis import analyze as analyze_crash_bridge_events
+from tools.boz_bridge_diagnosis import (
+    analyze as analyze_crash_bridge_events,
+    is_owner_after_mov_safe,
+)
 
 ROOT = pathlib.Path(__file__).resolve().parent
 PUBLIC = ROOT / "public"
@@ -2705,7 +2708,7 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                         if (
                                                                                             great_function_start
                                                                                             <= owner_off
-                                                                                            <= great_callsite + 8
+                                                                                            <= max(great_callsite + 8, 0xDA7A4)
                                                                                         ):
                                                                                             print(
                                                                                                 "[OWNER_DISASM] "
@@ -2927,11 +2930,21 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                         {"off": 0xDA72C, "mode": "thumb16", "label": "create_fallback_return"},
                                                                                         {"off": 0xDA730, "mode": "thumb16", "label": "fallback_null_branch"},
                                                                                         {"off": 0xDA792, "mode": "thumb16", "label": "tree_insert_call"},
-                                                                                        {"off": 0xDA79A, "mode": "thumb16", "label": "owner_return_value"},
+                                                                                        {"off": 0xDA79A, "mode": "thumb16", "label": "owner_before_mov_r0_r4"},
                                                                                         {"off": 0xDB31A, "mode": "thumb16", "label": "before_owner_dispatch"},
                                                                                         {"off": 0xDB31C, "mode": "thumb16", "label": "owner_dispatch"},
                                                                                         {"off": 0xDB31E, "mode": "thumb16", "label": "null_deref"},
                                                                                     ]
+                                                                                    if is_owner_after_mov_safe(parsed_disasm):
+                                                                                        crash_bridge_probes.append(
+                                                                                            {"off": 0xDA79C, "mode": "thumb16",
+                                                                                             "label": "owner_after_mov_r0_r4"}
+                                                                                        )
+                                                                                    else:
+                                                                                        print(
+                                                                                            "[CRASH_BRIDGE] skip DA79C: MOV/next boundary not verified",
+                                                                                            flush=True,
+                                                                                        )
                                                                                     crash_bridge_probes = [
                                                                                         item
                                                                                         for item in crash_bridge_probes
@@ -3037,22 +3050,23 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                                 "0xdb31a", "0xdb31c", "0xdb31e"
                                                                                             )
                                                                                         ]
-                                                                                        owner_returns = [
+                                                                                        owner_pre_mov = [
                                                                                             event for event in bridge_events
                                                                                             if event.get("type") == "probe"
                                                                                             and event.get("off") == "0xda79a"
                                                                                         ]
-                                                                                        null_owner_returns = [
-                                                                                            event for event in owner_returns
-                                                                                            if event.get("r0") == "0x00000000"
+                                                                                        owner_post_mov = [
+                                                                                            event for event in bridge_events
+                                                                                            if event.get("type") == "probe"
+                                                                                            and event.get("off") == "0xda79c"
                                                                                         ]
                                                                                         crash_bridge_result = {
                                                                                             "rc": bridge_run.returncode,
                                                                                             "probes": crash_bridge_probes,
                                                                                             "events": bridge_events,
                                                                                             "dispatch_events": dispatch_events,
-                                                                                            "owner_returns": owner_returns,
-                                                                                            "null_owner_returns": null_owner_returns,
+                                                                                            "owner_pre_mov": owner_pre_mov,
+                                                                                            "owner_post_mov": owner_post_mov,
                                                                                             "causal_summary": analyze_crash_bridge_events(bridge_events),
                                                                                             "analysis": analyze_boz_output(bridge_out),
                                                                                         }
@@ -3077,8 +3091,8 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                             "[CRASH_BRIDGE] "
                                                                                             f"rc={bridge_run.returncode} "
                                                                                             f"events={len(bridge_events)} "
-                                                                                            f"owner_returns={len(owner_returns)} "
-                                                                                            f"null_owner_returns={len(null_owner_returns)} "
+                                                                                            f"owner_pre_mov={len(owner_pre_mov)} "
+                                                                                            f"owner_post_mov={len(owner_post_mov)} "
                                                                                             f"artifact={bridge_json}",
                                                                                             flush=True,
                                                                                         )
