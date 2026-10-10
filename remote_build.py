@@ -18,6 +18,8 @@ import urllib.request
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import threading
 
+from tools.boz_bridge_diagnosis import analyze as analyze_crash_bridge_events
+
 ROOT = pathlib.Path(__file__).resolve().parent
 PUBLIC = ROOT / "public"
 PUBLIC.mkdir(exist_ok=True)
@@ -3042,7 +3044,7 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                         ]
                                                                                         null_owner_returns = [
                                                                                             event for event in owner_returns
-                                                                                            if event.get("r4") == "0x00000000"
+                                                                                            if event.get("r0") == "0x00000000"
                                                                                         ]
                                                                                         crash_bridge_result = {
                                                                                             "rc": bridge_run.returncode,
@@ -3051,6 +3053,7 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                             "dispatch_events": dispatch_events,
                                                                                             "owner_returns": owner_returns,
                                                                                             "null_owner_returns": null_owner_returns,
+                                                                                            "causal_summary": analyze_crash_bridge_events(bridge_events),
                                                                                             "analysis": analyze_boz_output(bridge_out),
                                                                                         }
                                                                                         bridge_trace = PUBLIC / "boz-crash-bridge-trace.log"
