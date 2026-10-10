@@ -24,6 +24,7 @@ from tools.boz_bridge_diagnosis import (
     verify_primary_factory_null_path,
 )
 from tools.boz_handler_pairs import summarize_handler_pairs
+from tools.boz_selector_provenance import summarize as summarize_selector_provenance
 
 ROOT = pathlib.Path(__file__).resolve().parent
 PUBLIC = ROOT / "public"
@@ -3249,7 +3250,21 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                             f"orphan={pair_summary['orphan_return_count']}",
                                                                                             flush=True,
                                                                                         )
+                                                                                        selector_provenance = summarize_selector_provenance(
+                                                                                            bridge_out.replace("\\n", "\n")
+                                                                                        )
+                                                                                        observations = selector_provenance["observations"]
+                                                                                        print(
+                                                                                            "[SELECTOR_PROVENANCE] "
+                                                                                            f"complete={selector_provenance['chronological_chain_complete']} "
+                                                                                            f"preserved={selector_provenance['key_value_preserved_across_observed_chain']} "
+                                                                                            f"stack={observations['key_in_stack_local']} "
+                                                                                            f"arg={observations['fifth_arg_at_dispatch']} "
+                                                                                            f"lookup={observations['key_at_registry_lookup']}",
+                                                                                            flush=True,
+                                                                                        )
                                                                                         crash_bridge_result = {
+                                                                                            "selector_provenance": selector_provenance,
                                                                                             "handler_pairs": pair_summary,
                                                                                             "rc": bridge_run.returncode,
                                                                                             "probes": crash_bridge_probes,
