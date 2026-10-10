@@ -23,6 +23,7 @@ from tools.boz_bridge_diagnosis import (
     is_owner_after_mov_safe,
     verify_primary_factory_null_path,
 )
+from tools.boz_handler_pairs import summarize_handler_pairs
 
 ROOT = pathlib.Path(__file__).resolve().parent
 PUBLIC = ROOT / "public"
@@ -3102,6 +3103,8 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                     )
                                                                                     bridge_env = env.copy()
                                                                                     bridge_env["BOZ_DEFER_OWNER_SECOND"] = "1"
+                                                                                    bridge_env["BOZ_TRACE_HANDLER_PAIRS"] = "1"
+                                                                                    bridge_env["BOZ_CLEAR_DEFAULT_MASS_PROBES"] = "1"
                                                                                     bridge_env["BOZ_MASS_PROBES"] = ",".join(
                                                                                         probe_env_token(item)
                                                                                         for item in crash_bridge_probes
@@ -3197,7 +3200,19 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                             if event.get("type") == "probe"
                                                                                             and event.get("off") == "0xda79c"
                                                                                         ]
+                                                                                        pair_summary = summarize_handler_pairs(
+                                                                                            bridge_out.replace("\\n", "\n")
+                                                                                        )
+                                                                                        print(
+                                                                                            "[CRASH_BRIDGE_PAIRS] "
+                                                                                            f"count={pair_summary['verified_pair_count']} "
+                                                                                            f"null={pair_summary['returned_null_count']} "
+                                                                                            f"incomplete={pair_summary['incomplete_call_count']} "
+                                                                                            f"orphan={pair_summary['orphan_return_count']}",
+                                                                                            flush=True,
+                                                                                        )
                                                                                         crash_bridge_result = {
+                                                                                            "handler_pairs": pair_summary,
                                                                                             "rc": bridge_run.returncode,
                                                                                             "probes": crash_bridge_probes,
                                                                                             "events": bridge_events,
