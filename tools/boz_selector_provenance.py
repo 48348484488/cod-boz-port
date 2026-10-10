@@ -27,6 +27,14 @@ SELECTOR_STREAM = re.compile(
 OPEN_EVENT = re.compile(
     r"\[S3E_FILE_(?:MEMORY_)?OPEN\]\s+.*?file=([0-9a-fA-F]{8})\b"
 )
+ARM_OPEN_ENTRY = re.compile(
+    r"\[SERIALIZER_FILE_OPEN\]\s+stage=entry\s+name_ptr=([0-9a-fA-F]{8})"
+    r"\s+read_mode=([0-9a-fA-F]{8})"
+)
+ARM_OPEN_ASSIGN = re.compile(
+    r"\[SERIALIZER_FILE_OPEN\]\s+stage=assign\s+file=([0-9a-fA-F]{8})"
+    r"\s+global=([0-9a-fA-F]{8})"
+)
 TARGETS = {
     0xDB2FA: "key_helper_before_blx",
     0xDB2FE: "key_helper_after_blx",
@@ -132,7 +140,26 @@ def summarize(raw: str) -> dict:
               if selector_stream and item["file"] == selector_stream["file"]), None)
     )
 
+    arm_open_entries = [
+        {"name_ptr": f"0x{int(pointer, 16):08x}",
+         "read_mode": int(mode, 16)}
+        for pointer, mode in ARM_OPEN_ENTRY.findall(raw)
+    ]
+    arm_open_assignments = [
+        {"file": f"0x{int(file_handle, 16):08x}",
+         "global": f"0x{int(global_ptr, 16):08x}"}
+        for file_handle, global_ptr in ARM_OPEN_ASSIGN.findall(raw)
+    ]
     return {
+        "arm_open_entries": arm_open_entries,
+        "arm_open_assignments": arm_open_assignments,
+        "arm_open_was_called": bool(arm_open_entries),
+        "arm_open_failed_assignment_count": sum(
+            item["file"] == "0x00000000" for item in arm_open_assignments
+        ),
+        "arm_open_successful_assignment_count": sum(
+            item["file"] != "0x00000000" for item in arm_open_assignments
+        ),
         "file_open_attempt_count": len(open_attempts),
         "file_open_success_count": sum(handle != 0 for handle in open_attempts),
         "file_open_failed_count": sum(handle == 0 for handle in open_attempts),
