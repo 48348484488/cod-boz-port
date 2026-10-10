@@ -3087,6 +3087,8 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                         {"off": 0xD94F2, "mode": "thumb16", "label": "primary_factory_null_compare"},
                                                                                         {"off": 0xD94F4, "mode": "thumb16", "label": "primary_factory_null_branch"},
                                                                                         {"off": 0xD95BE, "mode": "thumb16", "label": "primary_factory_return_after_mov"},
+                                                                                        {"off": 0xDB294, "mode": "thumb16", "label": "seed_helper_before_blx"},
+                                                                                        {"off": 0xDB298, "mode": "thumb16", "label": "seed_helper_after_blx"},
                                                                                         {"off": 0xDB2FA, "mode": "thumb16", "label": "key_helper_before_blx"},
                                                                                         {"off": 0xDB2FE, "mode": "thumb16", "label": "key_helper_after_blx"},
                                                                                         {"off": 0xDB306, "mode": "thumb16", "label": "stack_key_before_load"},
@@ -3118,7 +3120,7 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                     # DB306 -> fifth argument [sp] at
                                                                                     # DB31C -> D8F0E tree lookup.
                                                                                     pair_focus = {
-                                                                                        0xDB2FA, 0xDB2FE, 0xDB306,
+                                                                                        0xDB294, 0xDB298, 0xDB2FA, 0xDB2FE, 0xDB306,
                                                                                         0xDB31C, 0xDB31E, 0xDA728,
                                                                                         0xDA72C, 0xD8F0E, 0xD8F14,
                                                                                         0xD8F36, 0xD8F40, 0xD8F42,
