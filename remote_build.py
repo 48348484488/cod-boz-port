@@ -40,6 +40,7 @@ CONFIRMED_THUMB_RANGES = (
 )
 CONFIRMED_ARM_RANGES = (
     (0x00250000, 0x00260000),
+    (0x002FE000, 0x00300500),
     (0x0034B000, 0x0034F000),
 )
 
@@ -3139,6 +3140,10 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                         {"off": 0xD95BE, "mode": "thumb16", "label": "primary_factory_return_after_mov"},
                                                                                         {"off": 0xDB294, "mode": "thumb16", "label": "seed_helper_before_blx"},
                                                                                         {"off": 0xDB298, "mode": "thumb16", "label": "seed_helper_after_blx"},
+                                                                                        {"off": 0x2FFA30, "mode": "arm32", "label": "new_crash_caller_array"},
+                                                                                        {"off": 0x300444, "mode": "arm32", "label": "new_crash_caller_list"},
+                                                                                        {"off": 0x2FE088, "mode": "arm32", "label": "new_crash_entry"},
+                                                                                        {"off": 0x2FE0A8, "mode": "arm32", "label": "new_crash_null_field"},
                                                                                         {"off": 0x25812C, "mode": "arm32", "label": "serializer_open_entry"},
                                                                                         {"off": 0x258170, "mode": "arm32", "label": "serializer_open_assign"},
                                                                                         {"off": 0x257BD4, "mode": "arm32", "label": "selector_file_loaded"},
@@ -3173,6 +3178,8 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                     # DB306 -> fifth argument [sp] at
                                                                                     # DB31C -> D8F0E tree lookup.
                                                                                     pair_focus = {
+                                                                                        0x2FFA30, 0x300444,
+                                                                                        0x2FE088, 0x2FE0A8,
                                                                                         0x25812C, 0x258170,
                                                                                         0x257BD4, 0xDB294, 0xDB298,
                                                                                         0xDB2FA, 0xDB2FE, 0xDB306,
@@ -3380,7 +3387,26 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                             f"lookup={observations['key_at_registry_lookup']}",
                                                                                             flush=True,
                                                                                         )
+                                                                                        new_crash_events = [
+                                                                                            event for event in bridge_events
+                                                                                            if event.get("type") == "probe"
+                                                                                            and event.get("off") in (
+                                                                                                "0x2ffa30", "0x300444",
+                                                                                                "0x2fe088", "0x2fe0a8"
+                                                                                            )
+                                                                                        ]
+                                                                                        print(
+                                                                                            "[NEW_ARM_CRASH] probes="
+                                                                                            + json.dumps([
+                                                                                                {"off": e.get("off"), "r0": e.get("r0"),
+                                                                                                 "r1": e.get("r1"), "r4": e.get("r4"),
+                                                                                                 "lr": e.get("lr")}
+                                                                                                for e in new_crash_events
+                                                                                            ], separators=(",", ":")),
+                                                                                            flush=True,
+                                                                                        )
                                                                                         crash_bridge_result = {
+                                                                                            "new_arm_crash_events": new_crash_events,
                                                                                             "selector_provenance": selector_provenance,
                                                                                             "handler_pairs": pair_summary,
                                                                                             "rc": bridge_run.returncode,
