@@ -184,7 +184,7 @@ static int g_defer_owner_second_enabled;
 static int g_compat_null_child_skip;
 static int g_compat_skip_null_registration;
 static volatile sig_atomic_t g_compat_null_registration_count;
-#define BOZ_NULL_REGISTRATION_SKIP_MAX 32u
+#define BOZ_NULL_REGISTRATION_SKIP_MAX 32
 static volatile sig_atomic_t g_compat_null_child_skip_count;
 #define BOZ_NULL_CHILD_SKIP_MAX 128
 static int g_handler_pairs_enabled;
