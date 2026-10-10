@@ -182,6 +182,9 @@ static boz_probe_t g_tree_probes[BOZ_MAX_MASS_PROBES] = {
 static unsigned g_tree_probe_count = 9u;
 static int g_defer_owner_second_enabled;
 static int g_compat_null_child_skip;
+static int g_compat_skip_null_registration;
+static volatile sig_atomic_t g_compat_null_registration_count;
+#define BOZ_NULL_REGISTRATION_SKIP_MAX 32u
 static volatile sig_atomic_t g_compat_null_child_skip_count;
 #define BOZ_NULL_CHILD_SKIP_MAX 128
 static int g_handler_pairs_enabled;
@@ -371,7 +374,8 @@ static void arm_tree_probes(void) {
         }
         if ((g_defer_owner_second_enabled && is_deferred_owner_second_site(p->off)) ||
             (g_handler_pairs_enabled && p->off == 0x000d8f42u) ||
-            (g_defer_selector_stream_enabled && p->off == 0x00257bd4u)) {
+            (g_defer_selector_stream_enabled && p->off == 0x00257bd4u) ||
+            (g_compat_skip_null_registration && p->off == 0x0020fe72u)) {
             continue;
         }
         if (p->mode == BOZ_PROBE_THUMB16) {
@@ -726,6 +730,30 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
                         (unsigned long)uc->uc_mcontext.arm_lr,
                         (unsigned long)uc->uc_mcontext.arm_sp,
                         stack_word0, stack_word28);
+                /* Opt-in only: skip registration of a null child,
+                 * from getter 30204C via r1 at Thumb BLX 20FE6E.
+                 * Trap 20FE72 re-arms the call probe so earlier valid
+                 * invocations do not consume the null guard. */
+                if (g_compat_skip_null_registration &&
+                    (uc->uc_mcontext.arm_cpsr & 0x20u) &&
+                    p->off == 0x0020fe6eu) {
+                    const int null_pointer = uc->uc_mcontext.arm_r1 == 0;
+                    const int may_skip = g_compat_null_registration_count <
+                        BOZ_NULL_REGISTRATION_SKIP_MAX;
+                    const bool followup = arm_one_thumb_probe(0x0020fe72u);
+                    if (null_pointer && may_skip && followup) {
+                        ++g_compat_null_registration_count;
+                        fprintf(stderr,
+                                "[BOZ_NULL_REGISTRATION_SKIP] n=%d "
+                                "call=20fe6e r1=00000000 next=20fe72\n",
+                                (int)g_compat_null_registration_count);
+                        uc->uc_mcontext.arm_pc = g_loaded_base + 0x0020fe72u;
+                        return;
+                    }
+                } else if (g_compat_skip_null_registration &&
+                           p->off == 0x0020fe72u) {
+                    (void)arm_one_thumb_probe(0x0020fe6eu);
+                }
                 uc->uc_mcontext.arm_pc = g_loaded_base + p->off;
                 return;
             }
@@ -1181,6 +1209,12 @@ int main(int argc, char **argv) {
     const char *null_child_flag = getenv("BOZ_COMPAT_NULL_CHILD_SKIP");
     g_compat_null_child_skip =
         null_child_flag && strcmp(null_child_flag, "1") == 0;
+    const char *null_registration_flag = getenv("BOZ_COMPAT_SKIP_NULL_REGISTRATION");
+    g_compat_skip_null_registration = null_registration_flag &&
+                                    strcmp(null_registration_flag, "1") == 0;
+    if (g_compat_skip_null_registration) {
+        fprintf(stderr, "[BOZ_COMPAT] experimental null-registration bypass enabled\n");
+    }
     if (g_compat_null_child_skip) {
         fprintf(stderr, "[BOZ_COMPAT] experimental null-child cleanup skip enabled\n");
     }
