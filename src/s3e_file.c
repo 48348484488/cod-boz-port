@@ -106,6 +106,9 @@ static int dtrz_load_index(void) {
         "blackops_atitc.dz",
         "blackops_dxt.dz",
         "blackops_gles1.dz",
+        /* The APK also contains a loader DTRZ with console.bin. It is
+         * not interchangeable with the full game texture archives. */
+        "blackops_loader.dz",
     };
     for (size_t i = 0; i < sizeof(archives) / sizeof(archives[0]); ++i) {
         char candidate[sizeof(g_dtrz.path)];
@@ -183,7 +186,9 @@ static int dtrz_archive_redirect_path(const char *name, char *out, size_t out_si
         return 0;
     }
     const char *selected = base_name(g_dtrz.path);
-    if (strcasecmp(selected, requested) == 0 || !path_exists(g_dtrz.path)) {
+    if (strcasecmp(selected, requested) == 0 ||
+        strcasecmp(selected, "blackops_loader.dz") == 0 ||
+        !path_exists(g_dtrz.path)) {
         return 0;
     }
     snprintf(out, out_size, "%s", g_dtrz.path);
