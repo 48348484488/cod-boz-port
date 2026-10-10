@@ -3283,6 +3283,16 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                             bridge_out.replace("\\n", "\n")
                                                                                         )
                                                                                         observations = selector_provenance["observations"]
+                                                                                        stream = selector_provenance["matched_selector_stream"]
+                                                                                        print(
+                                                                                            "[SELECTOR_STREAM_RESULT] "
+                                                                                            f"matched={stream is not None} "
+                                                                                            f"file_null={selector_provenance['serializer_file_handle_is_null']} "
+                                                                                            f"open_attempts={selector_provenance['file_open_attempt_count']} "
+                                                                                            f"open_success={selector_provenance['file_open_success_count']} "
+                                                                                            f"stream={json.dumps(stream, sort_keys=True)}",
+                                                                                            flush=True,
+                                                                                        )
                                                                                         print(
                                                                                             "[SELECTOR_FILE_IO] "
                                                                                             f"matched={len(selector_provenance['matching_io_calls'])} "
