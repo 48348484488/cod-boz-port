@@ -13,13 +13,19 @@ import re
 from pathlib import Path
 
 PROBE = re.compile(r"\[TREE_PROBE\].*?\boff=0*([0-9a-fA-F]+)\b", re.I)
-REG = re.compile(r"\b(r0|r4)=([0-9a-fA-F]{8})\b", re.I)
+REG = re.compile(r"\b(r0|r2|r3|r4|r8)=([0-9a-fA-F]{8})\b", re.I)
 SITES = {
     0xDA70E: "primary_result_before_mov",
     0xDA72C: "fallback_result_before_mov",
+    0xDA702: "primary_dispatch_after_type_check",
+    0xDA71C: "type_selector_comparison",
     0xDA792: "insert_call_before_bl",
     0xDA79A: "owner_before_mov_r0_r4",
     0xDA79C: "owner_after_mov_r0_r4",
+    0xD94E4: "primary_factory_entry",
+    0xD94F2: "primary_factory_null_compare",
+    0xD94F4: "primary_factory_null_branch",
+    0xD95BE: "primary_factory_return_after_mov",
     0xDB31C: "dispatch_before_blx",
     0xDB31E: "null_deref_before_instruction",
 }
@@ -92,7 +98,7 @@ def analyze(events: list[dict]) -> dict:
         off = _number(event.get("off"))
         if off not in SITES or event.get("type", "probe") != "probe":
             continue
-        registers = {k: v for k in ("r0", "r4") if (v := _number(event.get(k))) is not None}
+        registers = {k: v for k in ("r0", "r2", "r3", "r4", "r8") if (v := _number(event.get(k))) is not None}
         ordered.append({"index": index, "off": hex(off), "label": SITES[off], **registers})
 
     def at(offset):
@@ -121,6 +127,12 @@ def analyze(events: list[dict]) -> dict:
         "post_mov_nonzero_r0_count": sum(e.get("r0", 0) != 0 for e in post),
         "post_mov_zero_r0_count": sum(e.get("r0") == 0 for e in post),
         "crash_site_zero_r0_count": sum(e.get("r0") == 0 for e in nulls),
+        "special_type_selector_match_count": sum(
+            e.get("r8", 0) != 0 and e.get("r8") == e.get("r3")
+            for e in at(0xDA702)
+        ),
+        "primary_factory_null_arg_count": sum(e.get("r2") == 0 for e in at(0xD94E4)),
+        "primary_factory_null_exit_count": sum(e.get("r0") == 0 for e in at(0xD95BE)),
         "fallback_nonzero_r0_count": sum(e.get("r0", 0) != 0 for e in at(0xDA72C)),
         "interpretation": (
             "DA79A probes observe registers BEFORE mov r0,r4, not a function "
