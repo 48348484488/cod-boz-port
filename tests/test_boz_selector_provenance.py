@@ -118,5 +118,28 @@ class SelectorProvenanceTests(unittest.TestCase):
         self.assertIsNone(output["matching_stream_io"])
 
 
+    def test_arm_open_assign_records_success_and_failure(self):
+        raw = "\n".join([
+            "[SERIALIZER_FILE_OPEN] stage=entry name_ptr=4a3be100 read_mode=00000001",
+            "[SERIALIZER_FILE_OPEN] stage=assign file=00000000 global=4a49bb90",
+            "[SERIALIZER_FILE_OPEN] stage=entry name_ptr=4a3be200 read_mode=00000000",
+            "[SERIALIZER_FILE_OPEN] stage=assign file=40b34000 global=4a49bb90",
+        ])
+        result = mod.summarize(raw)
+        self.assertTrue(result["arm_open_was_called"])
+        self.assertEqual(result["arm_open_failed_assignment_count"], 1)
+        self.assertEqual(result["arm_open_successful_assignment_count"], 1)
+        self.assertEqual(len(result["arm_open_entries"]), 2)
+
+    def test_no_arm_open_event_is_unknown_not_failed(self):
+        result = mod.summarize(
+            "[S3E_FILE_RW] op=read buffer=3ffff084 file=00000000 "
+            "elem=4 count=1 result=0 before=-1 after=-1 eof=0 error=0"
+        )
+        self.assertFalse(result["arm_open_was_called"])
+        self.assertEqual(result["arm_open_failed_assignment_count"], 0)
+        self.assertEqual(result["arm_open_successful_assignment_count"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()
