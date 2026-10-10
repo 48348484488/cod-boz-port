@@ -220,12 +220,16 @@ static const char *probe_mode_name(uint8_t mode) {
 static bool probe_mode_allowed(uint32_t off, uint8_t mode) {
     if (mode == BOZ_PROBE_THUMB16) {
         /* Confirmed by runtime CPSR at D8FF0/DA6C6/DAA84/DA4DC. */
-        return !(off & 1u) && off >= 0x000d6000u && off < 0x000db800u;
+        return !(off & 1u) &&
+               ((off >= 0x000d6000u && off < 0x000db800u) ||
+                /* Instruction boundaries verified in the restored S3E. */
+                (off >= 0x0020fe1cu && off < 0x0020fe76u));
     }
     if (mode == BOZ_PROBE_ARM32) {
         /* Confirmed ARM-state windows from the 0x254fxx and 0x34c1xx traces. */
         return !(off & 3u) &&
                ((off >= 0x00250000u && off < 0x00260000u) ||
+                (off >= 0x002fd500u && off < 0x002fd580u) ||
                 (off >= 0x002fe000u && off < 0x00300500u) ||
                 (off >= 0x0034b000u && off < 0x0034f000u));
     }
