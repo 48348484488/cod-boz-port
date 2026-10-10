@@ -7,6 +7,7 @@ import json
 import hashlib
 import hmac
 import os
+import signal
 import pathlib
 import re
 import subprocess
@@ -669,20 +670,29 @@ def run_boz_diagnostic(report: dict) -> int:
         quick_env["BOZ_DEFER_OWNER_SECOND"] = "0"
         quick_env["BOZ_TRACE_HANDLER_PAIRS"] = "0"
         print("[FAST_PROPERTY] QEMU A/B run without 60+ unrelated probes", flush=True)
-        try:
-            trial = subprocess.run(
-                cmd, cwd=ROOT, env=quick_env, text=True,
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                timeout=int(os.environ.get("BOZ_FAST_PROPERTY_TIMEOUT", "65")),
-            )
-        except subprocess.TimeoutExpired as exc:
-            report["fast_property"] = {"rc": 124, "error": "timeout"}
-            print("[FAST_PROPERTY] QEMU timed out", flush=True)
-            return 124
-        trial_out = trial.stdout or ""
-        trial_lines = trial_out.replace("\\n", "\n").splitlines()
+        # Stream the process output to disk so a timeout cannot discard the
+        # critical pre-fault register trace. Kill the entire Xvfb/QEMU process
+        # group when the time budget is exhausted.
         fast_trace = PUBLIC / "boz-fast-property.log"
-        fast_trace.write_text(trial_out, encoding="utf-8")
+        timed_out = False
+        with fast_trace.open("w", encoding="utf-8") as trial_log:
+            proc = subprocess.Popen(
+                cmd, cwd=ROOT, env=quick_env, text=True,
+                stdout=trial_log, stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+            try:
+                trial_rc = proc.wait(
+                    timeout=int(os.environ.get("BOZ_FAST_PROPERTY_TIMEOUT", "65"))
+                )
+            except subprocess.TimeoutExpired:
+                timed_out = True
+                os.killpg(proc.pid, signal.SIGKILL)
+                proc.wait()
+                trial_rc = 124
+                print("[FAST_PROPERTY] QEMU timed out; partial trace preserved", flush=True)
+        trial_out = fast_trace.read_text(encoding="utf-8", errors="replace")
+        trial_lines = trial_out.replace("\\n", "\n").splitlines()
         for line in trial_lines:
             if line.startswith((
                 "[BOZ_COMPAT]", "[BOZ_NULL_CHILD_SKIP]",
@@ -733,9 +743,22 @@ def run_boz_diagnostic(report: dict) -> int:
                             saved_grandparent - 0x4a000000, "unknown"
                         )
         result = {
-            "rc": trial.returncode,
+            "rc": trial_rc,
+            "timed_out": timed_out,
             "trace": str(fast_trace),
+            "log_bytes": fast_trace.stat().st_size,
             "fault_2fe7d0": bool(signal_line),
+            "signal_11_count": sum(
+                line.startswith("signal 11 ") for line in trial_lines
+            ),
+            "last_fault_line": next(
+                (line[:500] for line in reversed(trial_lines)
+                 if line.startswith("signal 11 ")), None
+            ),
+            "probe_20fe6e_hits": sum(
+                line.startswith("[TREE_PROBE]") and "off=20fe6e" in line
+                for line in trial_lines
+            ),
             "parent_lr": hex(saved_parent) if saved_parent is not None else None,
             "parent": parent_label,
             "grandparent_lr": (
@@ -751,7 +774,7 @@ def run_boz_diagnostic(report: dict) -> int:
         }
         report["fast_property"] = result
         print("[FAST_PROPERTY_RESULT] " + json.dumps(result, sort_keys=True), flush=True)
-        return trial.returncode
+        return trial_rc
 
     print("[RUNNER] launching BOZ:", " ".join(cmd), flush=True)
     try:
