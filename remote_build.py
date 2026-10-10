@@ -3066,7 +3066,7 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                             json.dumps(
                                                                                                 crash_bridge_result,
                                                                                                 indent=2,
-                                                                                            ) + "\\n",
+                                                                                            ) + "\n",
                                                                                             encoding="utf-8",
                                                                                         )
                                                                                         crash_bridge_result["trace"] = str(bridge_trace)
