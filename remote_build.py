@@ -647,6 +647,24 @@ def run_boz_diagnostic(report: dict) -> int:
                 if m:
                     arm_parsed.append((int(m.group(1), 16), m.group(2).strip(), arm_line.strip()))
 
+            key_helper_disassembly = [
+                {"off": f"0x{off:x}", "op": op, "line": line}
+                for off, op, line in arm_parsed
+                if 0x257B60 <= off < 0x257C30
+            ]
+            if key_helper_disassembly:
+                key_path = PUBLIC / "boz-key-helper-257b98.json"
+                key_path.write_text(
+                    json.dumps({"entry": "0x257b98",
+                                "instructions": key_helper_disassembly}, indent=2)
+                    + "\n", encoding="utf-8"
+                )
+                report["boz_key_helper_arm_disassembly"] = str(key_path)
+                print(f"[KEY_HELPER] count={len(key_helper_disassembly)} "
+                      f"artifact={key_path}", flush=True)
+                for row in key_helper_disassembly:
+                    print("[KEY_HELPER_DISASM] " + row["line"], flush=True)
+
             dispatch_site = 0x254F40
             dispatch_index = next(
                 (i for i, (off, _, _) in enumerate(arm_parsed) if off == dispatch_site),
