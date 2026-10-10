@@ -180,3 +180,40 @@ New commit series adds optional BOZ_TRACE_HANDLER_PAIRS=1:
 The new instrumentation is diagnostic; **no fake callbacks or game
 objects are inserted**. Functional recovery remains blocked until the
 registration path or wrong selector provenance is confirmed.
+
+
+## 2026-10-10 focused 9-probe runtime — final evidence
+
+Render deployment dep-db546gid0e5s73e50qh0 (commit
+e2c5a0936262fc4b99d557511089744282058432) was LIVE.
+ARMHF build and make test-host passed with **20 regression tests**.
+
+To disambiguate callback paths, the runner used only 9 Thumb probes
+and BOZ_TRACE_HANDLER_PAIRS=1. The run reached the fault at DB31E,
+exit status 139, and recorded:
+
+- DB31C: second owner call triggered deferred probe arming.
+- DA728: selector r2=0x40B34B20 passed to D8F0E.
+- D8F0E: manager=0x4065CF68, requested selector r2=0x40B34B20.
+- D8F14: loaded registry sentinel r6=0x40A28AC8 and **nonzero**
+  root r5=0x40B34940.
+- D8F36: candidate r4=0x40A28AC8 equals sentinel r6.
+  The lookup thus has no matching node for this requested selector.
+- DA72C: fallback returned r0=0.
+- DB31E: null-object fault repeated, RC=139.
+- HANDLER_PAIR summary: count=0, null=0, incomplete=0,
+  orphan=0. This is expected for a lookup that does not invoke
+  a handler, not evidence that a registered callback returned null.
+
+In an earlier independent run, the missing selector was 0x40B34AC0
+instead; these addresses vary across executions and must not be
+hardcoded as the faulting selector. We have confirmed a missing
+registered entry at the instant of lookup, NOT whether the selector
+is wrong or a registration step was skipped.
+
+Next investigation must trace the owner-call fifth argument, loaded
+into r8 from [sp,#56] at DA6BA. The caller at DB306 loads this value
+from [sp,#28] and stores it to its fifth argument slot at DB30E.
+The preceding call to 0x257B98 and registration writes to the
+manager's tree at +0x2c are the next static/runtime investigation
+targets. Do not invent a callback pointer or bypass the null check.
