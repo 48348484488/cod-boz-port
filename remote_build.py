@@ -1130,6 +1130,49 @@ def run_boz_diagnostic(report: dict) -> int:
                                                 "[PRIMARY_FACTORY_DISASM] " + item["instruction"],
                                                 flush=True,
                                             )
+                                    # Inspect the second invocation's fallback factory:
+                                    # it returned r0=0 at DA72C. Emit its Thumb code and
+                                    # static call/branch sites for targeted follow-up.
+                                    fallback_window = [
+                                        {"off": f"0x{off:x}", "instruction": raw_line}
+                                        for off, raw_line in parsed_disasm
+                                        if 0xD8F0E <= off < 0xD9260
+                                    ]
+                                    if fallback_window:
+                                        fallback_calls = [
+                                            item for item in fallback_window
+                                            if re.search(r"\\bblx?(?:\\.w)?\\b", item["instruction"], re.I)
+                                        ]
+                                        fallback_branches = [
+                                            item for item in fallback_window
+                                            if re.search(r"\\b(?:cbz|cbnz|beq|bne|bhs|blo|bcs|bcc|bmi|bpl)\\b",
+                                                         item["instruction"], re.I)
+                                        ]
+                                        fallback_path = PUBLIC / "boz-fallback-factory-disasm.json"
+                                        fallback_path.write_text(
+                                            json.dumps({
+                                                "entry": "0xd8f0e",
+                                                "window_end_exclusive": "0xd9260",
+                                                "instructions": fallback_window,
+                                                "calls": fallback_calls,
+                                                "branches": fallback_branches,
+                                            }, indent=2) + "\n",
+                                            encoding="utf-8",
+                                        )
+                                        report["boz_fallback_factory_disasm"] = str(fallback_path)
+                                        print(
+                                            "[FALLBACK_FACTORY] "
+                                            f"instructions={len(fallback_window)} "
+                                            f"calls={len(fallback_calls)} "
+                                            f"branches={len(fallback_branches)} "
+                                            f"artifact={fallback_path}",
+                                            flush=True,
+                                        )
+                                        for item in fallback_window:
+                                            print(
+                                                "[FALLBACK_FACTORY_DISASM] " + item["instruction"],
+                                                flush=True,
+                                            )
                                     # Inspect the immediate caller of DA6AC to find
                                     # the instruction supplying its null r2 parameter.
                                     caller_window = [
