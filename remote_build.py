@@ -15,6 +15,8 @@ import sys
 import time
 import shutil
 import lzma
+import zlib
+import struct
 import urllib.request
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import threading
@@ -673,6 +675,8 @@ def run_boz_diagnostic(report: dict) -> int:
         quick_env["BOZ_PC_SAMPLE_INTERVAL"] = os.environ.get(
             "BOZ_PC_SAMPLE_INTERVAL", "4"
         )
+        quick_env["BOZ_SWAP_PROGRESS"] = "1"
+        quick_env["BOZ_FRAME_CAPTURE_DIR"] = str(PUBLIC)
         print("[FAST_PROPERTY] QEMU A/B run without 60+ unrelated probes", flush=True)
         # Stream the process output to disk so a timeout cannot discard the
         # critical pre-fault register trace. Kill the entire Xvfb/QEMU process
@@ -697,6 +701,54 @@ def run_boz_diagnostic(report: dict) -> int:
                 print("[FAST_PROPERTY] QEMU timed out; partial trace preserved", flush=True)
         trial_out = fast_trace.read_text(encoding="utf-8", errors="replace")
         trial_lines = trial_out.replace("\\n", "\n").splitlines()
+        frame_outputs = []
+        for ppm in sorted(PUBLIC.glob("boz-swap-*.ppm")):
+            try:
+                parts = ppm.read_bytes().split(b"\\n", 3)
+                if len(parts) != 4 or parts[0] != b"P6" or parts[2] != b"255":
+                    raise ValueError("invalid PPM header")
+                width, height = (int(v) for v in parts[1].split())
+                raw = parts[3]
+                if width < 1 or height < 1 or width > 4096 or height > 4096:
+                    raise ValueError("invalid capture dimensions")
+                stride = width * 3
+                if len(raw) != stride * height:
+                    raise ValueError("incomplete capture pixels")
+                scanlines = b"".join(
+                    b"\\x00" + raw[y*stride:(y+1)*stride]
+                    for y in range(height)
+                )
+                def png_chunk(tag, data):
+                    payload = tag + data
+                    return (struct.pack(">I", len(data)) + payload +
+                            struct.pack(">I", zlib.crc32(payload) & 0xffffffff))
+                image = (
+                    b"\\x89PNG\\r\\n\\x1a\\n" +
+                    png_chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)) +
+                    png_chunk(b"IDAT", zlib.compress(scanlines, 4)) +
+                    png_chunk(b"IEND", b"")
+                )
+                png_path = ppm.with_suffix(".png")
+                png_path.write_bytes(image)
+                entry = {
+                    "file": str(png_path), "width": width, "height": height,
+                    "png_bytes": len(image),
+                    "sha256": hashlib.sha256(image).hexdigest()
+                }
+                frame_outputs.append(entry)
+                print("[FAST_FRAME_PNG] " + json.dumps(entry), flush=True)
+            except (OSError, ValueError) as exc:
+                print(f"[FAST_FRAME_ERROR] {ppm.name}: {exc!r}", flush=True)
+        upload_lines = []
+        if trace.exists():
+            upload_lines = trace.read_text(
+                encoding="utf-8", errors="replace"
+            ).splitlines()
+            shutil.copyfile(trace, PUBLIC / "boz_gl_upload_trace.log")
+        print("[FAST_GL_UPLOAD] " + json.dumps({
+            "lines": len(upload_lines), "first": upload_lines[:2],
+            "last": upload_lines[-2:]
+        }), flush=True)
         # Symbolicate actual ARM guest library PCs using the QEMU memory map.
         # No guesses based on host x86_64 mappings or host-side process PCs.
         arm_maps = []
@@ -813,6 +865,7 @@ def run_boz_diagnostic(report: dict) -> int:
                 "[BOZ_NULL_REGISTRATION_SKIP]", "[MASS_PROBE]",
                 "[BOZ_PC_SAMPLE]", "[BOZ_PC_SAMPLER]",
                 "[BOZ_MODULE_MAP]", "[egl]", "[GL_UPLOAD_TRACE]",
+                "[BOZ_SWAP_PROGRESS]", "[BOZ_FRAME_CAPTURE]",
                 "[BOZ_NULL_PROPERTY_ORIGIN]", "signal 11 ", "stack:",
                 "[S3E_FILE_EXISTS]",
             )) and not line.startswith("[S3E_FILE_EXISTS]"):
@@ -879,6 +932,12 @@ def run_boz_diagnostic(report: dict) -> int:
                 line[:500] for line in trial_lines
                 if line.startswith("[BOZ_PC_SAMPLE]")
             ],
+            "swap_progress_events": [
+                line[:350] for line in trial_lines
+                if line.startswith("[BOZ_SWAP_PROGRESS]")
+            ][-12:],
+            "captured_pngs": frame_outputs,
+            "gl_upload_line_count": len(upload_lines),
             "parent_lr": hex(saved_parent) if saved_parent is not None else None,
             "parent": parent_label,
             "grandparent_lr": (
