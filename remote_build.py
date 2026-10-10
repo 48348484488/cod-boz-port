@@ -3221,6 +3221,10 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                     bridge_env = env.copy()
                                                                                     bridge_env["BOZ_DEFER_OWNER_SECOND"] = "1"
                                                                                     bridge_env["BOZ_TRACE_HANDLER_PAIRS"] = "1"
+                                                                                    # A/B compatibility experiment ONLY. The primary
+                                                                                    # BOZ run above remains unchanged and retains
+                                                                                    # its real crash for comparison.
+                                                                                    bridge_env["BOZ_COMPAT_NULL_CHILD_SKIP"] = "1"
                                                                                     bridge_env["BOZ_FILE_RW_TRACE"] = "1"
                                                                                     bridge_env["BOZ_TRACE_SELECTOR_STREAM"] = "1"
                                                                                     bridge_env["BOZ_CLEAR_DEFAULT_MASS_PROBES"] = "1"
