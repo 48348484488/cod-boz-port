@@ -697,6 +697,92 @@ def run_boz_diagnostic(report: dict) -> int:
                 print("[FAST_PROPERTY] QEMU timed out; partial trace preserved", flush=True)
         trial_out = fast_trace.read_text(encoding="utf-8", errors="replace")
         trial_lines = trial_out.replace("\\n", "\n").splitlines()
+        # Symbolicate actual ARM guest library PCs using the QEMU memory map.
+        # No guesses based on host x86_64 mappings or host-side process PCs.
+        arm_maps = []
+        for trace_line in trial_lines:
+            if not trace_line.startswith("[BOZ_MODULE_MAP]"):
+                continue
+            match = re.match(
+                r"^\\[BOZ_MODULE_MAP\\]\\s+([0-9a-f]+)-([0-9a-f]+)\\s+\\S+"
+                r"\\s+([0-9a-f]+)\\s+\\S+\\s+\\d+\\s+(/\\S+)",
+                trace_line,
+            )
+            if match:
+                arm_maps.append({
+                    "start": int(match.group(1), 16),
+                    "end": int(match.group(2), 16),
+                    "file_offset": int(match.group(3), 16),
+                    "file": match.group(4),
+                })
+        sampled_addrs = set()
+        for trace_line in trial_lines:
+            if not trace_line.startswith("[BOZ_PC_SAMPLE]"):
+                continue
+            for key in ("pc", "lr"):
+                m = re.search(rf"\\b{key}=([0-9a-fA-F]{{8}})\\b", trace_line)
+                if m:
+                    sampled_addrs.add(int(m.group(1), 16) & ~1)
+        elf_samples = []
+        sym_cache = {}
+        for addr in sorted(sampled_addrs)[:10]:
+            mapped = next(
+                (item for item in arm_maps
+                 if item["start"] <= addr < item["end"]), None
+            )
+            if mapped is None:
+                continue
+            binary_path = pathlib.Path(mapped["file"])
+            vma = addr - mapped["start"] + mapped["file_offset"]
+            sample = {
+                "address": hex(addr), "binary": str(binary_path),
+                "elf_offset": hex(vma)
+            }
+            if not binary_path.is_file():
+                sample["error"] = "mapped library not available in container"
+                elf_samples.append(sample)
+                continue
+            try:
+                if str(binary_path) not in sym_cache:
+                    nm = subprocess.run(
+                        ["arm-linux-gnueabihf-nm", "-D", "-n", str(binary_path)],
+                        capture_output=True, text=True, timeout=12,
+                    )
+                    entries = []
+                    for item in nm.stdout.splitlines():
+                        fields = item.split()
+                        if len(fields) < 3:
+                            continue
+                        try:
+                            sym_off = int(fields[0], 16)
+                        except ValueError:
+                            continue
+                        if fields[1].lower() in ("t", "w"):
+                            entries.append((sym_off, fields[2]))
+                    sym_cache[str(binary_path)] = sorted(entries)
+                predecessors = [
+                    item for item in sym_cache[str(binary_path)]
+                    if item[0] <= vma
+                ]
+                if predecessors:
+                    prior = predecessors[-1]
+                    sample["closest_export"] = prior[1]
+                    sample["export_offset"] = hex(vma - prior[0])
+                dis = subprocess.run(
+                    ["arm-linux-gnueabihf-objdump", "-d",
+                     f"--start-address=0x{max(0, vma-32):x}",
+                     f"--stop-address=0x{vma+36:x}", str(binary_path)],
+                    capture_output=True, text=True, timeout=15,
+                )
+                sample["disassembly_rc"] = dis.returncode
+                sample["disassembly"] = dis.stdout.splitlines()[-28:]
+                if dis.returncode != 0:
+                    sample["error"] = dis.stderr[:350]
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                sample["error"] = repr(exc)
+            elf_samples.append(sample)
+            print("[BOZ_ELF_SAMPLE] " + json.dumps(sample), flush=True)
+        report["boz_fast_elf_samples"] = elf_samples
         # Render does not expose the public artifact through its logs API;
         # publish bounded evidence to logs for remote, reproducible diagnosis.
         from collections import Counter
