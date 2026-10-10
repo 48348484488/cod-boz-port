@@ -133,6 +133,18 @@ def analyze(events: list[dict]) -> dict:
         ),
         "primary_factory_null_arg_count": sum(e.get("r2") == 0 for e in at(0xD94E4)),
         "primary_factory_null_exit_count": sum(e.get("r0") == 0 for e in at(0xD95BE)),
+        "second_selector_probe_count": len(at(0xDA71C)),
+        "second_selector_equal_count": sum(
+            e.get("r8") is not None and e.get("r8") == e.get("r3")
+            for e in at(0xDA71C)
+        ),
+        "second_selector_unequal_count": sum(
+            e.get("r8") is not None and e.get("r3") is not None
+            and e.get("r8") != e.get("r3")
+            for e in at(0xDA71C)
+        ),
+        "second_fallback_return_count": len(at(0xDA72C)),
+        "second_fallback_null_count": sum(e.get("r0") == 0 for e in at(0xDA72C)),
         "fallback_nonzero_r0_count": sum(e.get("r0", 0) != 0 for e in at(0xDA72C)),
         "interpretation": (
             "DA79A probes observe registers BEFORE mov r0,r4, not a function "
