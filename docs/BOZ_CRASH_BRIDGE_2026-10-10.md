@@ -479,3 +479,51 @@ reduces repeated diagnostic passes and emits
 public/boz-fast-property.log and the report field fast_property.
 The original game loader's null-child skip stays **OFF by
 default** outside this explicit diagnostic A/B test.
+
+
+## Live fast-path ancestry proof for 2FE7D0 (2026-10-10)
+
+Render deployment dep-db55rmbbc2fs73eeeomg at commit
+2dd8152bf5b4074b2928e65430442edbdd872cb7:
+ARMHF build, make test-host and 47 Python tests PASS.
+The fast path completed a single QEMU execution with RC=139.
+
+Actual crash-time evidence:
+- BOZ_NULL_CHILD_SKIP n=1 advanced past the earlier 2FE0A8 fault
+  in a diagnostic-only opt-in A/B run.
+- At 2FE7D0, the original ARM STR r1,[r0,#0x90] faulted
+  with r0=0, address 0x90 and LR=BOZ+301F04.
+- Saved return LR from the fatal 301ECC frame was BOZ+306500,
+  proving it was called from 3064FC inside function 3064D8.
+- Saved next LR was BOZ+323284, proving 3064D8's
+  caller was function 32326C (BL at 323280).
+- Saved next LR was 0x4A20FE73, i.e. Thumb return 20FE72
+  after the BLX to 32326C at 20FE6E.
+
+Byte-verified ARM/Thumb instructions show this common source:
+
+    20FE38  BLX 2FD518       ; child/type lookup
+    20FE40  BLX 302010       ; store returned object in holder
+    20FE48  BLX 302020       ; load it for the first copy
+    20FE4E  BLX 2FE088       ; first null-child crash
+    20FE54  MOV r0,r4        ; same holder
+    20FE5A  BLX 30204C       ; ARM LDR r0,[r0], reload holder
+    20FE64  MOV r1,r0
+    20FE6E  BLX 32326C
+    323280  BL  3064D8
+    3064FC  BL  301ECC
+    301ED4  MOV r5,r1
+    301EE0  MOV r0,r5
+    301F00  BL  2FE7D0
+    2FE7D0  STR r1,[r0,#0x90] ; second null-child crash
+
+The two downstream crashes use the same pointer holder
+written from 2FD518. The root cause of NULL *inside* that
+lookup remains unproven: missing/unregistered type or
+incomplete game assets could account for it.
+
+The full-game assets frontend.group.bin, fixed.group.bin,
+and splash.group.bin remain missing from the Render runner.
+The available blackops_loader.dz carries bootstrap resources
+but not those three groups. Do not default to fabricating
+objects or skipping either null pointer use.
