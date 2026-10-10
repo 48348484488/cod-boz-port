@@ -457,6 +457,13 @@ void *s3eFileOpen(const char *name, const char *mode) {
     if (!file && is_read_mode(safe_mode) && strcmp(base_name(safe_name), "console.bin") == 0) {
         file = fopen("/dev/null", "rb");
     }
+    const char *rw_trace = getenv("BOZ_FILE_RW_TRACE");
+    if (rw_trace && strcmp(rw_trace, "1") == 0) {
+        fprintf(stderr,
+                "[S3E_FILE_OPEN] name=%s mode=%s resolved=%s file=%08lx\n",
+                safe_name, safe_mode, opened_path,
+                (unsigned long)(uintptr_t)file);
+    }
     return file;
 }
 
@@ -575,7 +582,15 @@ const char *s3eFileGetErrorString(void) {
 }
 
 void *s3eFileOpenFromMemory(void *buffer, uint32_t size) {
-    return buffer && size ? fmemopen(buffer, size, "rb") : NULL;
+    void *file = buffer && size ? fmemopen(buffer, size, "rb") : NULL;
+    const char *rw_trace = getenv("BOZ_FILE_RW_TRACE");
+    if (rw_trace && strcmp(rw_trace, "1") == 0) {
+        fprintf(stderr,
+                "[S3E_FILE_MEMORY_OPEN] buffer=%08lx size=%u file=%08lx\n",
+                (unsigned long)(uintptr_t)buffer, size,
+                (unsigned long)(uintptr_t)file);
+    }
+    return file;
 }
 
 int32_t s3eFileGetFileInt(void *file, uint32_t key) {
