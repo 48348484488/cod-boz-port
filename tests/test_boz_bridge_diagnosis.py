@@ -145,5 +145,32 @@ class TestCrashBridge(unittest.TestCase):
 
 
 
+    def test_second_registry_absent_handler(self):
+        trace = "\n".join([
+            "[TREE_PROBE] off=0d8f14 r0=4065cf70 r4=00000000 r5=00000000 r6=40aa9900",
+            "[TREE_PROBE] off=0d8f36 r0=4065cf70 r4=40aa9900 r5=00000000 r6=40aa9900",
+            "[TREE_PROBE] off=0d8f44 r0=4065cf70 r4=40aa9900 r6=40aa9900",
+            "[TREE_PROBE] off=0d8f46 r0=00000000 r4=40aa9900 r6=40aa9900",
+        ])
+        result = module.analyze(module.parse_trace(trace))
+        self.assertEqual(result["second_registry_root_null_count"], 1)
+        self.assertEqual(result["second_registry_sentinel_selected_count"], 1)
+        self.assertEqual(result["second_registry_no_handler_count"], 1)
+        self.assertEqual(result["second_registry_handler_call_count"], 0)
+
+    def test_second_registry_handler_returned_null_is_different(self):
+        trace = "\n".join([
+            "[TREE_PROBE] off=0d8f14 r0=4065cf70 r4=00000000 r5=40b0e400 r6=40aa9900",
+            "[TREE_PROBE] off=0d8f40 r0=40b34000 r2=40b0e400 r4=40b0e400 r6=40aa9900",
+            "[TREE_PROBE] off=0d8f42 r0=00000000 r4=40b0e400 r6=40aa9900",
+        ])
+        result = module.analyze(module.parse_trace(trace))
+        self.assertEqual(result["second_registry_root_null_count"], 0)
+        self.assertEqual(result["second_registry_handler_call_count"], 1)
+        self.assertEqual(result["second_registry_handler_null_return_count"], 1)
+        self.assertEqual(result["second_registry_no_handler_count"], 0)
+
+
+
 if __name__ == "__main__":
     unittest.main()
