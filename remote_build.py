@@ -646,6 +646,97 @@ def run_boz_diagnostic(report: dict) -> int:
         xvfb_run = shutil.which("xvfb-run")
         if xvfb_run:
             cmd = [xvfb_run, "-a", "-s", f"-screen 0 {display_size}x24", "--", *cmd]
+    if os.environ.get("BOZ_FAST_NULL_PROPERTY", "1") == "1":
+        # Diagnostic fast lane: the normal (unmodified) baseline and all
+        # slow parent/owner focus passes have already been recorded in
+        # previous deployments. Never fabricate a game object; only enable
+        # the bounded existing A/B skip in this one test process.
+        quick_env = env.copy()
+        quick_env["BOZ_COMPAT_NULL_CHILD_SKIP"] = "1"
+        quick_env["BOZ_CLEAR_DEFAULT_MASS_PROBES"] = "1"
+        quick_env["BOZ_MASS_PROBES"] = ""
+        quick_env["BOZ_DEFER_OWNER_SECOND"] = "0"
+        quick_env["BOZ_TRACE_HANDLER_PAIRS"] = "0"
+        print("[FAST_PROPERTY] QEMU A/B run without 60+ unrelated probes", flush=True)
+        try:
+            trial = subprocess.run(
+                cmd, cwd=ROOT, env=quick_env, text=True,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                timeout=int(os.environ.get("BOZ_FAST_PROPERTY_TIMEOUT", "65")),
+            )
+        except subprocess.TimeoutExpired as exc:
+            report["fast_property"] = {"rc": 124, "error": "timeout"}
+            print("[FAST_PROPERTY] QEMU timed out", flush=True)
+            return 124
+        trial_out = trial.stdout or ""
+        trial_lines = trial_out.replace("\\n", "\n").splitlines()
+        fast_trace = PUBLIC / "boz-fast-property.log"
+        fast_trace.write_text(trial_out, encoding="utf-8")
+        for line in trial_lines:
+            if line.startswith((
+                "[BOZ_COMPAT]", "[BOZ_NULL_CHILD_SKIP]",
+                "[BOZ_NULL_PROPERTY_ORIGIN]", "signal 11 ", "stack:",
+                "[S3E_FILE_EXISTS]",
+            )) and not line.startswith("[S3E_FILE_EXISTS]"):
+                print("[FAST_PROPERTY] " + line[:1400], flush=True)
+
+        signal_line = next(
+            (line for line in reversed(trial_lines)
+             if line.startswith("signal 11 ") and
+             "pc_off=0x002fe7d0" in line),
+            None,
+        )
+        saved_parent = None
+        saved_grandparent = None
+        parent_label = None
+        grandparent_label = None
+        if signal_line:
+            fault_index = trial_lines.index(signal_line)
+            stack_line = next(
+                (line for line in trial_lines[fault_index + 1:fault_index + 6]
+                 if line.startswith("stack:")),
+                None,
+            )
+            if stack_line:
+                words = re.findall(r"\b[0-9a-fA-F]{8}\b", stack_line)
+                if len(words) >= 12:
+                    saved_parent = int(words[3], 16)
+                    parent_offsets = {
+                        0x306500: "3064d8_argument_r1",
+                        0x30AE14: "30adc8_argument_r4",
+                    }
+                    parent_label = parent_offsets.get(
+                        saved_parent - 0x4a000000, "unknown"
+                    )
+                    if parent_label == "3064d8_argument_r1":
+                        saved_grandparent = int(words[11], 16)
+                        grandparent_offsets = {
+                            0x30A59C: "30a578",
+                            0x30C6C4: "30c6a0",
+                            0x31AC48: "31ac_loop",
+                            0x31DE24: "31de_init",
+                            0x323284: "32326c",
+                        }
+                        grandparent_label = grandparent_offsets.get(
+                            saved_grandparent - 0x4a000000, "unknown"
+                        )
+        result = {
+            "rc": trial.returncode,
+            "trace": str(fast_trace),
+            "fault_2fe7d0": bool(signal_line),
+            "parent_lr": hex(saved_parent) if saved_parent is not None else None,
+            "parent": parent_label,
+            "grandparent_lr": (
+                hex(saved_grandparent) if saved_grandparent is not None else None
+            ),
+            "grandparent": grandparent_label,
+            "null_child_skips": trial_out.count("[BOZ_NULL_CHILD_SKIP]"),
+            "caveat": "Opt-in diagnostic control-flow skip, not functional fix",
+        }
+        report["fast_property"] = result
+        print("[FAST_PROPERTY_RESULT] " + json.dumps(result, sort_keys=True), flush=True)
+        return trial.returncode
+
     print("[RUNNER] launching BOZ:", " ".join(cmd), flush=True)
     try:
         p = subprocess.run(cmd, cwd=ROOT, env=env, text=True,
