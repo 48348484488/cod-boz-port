@@ -1093,6 +1093,34 @@ def run_boz_diagnostic(report: dict) -> int:
                                                 int(static_match.group(1), 16),
                                                 static_line.strip(),
                                             ))
+                                    # Inspect the factory called by the failing second
+                                    # DA6AC invocation. This is static analysis only;
+                                    # no patch/side effect is applied to the game.
+                                    primary_window = [
+                                        {"off": f"0x{off:x}", "instruction": raw_line}
+                                        for off, raw_line in parsed_disasm
+                                        if 0xD94E4 <= off < 0xD9720
+                                    ]
+                                    if primary_window:
+                                        primary_path = PUBLIC / "boz-primary-factory-disasm.json"
+                                        primary_path.write_text(
+                                            json.dumps({
+                                                "entry": "0xd94e4",
+                                                "window_end_exclusive": "0xd9720",
+                                                "instructions": primary_window,
+                                            }, indent=2) + "\n",
+                                            encoding="utf-8",
+                                        )
+                                        report["boz_primary_factory_disasm"] = str(primary_path)
+                                        print(
+                                            f"[PRIMARY_FACTORY] instructions={len(primary_window)} "
+                                            f"artifact={primary_path}", flush=True,
+                                        )
+                                        for item in primary_window:
+                                            print(
+                                                "[PRIMARY_FACTORY_DISASM] " + item["instruction"],
+                                                flush=True,
+                                            )
                                     focus_static = []
                                     hot_values = [
                                         int(value, 16)
