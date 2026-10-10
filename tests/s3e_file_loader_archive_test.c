@@ -48,7 +48,7 @@ static void make_loader_archive(const char *path) {
     put_u32(f, 6);
     put_u32(f, 6);
     put_u32(f, 256);
-    assert(ftell(f) == payload_offset);
+    assert(ftell(f) == (long)payload_offset);
     assert(fwrite("VALID!", 1, 6, f) == 6);
     assert(fclose(f) == 0);
 }
@@ -61,7 +61,9 @@ int main(void) {
     char archive_path[1200];
     snprintf(asset_dir, sizeof(asset_dir), "%s/assets", dir);
     assert(mkdir(asset_dir, 0700) == 0);
-    snprintf(archive_path, sizeof(archive_path), "%s/blackops_loader.dz", asset_dir);
+    assert(strlen(asset_dir) + strlen("/blackops_loader.dz") + 1 < sizeof(archive_path));
+    strcpy(archive_path, asset_dir);
+    strcat(archive_path, "/blackops_loader.dz");
     make_loader_archive(archive_path);
 
     assert(s3eFileCheckExists("console.bin") == 1);
