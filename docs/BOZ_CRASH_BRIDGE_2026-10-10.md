@@ -112,3 +112,29 @@ a missing resource, or an unsupported host service; do not
 assign a cause without probing. The next investigation targets
 D8F0E and its return paths on the **second** invocation. No
 memory patch or non-null fabricated object was introduced.
+
+
+## D8F0E fallback is a registered-handler lookup, not an allocator
+
+The runtime-linked Thumb disassembly emitted on 2026-10-10 shows:
+
+- 0xD8F10: LDR r6, [r0, #44] — obtain registry/sentinel pointer.
+- 0xD8F12: LDR r5, [r6, #4] — load the tree root.
+- 0xD8F16..0xD8F28: walk the ordered search tree comparing key
+  from the node at offset +16 against input r2.
+- 0xD8F2A..0xD8F38: compare the candidate to the sentinel and
+  check its key. If no match, branch to D8F44.
+- 0xD8F3A: LDR r2, [r4,#20] — load callback from the node.
+- 0xD8F40: BLX r2 — invoke registered callback. Callback may
+  itself return NULL.
+- 0xD8F44: MOVS r0, #0 — explicit no-handler result.
+- 0xD8F46: return.
+
+This makes two possible and distinguishable failure conditions:
+(1) the selector provided by the second owner call was absent in
+the registry, or (2) a callback was found and returned null. Both
+cause DA72C r0=0. Neither outcome should be assumed in advance.
+
+To settle this, we added deferred runtime probes in D8F0E on the
+SECOND owner invocation, recording the root, sentinel comparison,
+handler call, and absent-entry branch. Regression tests check both.
