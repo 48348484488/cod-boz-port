@@ -325,3 +325,48 @@ separate definitive SIGSEGV state from unrelated one-shot
 probes. Next step is correlate the object argument to its
 caller at BOZ+2FFA30 or BOZ+300444, without patching
 a fake non-null pointer or claiming the gameplay works.
+
+
+## Actual Thumb caller and upstream null lookup (2026-10-10)
+
+The full register crash trace in Render (dep-db557134a5bs73dciamg,
+2026-10-10 15:07 UTC) conclusively reports
+PC=BOZ+0x2FE0A8 and **r4=0x00000000**. Test suite and five
+new crash-regs regressions passed.
+
+The preserved stack from the same crashing invocation contains:
+- [sp+0]=0x00000000: initial r0 pushed by 2FE088.
+- [sp+20]=0x4A20FE53: saved LR, identifying Thumb caller at
+  BOZ+0x20FE4E (return address 0x20FE52, Thumb bit set).
+
+This is not the earlier assumed ARM caller at 2FFA30 or
+300444. The relevant Thumb function starts at BOZ+0x20FE1C:
+
+| Offset | Instruction | Evidence |
+| --- | --- | --- |
+| 20FE1E | ADD.W r4,r0,#0x24 | Prepare pointer holder |
+| 20FE2E | BLX 302028 | Test holder before proceeding |
+| 20FE38 | BLX 2FD518 | Lookup/construct pointer |
+| 20FE3C | MOV r1,r0 | Use lookup return as stored value |
+| 20FE40 | BLX 302010 | Store value; 302010 is STR r1,[r0] |
+| 20FE46 | MOV r0,r4 | Pass pointer holder |
+| 20FE48 | BLX 302020 | Load pointer; 302020 is LDR r0,[r0] |
+| 20FE4E | BLX 2FE088 | Use the pointer without null guard |
+
+At the crashing invocation, the stored pointer and the loaded
+argument are null. This strongly implicates the result of
+2FD518; exact per-call probes are now added at 2FD518,
+2FD568, 20FE3C and 20FE4E to verify it dynamically.
+
+The ARM function 2FD518 has a **real zero return path**:
+- When argument r1 is zero (as provided at 20FE34),
+  it calls Thumb 2352F8.
+- At 2FD568, it tests r0 and returns immediately on zero.
+- Otherwise it branches to 2FD4E0 to create an object.
+- 2352F8 calls 24BA2C and continues to 235220 for
+  lookup/dispatch. Do not claim which resource or registry
+  entry is missing until the runtime path is measured.
+
+These disassemblies are from restored, verified
+boz.s3e.unpacked; no game bytes have been checked into GitHub.
+No fake pointer or unconditional bypass has been applied.
