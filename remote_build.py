@@ -3089,6 +3089,8 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                         {"off": 0xD95BE, "mode": "thumb16", "label": "primary_factory_return_after_mov"},
                                                                                         {"off": 0xDB294, "mode": "thumb16", "label": "seed_helper_before_blx"},
                                                                                         {"off": 0xDB298, "mode": "thumb16", "label": "seed_helper_after_blx"},
+                                                                                        {"off": 0x25812C, "mode": "arm32", "label": "serializer_open_entry"},
+                                                                                        {"off": 0x258170, "mode": "arm32", "label": "serializer_open_assign"},
                                                                                         {"off": 0x257BD4, "mode": "arm32", "label": "selector_file_loaded"},
                                                                                         {"off": 0xDB2FA, "mode": "thumb16", "label": "key_helper_before_blx"},
                                                                                         {"off": 0xDB2FE, "mode": "thumb16", "label": "key_helper_after_blx"},
@@ -3121,6 +3123,7 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                     # DB306 -> fifth argument [sp] at
                                                                                     # DB31C -> D8F0E tree lookup.
                                                                                     pair_focus = {
+                                                                                        0x25812C, 0x258170,
                                                                                         0x257BD4, 0xDB294, 0xDB298,
                                                                                         0xDB2FA, 0xDB2FE, 0xDB306,
                                                                                         0xDB31C, 0xDB31E, 0xDA728,
@@ -3215,6 +3218,13 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                                     + stripped,
                                                                                                     flush=True,
                                                                                                 )
+                                                                                            elif stripped.startswith("[SERIALIZER_FILE_OPEN]"):
+                                                                                                bridge_events.append({
+                                                                                                    "index": bridge_index,
+                                                                                                    "type": "serializer_open",
+                                                                                                    "line": stripped,
+                                                                                                })
+                                                                                                print("[CRASH_BRIDGE] " + stripped, flush=True)
                                                                                             elif stripped.startswith("[SELECTOR_STREAM]"):
                                                                                                 bridge_events.append({
                                                                                                     "index": bridge_index,
