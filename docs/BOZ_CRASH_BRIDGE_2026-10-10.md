@@ -138,3 +138,45 @@ cause DA72C r0=0. Neither outcome should be assumed in advance.
 To settle this, we added deferred runtime probes in D8F0E on the
 SECOND owner invocation, recording the root, sentinel comparison,
 handler call, and absent-entry branch. Regression tests check both.
+
+
+## 2026-10-10 sparse second-call trace: missing selector identified
+
+The targeted Render run dep-db543pnavr4c73fd24bg
+(commit 147863fea7339c7bbbc9a7ca721c94d58f204840)
+passed 16 existing regression tests and reproduced RC=139.
+
+During the second owner's factory path D8F0E, the first registry lookup
+used key 0xE2E16F9C. It reached the BLX handler at 0xD8F40, which
+returned a nonzero object pointer (0x40B34A40 at D8F42).
+
+A later D8F0E lookup used a different key, 0x40B34AC0, and selected
+the registry sentinel at 0xD8F36 (r4==r6==0x40A28A68).
+This traversal executed D8F44 (MOVS r0,#0), then D8F46 (r0==0):
+**no matching callback was registered for that key in this registry
+at lookup time**. That is the directly observed reason for the
+fallback factory's zero return in the sparse trace.
+
+This does **not** establish why that key is missing: wrong key,
+unregistered class, initialization order, incomplete runtime service,
+or a missing asset are distinct hypotheses.
+
+## Callback call/return-pair improvement
+
+The earlier 42-probe capture was ambiguous because D8F40 and D8F42
+were both armed as independent one-shot BKPTs and could be confused
+with adjacent instruction addresses or unrelated invocations.
+
+New commit series adds optional BOZ_TRACE_HANDLER_PAIRS=1:
+- Wait for second owner dispatch at DB31C.
+- Arm D8F40 only.
+- On D8F40, preserve target in r2 and arm D8F42.
+- On D8F42, record actual r0 result for the same BLX invocation.
+- Repeat, capped at 48 correlated pairs.
+- tools/boz_handler_pairs.py rejects incomplete/unmatched pairs.
+- The crash-bridge run disables default mass probes and selects a
+  minimal focus set to avoid unrelated/adjacent breakpoint confusion.
+
+The new instrumentation is diagnostic; **no fake callbacks or game
+objects are inserted**. Functional recovery remains blocked until the
+registration path or wrong selector provenance is confirmed.
