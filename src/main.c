@@ -901,13 +901,20 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
     unsigned char *pc_bytes = (unsigned char *)(crash_pc & ~(uintptr_t)1u);
     fprintf(stderr,
             "signal %d addr=%p pc=0x%08lx pc_off=0x%08lx lr=0x%08lx lr_off=0x%08lx "
-            "sp=0x%08lx cpsr=0x%08lx thumb=%lu r0=0x%08lx r1=0x%08lx r2=0x%08lx r3=0x%08lx\n",
+            "sp=0x%08lx cpsr=0x%08lx thumb=%lu r0=0x%08lx r1=0x%08lx r2=0x%08lx r3=0x%08lx "
+            "r4=0x%08lx r5=0x%08lx r6=0x%08lx r7=0x%08lx r8=0x%08lx r9=0x%08lx "
+            "r10=0x%08lx fp=0x%08lx ip=0x%08lx\n",
             sig, info ? info->si_addr : NULL, (unsigned long)crash_pc,
             (unsigned long)pc_offset, (unsigned long)crash_lr, (unsigned long)lr_offset,
             (unsigned long)uc->uc_mcontext.arm_sp, (unsigned long)uc->uc_mcontext.arm_cpsr,
             (unsigned long)((uc->uc_mcontext.arm_cpsr >> 5) & 1u),
             (unsigned long)uc->uc_mcontext.arm_r0, (unsigned long)uc->uc_mcontext.arm_r1,
-            (unsigned long)uc->uc_mcontext.arm_r2, (unsigned long)uc->uc_mcontext.arm_r3);
+            (unsigned long)uc->uc_mcontext.arm_r2, (unsigned long)uc->uc_mcontext.arm_r3,
+            (unsigned long)uc->uc_mcontext.arm_r4, (unsigned long)uc->uc_mcontext.arm_r5,
+            (unsigned long)uc->uc_mcontext.arm_r6, (unsigned long)uc->uc_mcontext.arm_r7,
+            (unsigned long)uc->uc_mcontext.arm_r8, (unsigned long)uc->uc_mcontext.arm_r9,
+            (unsigned long)uc->uc_mcontext.arm_r10, (unsigned long)uc->uc_mcontext.arm_fp,
+            (unsigned long)uc->uc_mcontext.arm_ip);
     if (pc_offset != UINTPTR_MAX && pc_offset >= 8 && pc_offset + 16 < 0x41d970u) {
         fprintf(stderr, "pc-bytes:");
         for (int i = -8; i < 16; ++i) fprintf(stderr, " %02x", pc_bytes[i]);
