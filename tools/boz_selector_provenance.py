@@ -14,7 +14,9 @@ PROBE = re.compile(r"\[TREE_PROBE\].*?\boff=0*([0-9a-fA-F]+)\b", re.I)
 VALUE = re.compile(r"\b(r0|r2|sp0|sp28)=([0-9a-fA-F]{8})\b", re.I)
 IO_EVENT = re.compile(
     r"\[S3E_FILE_RW\]\s+op=(read|write)\s+buffer=([0-9a-fA-F]{8})"
-    r".*?elem=(\d+)\s+count=(\d+)\s+result=(\d+)"
+    r"\s+file=([0-9a-fA-F]{8})\s+elem=(\d+)\s+count=(\d+)"
+    r"\s+result=(\d+)\s+before=(-?\d+)\s+after=(-?\d+)"
+    r"\s+(?:eof=(\d+)\s+)?error=(\d+)"
 )
 TARGETS = {
     0xDB2FA: "key_helper_before_blx",
@@ -85,13 +87,18 @@ def summarize(raw: str) -> dict:
     helper_dest = None if before is None else before.get("r0")
     stream_io = []
     for match in IO_EVENT.finditer(raw):
-        operation, buffer, elem_size, count, result = match.groups()
+        (operation, buffer, file_handle, elem_size, count, result,
+         position_before, position_after, eof, error) = match.groups()
         buffer_addr = int(buffer, 16)
         if helper_dest is not None and buffer_addr == helper_dest:
             stream_io.append({
                 "op": operation, "buffer": f"0x{buffer_addr:08x}",
+                "file": f"0x{int(file_handle,16):08x}",
                 "element_size": int(elem_size), "count": int(count),
-                "result": int(result),
+                "result": int(result), "before": int(position_before),
+                "after": int(position_after),
+                "eof": None if eof is None else int(eof),
+                "error": int(error),
             })
 
     return {
