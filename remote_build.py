@@ -3143,6 +3143,8 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                         {"off": 0x2FFA30, "mode": "arm32", "label": "new_crash_caller_array"},
                                                                                         {"off": 0x300444, "mode": "arm32", "label": "new_crash_caller_list"},
                                                                                         {"off": 0x2FE088, "mode": "arm32", "label": "new_crash_entry"},
+                                                                                        {"off": 0x2FE098, "mode": "arm32", "label": "new_crash_after_initializer"},
+                                                                                        {"off": 0x2FE0A4, "mode": "arm32", "label": "new_crash_before_helper"},
                                                                                         {"off": 0x2FE0A8, "mode": "arm32", "label": "new_crash_null_field"},
                                                                                         {"off": 0x25812C, "mode": "arm32", "label": "serializer_open_entry"},
                                                                                         {"off": 0x258170, "mode": "arm32", "label": "serializer_open_assign"},
@@ -3179,7 +3181,7 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                     # DB31C -> D8F0E tree lookup.
                                                                                     pair_focus = {
                                                                                         0x2FFA30, 0x300444,
-                                                                                        0x2FE088, 0x2FE0A8,
+                                                                                        0x2FE088, 0x2FE098, 0x2FE0A4, 0x2FE0A8,
                                                                                         0x25812C, 0x258170,
                                                                                         0x257BD4, 0xDB294, 0xDB298,
                                                                                         0xDB2FA, 0xDB2FE, 0xDB306,
