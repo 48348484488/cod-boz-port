@@ -3087,6 +3087,19 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                         for item in crash_bridge_probes
                                                                                         if probe_is_arch_safe(item)
                                                                                     ]
+                                                                                    # Focus on the second owner dispatch and the
+                                                                                    # callback pair. Adjacent one-shot BKPTs can
+                                                                                    # alias under QEMU (trap PC may be insn+2).
+                                                                                    # D8F40/D8F42 are instead armed alternately.
+                                                                                    pair_focus = {
+                                                                                        0xDB31C, 0xDB31E, 0xDA728, 0xDA72C,
+                                                                                        0xD8F0E, 0xD8F14, 0xD8F36,
+                                                                                        0xD8F40, 0xD8F42,
+                                                                                    }
+                                                                                    crash_bridge_probes = [
+                                                                                        item for item in crash_bridge_probes
+                                                                                        if item["off"] in pair_focus
+                                                                                    ]
                                                                                     bridge_by_off = {
                                                                                         item["off"]: item
                                                                                         for item in crash_bridge_probes
