@@ -575,6 +575,24 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
                             "[SELECTOR_STREAM_ARM] at=0xdb2fa ok=%d\n",
                             ok ? 1 : 0);
                 }
+                if (p->off == 0x0025812cu) {
+                    /* Verified ARM entry: CMP r1,#1; r0 is filename,
+                     * r1 selects rb(1) versus wb(other). */
+                    fprintf(stderr,
+                            "[SERIALIZER_FILE_OPEN] stage=entry name_ptr=%08lx "
+                            "read_mode=%08lx\n",
+                            (unsigned long)uc->uc_mcontext.arm_r0,
+                            (unsigned long)uc->uc_mcontext.arm_r1);
+                }
+                if (p->off == 0x00258170u) {
+                    /* Verified ARM STR r0,[r3,#8], before the store.
+                     * r0 is the FILE* returned by native open helper. */
+                    fprintf(stderr,
+                            "[SERIALIZER_FILE_OPEN] stage=assign file=%08lx "
+                            "global=%08lx\n",
+                            (unsigned long)uc->uc_mcontext.arm_r0,
+                            (unsigned long)uc->uc_mcontext.arm_r3);
+                }
                 if (p->off == 0x00257bd4u) {
                     /* ARM instruction 257BD0 has already loaded the file
                      * argument into r3. At BD4 the file register is final. */
