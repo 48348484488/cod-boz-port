@@ -27,7 +27,8 @@ HOST_TESTS := \
   $(BUILD_DIR)/tests/device_id_test \
   $(BUILD_DIR)/tests/s3e_audio_test \
   $(BUILD_DIR)/tests/s3e_audio_unit_test \
-  $(BUILD_DIR)/tests/s3e_input_test
+  $(BUILD_DIR)/tests/s3e_input_test \
+  $(BUILD_DIR)/tests/s3e_file_loader_archive_test
 ARM_TESTS := $(BUILD_DIR)/tests/codboz_frame_interpolation_test
 CFLAGS ?= -O2 -g
 PROJECT_CPPFLAGS := -D_GNU_SOURCE -Iinclude -Ithird_party/lzma
@@ -194,6 +195,13 @@ $(BUILD_DIR)/tests/s3e_input_test: tests/s3e_input_test.c src/s3e_input.c \
 	$(HOST_CC) $(PROJECT_CPPFLAGS) -Ddlsym=s3e_input_test_dlsym \
 	  -Ddlclose=s3e_input_test_dlclose $(HOST_TEST_CFLAGS) $(PROJECT_CFLAGS) \
 	  -o $@ tests/s3e_input_test.c src/s3e_input.c $(HOST_TEST_LDFLAGS)
+
+$(BUILD_DIR)/tests/s3e_file_loader_archive_test: tests/s3e_file_loader_archive_test.c \
+                                             src/s3e_file.c include/s3e_host_internal.h | $(BUILD_DIR)
+	mkdir -p $(dir $@)
+	$(HOST_CC) $(PROJECT_CPPFLAGS) $(HOST_TEST_CFLAGS) $(PROJECT_CFLAGS) \
+	  -o $@ tests/s3e_file_loader_archive_test.c src/s3e_file.c \
+	  $(HOST_TEST_LDFLAGS)
 
 $(BUILD_DIR)/tests/codboz_frame_interpolation_test: \
     tests/codboz_frame_interpolation_test.c src/codboz_frame_interpolation.c \
