@@ -1099,6 +1099,22 @@ static void install_boz_pc_sampler(void) {
     if (setitimer(ITIMER_REAL, &timer, NULL) == 0) {
         fprintf(stderr, "[BOZ_PC_SAMPLER] interval=%lu enabled=1\n", seconds);
     }
+    /* Memory maps identify which ARM shared object owns sampled PCs.
+     * Limit the output to the guest shared-library address window. */
+    FILE *maps = fopen("/proc/self/maps", "r");
+    if (maps) {
+        char line[512];
+        unsigned emitted = 0;
+        while (fgets(line, sizeof(line), maps) && emitted < 80u) {
+            unsigned long lo = 0, hi = 0;
+            if (sscanf(line, "%lx-%lx", &lo, &hi) != 2) continue;
+            if (lo < 0x40000000ul && hi > 0x3f000000ul) {
+                fprintf(stderr, "[BOZ_MODULE_MAP] %s", line);
+                ++emitted;
+            }
+        }
+        fclose(maps);
+    }
 }
 #endif
 
