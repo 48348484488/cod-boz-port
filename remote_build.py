@@ -3089,6 +3089,7 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                         {"off": 0xD95BE, "mode": "thumb16", "label": "primary_factory_return_after_mov"},
                                                                                         {"off": 0xDB294, "mode": "thumb16", "label": "seed_helper_before_blx"},
                                                                                         {"off": 0xDB298, "mode": "thumb16", "label": "seed_helper_after_blx"},
+                                                                                        {"off": 0x257BD4, "mode": "arm32", "label": "selector_file_loaded"},
                                                                                         {"off": 0xDB2FA, "mode": "thumb16", "label": "key_helper_before_blx"},
                                                                                         {"off": 0xDB2FE, "mode": "thumb16", "label": "key_helper_after_blx"},
                                                                                         {"off": 0xDB306, "mode": "thumb16", "label": "stack_key_before_load"},
@@ -3120,7 +3121,8 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                     # DB306 -> fifth argument [sp] at
                                                                                     # DB31C -> D8F0E tree lookup.
                                                                                     pair_focus = {
-                                                                                        0xDB294, 0xDB298, 0xDB2FA, 0xDB2FE, 0xDB306,
+                                                                                        0x257BD4, 0xDB294, 0xDB298,
+                                                                                        0xDB2FA, 0xDB2FE, 0xDB306,
                                                                                         0xDB31C, 0xDB31E, 0xDA728,
                                                                                         0xDA72C, 0xD8F0E, 0xD8F14,
                                                                                         0xD8F36, 0xD8F40, 0xD8F42,
@@ -3148,6 +3150,7 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                     bridge_env["BOZ_DEFER_OWNER_SECOND"] = "1"
                                                                                     bridge_env["BOZ_TRACE_HANDLER_PAIRS"] = "1"
                                                                                     bridge_env["BOZ_FILE_RW_TRACE"] = "1"
+                                                                                    bridge_env["BOZ_TRACE_SELECTOR_STREAM"] = "1"
                                                                                     bridge_env["BOZ_CLEAR_DEFAULT_MASS_PROBES"] = "1"
                                                                                     bridge_env["BOZ_MASS_PROBES"] = ",".join(
                                                                                         probe_env_token(item)
@@ -3212,6 +3215,13 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                                     + stripped,
                                                                                                     flush=True,
                                                                                                 )
+                                                                                            elif stripped.startswith("[SELECTOR_STREAM]"):
+                                                                                                bridge_events.append({
+                                                                                                    "index": bridge_index,
+                                                                                                    "type": "selector_stream",
+                                                                                                    "line": stripped,
+                                                                                                })
+                                                                                                print("[CRASH_BRIDGE] " + stripped, flush=True)
                                                                                             elif stripped.startswith((
                                                                                                 "[S3E_FILE_RW]",
                                                                                                 "[S3E_FILE_OPEN]",
