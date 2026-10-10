@@ -75,6 +75,7 @@ static GLuint g_bound_framebuffer;
 static unsigned g_boz_gl_clear_count;
 static unsigned g_boz_gl_draw_arrays_count;
 static unsigned g_boz_gl_draw_elements_count;
+static unsigned g_boz_gl_draw_tex_count;
 
 /* Count actual GL commands, not merely successful window swaps. */
 static S3E_SOFTFP void host_glClear(GLbitfield mask) {
@@ -141,7 +142,11 @@ GL_WRAP_FLOAT1_ALIAS(glClearDepthfOES, glClearDepthf, GLfloat)
 GL_WRAP_FLOAT4(glColor4f, GLfloat, GLfloat, GLfloat, GLfloat)
 GL_WRAP_FLOAT2(glDepthRangef, GLfloat, GLfloat)
 GL_WRAP_FLOAT2_ALIAS(glDepthRangefOES, glDepthRangef, GLfloat, GLfloat)
-GL_WRAP_FLOAT5(glDrawTexfOES, GLfloat, GLfloat, GLfloat, GLfloat, GLfloat)
+static S3E_SOFTFP void host_glDrawTexfOES(GLfloat x, GLfloat y, GLfloat z, GLfloat width, GLfloat height) {
+    ++g_boz_gl_draw_tex_count;
+    void (*real)(GLfloat, GLfloat, GLfloat, GLfloat, GLfloat) = lookup_gl("glDrawTexfOES");
+    if (real) real(x, y, z, width, height);
+}
 GL_WRAP_FLOAT2(glFogf, GLenum, GLfloat)
 GL_WRAP_FLOAT6(glFrustumf, GLfloat, GLfloat, GLfloat, GLfloat, GLfloat, GLfloat)
 GL_WRAP_FLOAT6_ALIAS(glFrustumfOES, glFrustumf, GLfloat, GLfloat, GLfloat, GLfloat, GLfloat,
@@ -557,9 +562,11 @@ static void boz_capture_swap_frame(unsigned frame) {
 
 static EGLBoolean host_eglSwapBuffers(EGLDisplay display, EGLSurface surface) {
     static unsigned swap_count;
+    static uint64_t first_swap_ms;
     const char *trace_swap = getenv("BOZ_SWAP_PROGRESS");
     const bool trace_enabled = trace_swap && strcmp(trace_swap, "1") == 0;
     ++swap_count;
+    if (!first_swap_ms) first_swap_ms = monotonic_us() / 1000u;
     input_pump();
     dispatch_due_timers();
     GLuint previous_framebuffer = g_bound_framebuffer;
@@ -574,9 +581,11 @@ static EGLBoolean host_eglSwapBuffers(EGLDisplay display, EGLSurface surface) {
     EGLBoolean result = egl_backend_swap_buffers(display, surface);
     if (trace_enabled && (swap_count <= 5u || swap_count % 30u == 0u)) {
         fprintf(stderr,
-                "[BOZ_SWAP_PROGRESS] n=%u ok=%d fbo=%u gl_clear=%u gl_draw_arrays=%u gl_draw_elements=%u\n",
+                "[BOZ_SWAP_PROGRESS] n=%u ok=%d fbo=%u elapsed_ms=%llu gl_clear=%u gl_draw_arrays=%u gl_draw_elements=%u gl_draw_tex=%u\n",
                 swap_count, (int)result, (unsigned)previous_framebuffer,
-                g_boz_gl_clear_count, g_boz_gl_draw_arrays_count, g_boz_gl_draw_elements_count);
+                (unsigned long long)(monotonic_us() / 1000u - first_swap_ms),
+                g_boz_gl_clear_count, g_boz_gl_draw_arrays_count,
+                g_boz_gl_draw_elements_count, g_boz_gl_draw_tex_count);
     }
     pace_frame();
     return result;
