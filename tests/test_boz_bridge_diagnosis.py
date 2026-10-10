@@ -89,5 +89,25 @@ class TestCrashBridge(unittest.TestCase):
 
 
 
+    def test_primary_factory_null_arg_proof(self):
+        rows = [
+            (0xD94EE, "d94ee: 4614 mov r4, r2"),
+            (0xD94F2, "d94f2: 2a00 cmp r2, #0"),
+            (0xD94F4, "d94f4: d062 beq.n 0xd95bc"),
+            (0xD95BC, "d95bc: 4620 mov r0, r4"),
+            (0xD95BE, "d95be: e8bd 81f0 ldmia.w sp!, {r4, r5, r6, r7, r8, pc}"),
+        ]
+        proof = module.verify_primary_factory_null_path(rows)
+        self.assertTrue(proof["r2_zero_short_circuit_verified"])
+        self.assertIn("return nullptr", proof["cxx_equivalent_for_this_path_only"])
+
+        # A missing or changed branch must not produce an automatic proof.
+        bad = [(off, line.replace("beq.n", "bne.n")) for off, line in rows]
+        self.assertFalse(
+            module.verify_primary_factory_null_path(bad)["r2_zero_short_circuit_verified"]
+        )
+
+
+
 if __name__ == "__main__":
     unittest.main()
