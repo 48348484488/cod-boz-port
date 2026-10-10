@@ -72,11 +72,17 @@ def analyze_boz_output(output: str) -> dict:
         "next_action": None,
     }
     if trees and "root=00000000" in trees[-1]["line"]:
-        diagnosis["root_cause_candidate"] = "D8FF0 registry sentinel exists but its root pointer is NULL; the manager tree was never populated before lookup"
-        diagnosis["confidence"] = "high"
-        diagnosis["failed_stage"] = "manager_tree_registration"
-        diagnosis["next_action"] = "identify the insertion/registration path that should write sentinel+4 before D8FF0"
+        # The lookup runs before the possible factory/insertion path, so an
+        # empty tree at this instant is an observation, not a failed setup.
+        diagnosis["observed_condition"] = "registry_root_null_at_lookup"
         diagnosis["empty_registry_tree"] = True
+        diagnosis["root_cause_candidate"] = None
+        diagnosis["confidence"] = "insufficient"
+        diagnosis["next_action"] = (
+            "correlate the owner factory/insertion return with the same "
+            "call's later dispatch; a one-shot root=0 probe cannot prove "
+            "registration failed"
+        )
     elif da6 and lookups and "r0=00000000" in da6[-1]["line"] and "lr=4a0d8ffb" in da6[-1]["line"].lower():
         diagnosis["root_cause_candidate"] = "D8FF0 lookup returned NULL for the observed key; DA6AC then propagated the missing object toward DB31E"
         diagnosis["confidence"] = "high"
