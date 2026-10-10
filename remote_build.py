@@ -17,6 +17,7 @@ import shutil
 import lzma
 import zlib
 import struct
+import base64
 import urllib.request
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import threading
@@ -730,13 +731,40 @@ def run_boz_diagnostic(report: dict) -> int:
                 )
                 png_path = ppm.with_suffix(".png")
                 png_path.write_bytes(image)
+                from collections import Counter
+                palette = Counter(
+                    raw[pos:pos+3] for pos in range(0, len(raw), 3)
+                )
                 entry = {
                     "file": str(png_path), "width": width, "height": height,
                     "png_bytes": len(image),
-                    "sha256": hashlib.sha256(image).hexdigest()
+                    "sha256": hashlib.sha256(image).hexdigest(),
+                    "distinct_rgb_colors": len(palette),
+                    "top_rgb": [
+                        {"rgb": color.hex(), "pixels": count}
+                        for color, count in palette.most_common(6)
+                    ],
                 }
                 frame_outputs.append(entry)
                 print("[FAST_FRAME_PNG] " + json.dumps(entry), flush=True)
+                if len(image) <= 3500:
+                    print("[FAST_FRAME_BASE64] " + png_path.name + " " +
+                          base64.b64encode(image).decode("ascii"), flush=True)
+                # Small text preview is useful when the Render PNG URL cannot
+                # be opened by external debugging clients.
+                grayscale = " .:-=+*#%@"
+                preview = []
+                for sample_y in range(20):
+                    sy = min(height-1, (sample_y*height + height//40)//20)
+                    row_chars = []
+                    for sample_x in range(40):
+                        sx = min(width-1, (sample_x*width + width//80)//40)
+                        at = (sy*width+sx)*3
+                        light = (raw[at]*30 + raw[at+1]*59 + raw[at+2]*11)//100
+                        row_chars.append(grayscale[light*(len(grayscale)-1)//256])
+                    preview.append("".join(row_chars))
+                print("[FAST_FRAME_ASCII] " + png_path.name + " " +
+                      json.dumps(preview), flush=True)
             except (OSError, ValueError) as exc:
                 print(f"[FAST_FRAME_ERROR] {ppm.name}: {exc!r}", flush=True)
         upload_lines = []
