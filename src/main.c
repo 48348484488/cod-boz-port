@@ -182,6 +182,7 @@ static boz_probe_t g_tree_probes[BOZ_MAX_MASS_PROBES] = {
 static unsigned g_tree_probe_count = 9u;
 static int g_defer_owner_second_enabled;
 static int g_handler_pairs_enabled;
+static int g_defer_selector_stream_enabled;
 static int g_handler_pairs_started;
 static int g_handler_pair_pending;
 static unsigned g_handler_pair_count;
@@ -322,6 +323,28 @@ static bool arm_one_thumb_probe(uint32_t off) {
     return false;
 }
 
+/* Called only after the matching Thumb BLX at DB2FA: a previously
+ * unseen ARM-state serializer probe cannot be consumed by an earlier
+ * unrelated call to the shared wrapper. */
+static bool arm_one_arm_probe(uint32_t off) {
+    if (!probe_mode_allowed(off, BOZ_PROBE_ARM32)) {
+        return false;
+    }
+    for (unsigned i = 0; i < g_tree_probe_count; ++i) {
+        boz_probe_t *p = &g_tree_probes[i];
+        if (p->off != off || p->mode != BOZ_PROBE_ARM32 || p->armed) {
+            continue;
+        }
+        uint32_t *site = (uint32_t *)(uintptr_t)(g_loaded_base + off);
+        p->saved = *site;
+        *site = 0xe1200070u; /* ARM BKPT */
+        __builtin___clear_cache((char *)site, (char *)(site + 1));
+        p->armed = 1;
+        return true;
+    }
+    return false;
+}
+
 static void arm_tree_probes(void) {
     load_mass_probe_env();
     const char *defer = getenv("BOZ_DEFER_OWNER_SECOND");
@@ -329,6 +352,9 @@ static void arm_tree_probes(void) {
     const char *pairs = getenv("BOZ_TRACE_HANDLER_PAIRS");
     g_handler_pairs_enabled = g_defer_owner_second_enabled &&
                               pairs && strcmp(pairs, "1") == 0;
+    const char *selector_stream = getenv("BOZ_TRACE_SELECTOR_STREAM");
+    g_defer_selector_stream_enabled =
+        selector_stream && strcmp(selector_stream, "1") == 0;
     unsigned armed = 0;
     for (unsigned i = 0; i < g_tree_probe_count; ++i) {
         boz_probe_t *p = &g_tree_probes[i];
@@ -336,7 +362,8 @@ static void arm_tree_probes(void) {
             continue;
         }
         if ((g_defer_owner_second_enabled && is_deferred_owner_second_site(p->off)) ||
-            (g_handler_pairs_enabled && p->off == 0x000d8f42u)) {
+            (g_handler_pairs_enabled && p->off == 0x000d8f42u) ||
+            (g_defer_selector_stream_enabled && p->off == 0x00257bd4u)) {
             continue;
         }
         if (p->mode == BOZ_PROBE_THUMB16) {
@@ -541,6 +568,27 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
                     __builtin___clear_cache((char *)site, (char *)(site + 1));
                 }
                 p->armed = 0;
+                if (p->off == 0x000db2fau && g_defer_selector_stream_enabled) {
+                    g_defer_selector_stream_enabled = 0;
+                    bool ok = arm_one_arm_probe(0x00257bd4u);
+                    fprintf(stderr,
+                            "[SELECTOR_STREAM_ARM] at=0xdb2fa ok=%d\n",
+                            ok ? 1 : 0);
+                }
+                if (p->off == 0x00257bd4u) {
+                    /* ARM instruction 257BD0 has already loaded the file
+                     * argument into r3. At BD4 the file register is final. */
+                    fprintf(stderr,
+                            "[SELECTOR_STREAM] off=257bd4 buffer=%08lx "
+                            "file=%08lx global=%08lx read_flag=%08lx "
+                            "element_size=%08lx count=%08lx\n",
+                            (unsigned long)uc->uc_mcontext.arm_r0,
+                            (unsigned long)uc->uc_mcontext.arm_r3,
+                            (unsigned long)uc->uc_mcontext.arm_ip,
+                            (unsigned long)uc->uc_mcontext.arm_r2,
+                            (unsigned long)uc->uc_mcontext.arm_r1,
+                            (unsigned long)uc->uc_mcontext.arm_r4);
+                }
                 if (p->off == 0x000db31cu && g_defer_owner_second_enabled) {
                     unsigned deferred_armed = 0;
                     g_defer_owner_second_enabled = 0;
