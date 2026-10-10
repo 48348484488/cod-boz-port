@@ -3248,6 +3248,13 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                             ),
                                                                                         )
                                                                                         bridge_out = bridge_run.stdout or ""
+                                                                                        origin_lines = [
+                                                                                            line.strip()
+                                                                                            for line in bridge_out.replace("\\n", "\n").splitlines()
+                                                                                            if line.strip().startswith("[BOZ_NULL_PROPERTY_ORIGIN]")
+                                                                                        ]
+                                                                                        for line in origin_lines:
+                                                                                            print("[CRASH_BRIDGE] " + line, flush=True)
                                                                                         bridge_events = []
                                                                                         for bridge_index, bridge_line in enumerate(
                                                                                             bridge_out.replace("\\\\n", "\\n").splitlines()
@@ -3433,6 +3440,7 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                             flush=True,
                                                                                         )
                                                                                         crash_bridge_result = {
+                                                                                            "null_property_origin": origin_lines,
                                                                                             "new_crash_registers": crash_registers,
                                                                                             "new_arm_crash_events": new_crash_events,
                                                                                             "selector_provenance": selector_provenance,
