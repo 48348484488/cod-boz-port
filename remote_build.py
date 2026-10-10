@@ -687,7 +687,7 @@ def run_boz_diagnostic(report: dict) -> int:
             )
             try:
                 trial_rc = proc.wait(
-                    timeout=int(os.environ.get("BOZ_FAST_PROPERTY_TIMEOUT", "65"))
+                    timeout=int(os.environ.get("BOZ_FAST_PROPERTY_TIMEOUT", "50"))
                 )
             except subprocess.TimeoutExpired:
                 timed_out = True
@@ -720,6 +720,7 @@ def run_boz_diagnostic(report: dict) -> int:
                 "[BOZ_COMPAT]", "[BOZ_NULL_CHILD_SKIP]",
                 "[BOZ_NULL_REGISTRATION_SKIP]", "[MASS_PROBE]",
                 "[BOZ_PC_SAMPLE]", "[BOZ_PC_SAMPLER]",
+                "[BOZ_MODULE_MAP]", "[egl]", "[GL_UPLOAD_TRACE]",
                 "[BOZ_NULL_PROPERTY_ORIGIN]", "signal 11 ", "stack:",
                 "[S3E_FILE_EXISTS]",
             )) and not line.startswith("[S3E_FILE_EXISTS]"):
