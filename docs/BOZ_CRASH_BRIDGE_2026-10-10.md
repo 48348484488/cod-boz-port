@@ -389,3 +389,48 @@ This **proves that an absent matching type can propagate a
 null pointer through 2FD518 to the 20FE4E call**. It does not
 yet prove the missing type at runtime; the new typed
 ARM/Thumb probes will check the path.
+
+
+## Experimental non-fabricating null-child A/B (2026-10-10)
+
+The baseline crash is PC=BOZ+0x2FE0A8, ARM LDRH r3,[r4,#44]
+with r4=0 and fault address 0x2C. The unmodified primary QEMU run
+still returns RC=139 at the same location.
+
+Commit 9d83284e89ed34dfc8f02d139e6f664d0e966d6e added an
+**opt-in, bounded, diagnostic-only** SIGSEGV continuation gated by
+BOZ_COMPAT_NULL_CHILD_SKIP=1. For this exact ARM PC and r4=0,
+it skips the invalid child copy and resumes at BOZ+0x2FE0F8,
+the routine's original temporary-object cleanup path
+(MOV r0,r6, BL destructor, stack epilogue). It does not create a fake
+object. At most 128 such continuations are allowed; defaults are OFF.
+
+Commit a4ef9c3241931880d374dba063ed885c19247ec7 enables this
+flag **only in the crash-bridge A/B run**, not in the primary run.
+
+The Render deployment dep-db55iqrbc2fs73edjurg compiled successfully,
+passed make test-host and reproduced the baseline fault. The
+experimental crash bridge (also RC=139) advanced past 2FE0A8 and
+recorded a *different* fault:
+
+- PC=BOZ+0x2FE7D0; ARM instruction STR r1,[r0,#0x90]
+- r0=0, effective fault address 0x90
+- LR=BOZ+0x301F04, identifying the BL call site at 0x301F00.
+- Static disassembly at 0x301EE0/0x301F00 shows:
+  MOV r0,r5 and then BL 0x2FE7D0. Thus the caller provided a
+  null target pointer to this store.
+- Missing group resources (frontend/fixed/splash) were still
+  reported by the file layer.
+
+The A/B result validates that the guarded change of control flow
+can pass the earlier failure, NOT that gameplay or initialization is
+correct. The exact optional/required semantics of missing child
+objects remain unknown. Do not enable this compatibility flag by
+default or replace it with a synthetic object before validating
+complete asset initialization.
+
+Public source mirror eugene373/COD-BOZ-Partially-Decompiled has
+the loader DTRZ but no frontend.group.bin, fixed.group.bin or
+splash.group.bin in its tracked tree (checked 2026-10-10).
+The original data packages still must be provided or downloaded
+through the authorized game resource pipeline.
