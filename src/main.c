@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ucontext.h>
+#include <sys/time.h>
 
 #if defined(__arm__)
 static uintptr_t g_loaded_base;
@@ -1052,6 +1053,55 @@ static void install_terminate_handlers(void) {
     sigaction(SIGHUP, &sa, NULL);
 }
 
+/* Opt-in guest ARM PC sampling after the null registration bypass.
+ * This deliberately does not modify registers or fabricate game objects. */
+#if defined(__arm__)
+static volatile sig_atomic_t g_pc_sample_seq;
+static void boz_pc_sample_handler(int sig, siginfo_t *info, void *ctx) {
+    (void)sig;
+    (void)info;
+    if (!g_compat_null_registration_count) {
+        return;
+    }
+    ucontext_t *uc = (ucontext_t *)ctx;
+    uintptr_t pc = (uintptr_t)uc->uc_mcontext.arm_pc;
+    uintptr_t off = pc >= g_loaded_base ? pc - g_loaded_base : UINTPTR_MAX;
+    ++g_pc_sample_seq;
+    fprintf(stderr,
+            "[BOZ_PC_SAMPLE] seq=%d guard=%d pc=%08lx off=%08lx lr=%08lx "
+            "sp=%08lx cpsr=%08lx r0=%08lx r1=%08lx r2=%08lx r3=%08lx\n",
+            (int)g_pc_sample_seq, (int)g_compat_null_registration_count,
+            (unsigned long)pc, (unsigned long)off,
+            (unsigned long)uc->uc_mcontext.arm_lr,
+            (unsigned long)uc->uc_mcontext.arm_sp,
+            (unsigned long)uc->uc_mcontext.arm_cpsr,
+            (unsigned long)uc->uc_mcontext.arm_r0,
+            (unsigned long)uc->uc_mcontext.arm_r1,
+            (unsigned long)uc->uc_mcontext.arm_r2,
+            (unsigned long)uc->uc_mcontext.arm_r3);
+}
+
+static void install_boz_pc_sampler(void) {
+    const char *setting = getenv("BOZ_PC_SAMPLE_INTERVAL");
+    if (!setting || !*setting) return;
+    char *end = NULL;
+    unsigned long seconds = strtoul(setting, &end, 10);
+    if (*end != '\0' || seconds < 1u || seconds > 30u) return;
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_SIGINFO;
+    sa.sa_sigaction = boz_pc_sample_handler;
+    if (sigaction(SIGALRM, &sa, NULL) != 0) return;
+    struct itimerval timer = {0};
+    timer.it_value.tv_sec = (time_t)seconds;
+    timer.it_interval.tv_sec = (time_t)seconds;
+    if (setitimer(ITIMER_REAL, &timer, NULL) == 0) {
+        fprintf(stderr, "[BOZ_PC_SAMPLER] interval=%lu enabled=1\n", seconds);
+    }
+}
+#endif
+
 int main(int argc, char **argv) {
     bool run = false;
     bool diagnostic_skip_frame_interpolation = false;
@@ -1230,6 +1280,9 @@ int main(int argc, char **argv) {
     }
 #endif
     if (run) {
+#if defined(__arm__)
+        install_boz_pc_sampler();
+#endif
         int (*entry)(void) = (int (*)(void))(uintptr_t)(loaded.base + loaded.entry_offset);
         int rc = entry();
         fprintf(stderr, "S3E entry returned %d\n", rc);
