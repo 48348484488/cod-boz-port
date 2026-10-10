@@ -370,3 +370,22 @@ The ARM function 2FD518 has a **real zero return path**:
 These disassemblies are from restored, verified
 boz.s3e.unpacked; no game bytes have been checked into GitHub.
 No fake pointer or unconditional bypass has been applied.
+
+
+### Static lookup logic at 235220
+
+Direct Thumb disassembly of the restored S3E shows a further
+failure path in BOZ+0x235220, reached through 0x2352F8:
+
+- 0x235246 loads the entry-array pointer from manager+0x44;
+- 0x235248 loads the entry count from manager+0x48;
+- 0x235250/0x235252 compare the cursor to the end;
+- 0x235258 loads an entry key from node+0x4;
+- 0x23525A compares the entry key with the requested type;
+- 0x235272 sets r0=0 if traversal finishes with no accepted entry;
+- 0x235298 returns that result.
+
+This **proves that an absent matching type can propagate a
+null pointer through 2FD518 to the 20FE4E call**. It does not
+yet prove the missing type at runtime; the new typed
+ARM/Thumb probes will check the path.
