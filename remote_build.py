@@ -3091,10 +3091,16 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                     # callback pair. Adjacent one-shot BKPTs can
                                                                                     # alias under QEMU (trap PC may be insn+2).
                                                                                     # D8F40/D8F42 are instead armed alternately.
+                                                                                    # Trace the selector's lifecycle before
+                                                                                    # BLX: 257B98 caller -> stack local at
+                                                                                    # DB306 -> fifth argument [sp] at
+                                                                                    # DB31C -> D8F0E tree lookup.
                                                                                     pair_focus = {
-                                                                                        0xDB31C, 0xDB31E, 0xDA728, 0xDA72C,
-                                                                                        0xD8F0E, 0xD8F14, 0xD8F36,
-                                                                                        0xD8F40, 0xD8F42,
+                                                                                        0xDB2FA, 0xDB2FE, 0xDB306,
+                                                                                        0xDB31C, 0xDB31E, 0xDA728,
+                                                                                        0xDA72C, 0xD8F0E, 0xD8F14,
+                                                                                        0xD8F36, 0xD8F40, 0xD8F42,
+                                                                                        0xD8F44,
                                                                                     }
                                                                                     crash_bridge_probes = [
                                                                                         item for item in crash_bridge_probes
@@ -3165,6 +3171,7 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                                     "r4", "r5", "r6", "r7",
                                                                                                     "r8", "r9", "r10", "fp",
                                                                                                     "ip", "lr", "sentinel", "root",
+                                                                                                    "sp", "sp0", "sp28",
                                                                                                 ):
                                                                                                     field_match = re.search(
                                                                                                         rf"\b{field}=([0-9a-fA-F]{{8}})\b",
