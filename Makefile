@@ -206,6 +206,7 @@ $(BUILD_DIR)/tests/codboz_frame_interpolation_test: \
 test-host: $(HOST_TESTS)
 	@set -e; for test in $(HOST_TESTS); do "$$test"; done
 	tests/portmaster_launcher_test.sh
+	python3 -m unittest discover -s tests -p 'test_boz_bridge_diagnosis.py' -v
 
 test-arm: $(ARM_TESTS)
 	@set -e; for test in $(ARM_TESTS); do $(QEMU_ARM) -L $(ARM_SYSROOT) "$$test"; done
