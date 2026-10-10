@@ -13,7 +13,7 @@ import re
 from pathlib import Path
 
 PROBE = re.compile(r"\[TREE_PROBE\].*?\boff=0*([0-9a-fA-F]+)\b", re.I)
-REG = re.compile(r"\b(r0|r2|r3|r4|r8)=([0-9a-fA-F]{8})\b", re.I)
+REG = re.compile(r"\b(r0|r2|r3|r4|r5|r6|r8)=([0-9a-fA-F]{8})\b", re.I)
 SITES = {
     0xDA70E: "primary_result_before_mov",
     0xDA72C: "fallback_result_before_mov",
@@ -22,6 +22,17 @@ SITES = {
     0xDA792: "insert_call_before_bl",
     0xDA79A: "owner_before_mov_r0_r4",
     0xDA79C: "owner_after_mov_r0_r4",
+    0xD8F0E: "second_registry_entry",
+    0xD8F14: "second_registry_loaded",
+    0xD8F16: "second_registry_search",
+    0xD8F2A: "second_registry_search_done",
+    0xD8F36: "second_registry_compare",
+    0xD8F38: "second_registry_missing_branch",
+    0xD8F3A: "second_registry_handler_found",
+    0xD8F40: "second_registry_handler_call",
+    0xD8F42: "second_registry_handler_return",
+    0xD8F44: "second_registry_not_found",
+    0xD8F46: "second_registry_return_zero",
     0xD94E4: "primary_factory_entry",
     0xD94F2: "primary_factory_null_compare",
     0xD94F4: "primary_factory_null_branch",
@@ -98,7 +109,7 @@ def analyze(events: list[dict]) -> dict:
         off = _number(event.get("off"))
         if off not in SITES or event.get("type", "probe") != "probe":
             continue
-        registers = {k: v for k in ("r0", "r2", "r3", "r4", "r8") if (v := _number(event.get(k))) is not None}
+        registers = {k: v for k in ("r0", "r2", "r3", "r4", "r5", "r6", "r8") if (v := _number(event.get(k))) is not None}
         ordered.append({"index": index, "off": hex(off), "label": SITES[off], **registers})
 
     def at(offset):
@@ -145,6 +156,17 @@ def analyze(events: list[dict]) -> dict:
         ),
         "second_fallback_return_count": len(at(0xDA72C)),
         "second_fallback_null_count": sum(e.get("r0") == 0 for e in at(0xDA72C)),
+        "second_registry_root_null_count": sum(e.get("r5") == 0 for e in at(0xD8F14)),
+        "second_registry_no_handler_count": len(at(0xD8F44)),
+        "second_registry_handler_call_count": len(at(0xD8F40)),
+        "second_registry_handler_null_return_count": sum(
+            e.get("r0") == 0 for e in at(0xD8F42)
+        ),
+        "second_registry_sentinel_selected_count": sum(
+            e.get("r4") is not None and e.get("r6") is not None
+            and e.get("r4") == e.get("r6")
+            for e in at(0xD8F36)
+        ),
         "fallback_nonzero_r0_count": sum(e.get("r0", 0) != 0 for e in at(0xDA72C)),
         "interpretation": (
             "DA79A probes observe registers BEFORE mov r0,r4, not a function "
