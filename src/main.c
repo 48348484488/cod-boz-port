@@ -180,6 +180,26 @@ static boz_probe_t g_tree_probes[BOZ_MAX_MASS_PROBES] = {
     {0x000daef2u, 0, BOZ_PROBE_THUMB16, 0},
 };
 static unsigned g_tree_probe_count = 9u;
+static int g_defer_owner_second_enabled;
+
+/* One-shot probes armed only after the DB31C dispatch. This avoids
+ * consuming the fallback probes on the earlier successful invocation. */
+static bool is_deferred_owner_second_site(uint32_t off) {
+    switch (off) {
+    case 0x000da716u:
+    case 0x000da71au:
+    case 0x000da71cu:
+    case 0x000da71eu:
+    case 0x000da720u:
+    case 0x000da728u:
+    case 0x000da72cu:
+    case 0x000da72eu:
+    case 0x000da730u:
+        return true;
+    default:
+        return false;
+    }
+}
 
 static const char *probe_mode_name(uint8_t mode) {
     return mode == BOZ_PROBE_ARM32 ? "arm32" : "thumb16";
@@ -267,10 +287,15 @@ static void load_mass_probe_env(void) {
 
 static void arm_tree_probes(void) {
     load_mass_probe_env();
+    const char *defer = getenv("BOZ_DEFER_OWNER_SECOND");
+    g_defer_owner_second_enabled = defer && strcmp(defer, "1") == 0;
     unsigned armed = 0;
     for (unsigned i = 0; i < g_tree_probe_count; ++i) {
         boz_probe_t *p = &g_tree_probes[i];
         if (!probe_mode_allowed(p->off, p->mode)) {
+            continue;
+        }
+        if (g_defer_owner_second_enabled && is_deferred_owner_second_site(p->off)) {
             continue;
         }
         if (p->mode == BOZ_PROBE_THUMB16) {
@@ -475,6 +500,32 @@ static void crash_handler(int sig, siginfo_t *info, void *context) {
                     __builtin___clear_cache((char *)site, (char *)(site + 1));
                 }
                 p->armed = 0;
+                if (p->off == 0x000db31cu && g_defer_owner_second_enabled) {
+                    unsigned deferred_armed = 0;
+                    g_defer_owner_second_enabled = 0;
+                    for (unsigned j = 0; j < g_tree_probe_count; ++j) {
+                        boz_probe_t *q = &g_tree_probes[j];
+                        if (!is_deferred_owner_second_site(q->off) ||
+                            q->mode != BOZ_PROBE_THUMB16 || q->armed ||
+                            !probe_mode_allowed(q->off, q->mode)) {
+                            continue;
+                        }
+                        uint16_t *deferred_site =
+                            (uint16_t *)(uintptr_t)(g_loaded_base + q->off);
+                        q->saved = *deferred_site;
+                        *deferred_site = 0xbe00u;
+                        __builtin___clear_cache((char *)deferred_site,
+                                                (char *)(deferred_site + 1));
+                        q->armed = 1;
+                        ++deferred_armed;
+                    }
+                    fprintf(stderr,
+                            "[SECOND_OWNER_ARMED] count=%u r0=%08lx r2=%08lx r8=%08lx\n",
+                            deferred_armed,
+                            (unsigned long)uc->uc_mcontext.arm_r0,
+                            (unsigned long)uc->uc_mcontext.arm_r2,
+                            (unsigned long)uc->uc_mcontext.arm_r8);
+                }
                 /*
                  * Mass probes can stop at dozens of unrelated instructions.
                  * r4/r5 are not guaranteed to be valid pointers at every site,
