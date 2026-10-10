@@ -18,6 +18,15 @@ IO_EVENT = re.compile(
     r"\s+result=(\d+)\s+before=(-?\d+)\s+after=(-?\d+)"
     r"\s+(?:eof=(\d+)\s+)?error=(\d+)"
 )
+SELECTOR_STREAM = re.compile(
+    r"\[SELECTOR_STREAM\]\s+off=257bd4\s+buffer=([0-9a-fA-F]{8})"
+    r"\s+file=([0-9a-fA-F]{8})\s+global=([0-9a-fA-F]{8})"
+    r"\s+read_flag=([0-9a-fA-F]{8})"
+    r"\s+element_size=([0-9a-fA-F]{8})\s+count=([0-9a-fA-F]{8})"
+)
+OPEN_EVENT = re.compile(
+    r"\[S3E_FILE_(?:MEMORY_)?OPEN\]\s+.*?file=([0-9a-fA-F]{8})\b"
+)
 TARGETS = {
     0xDB2FA: "key_helper_before_blx",
     0xDB2FE: "key_helper_after_blx",
@@ -101,7 +110,38 @@ def summarize(raw: str) -> dict:
                 "error": int(error),
             })
 
+    open_attempts = [int(hit.group(1), 16) for hit in OPEN_EVENT.finditer(raw)]
+    stream_samples = [
+        {
+            "buffer": f"0x{int(buf, 16):08x}",
+            "file": f"0x{int(file_handle, 16):08x}",
+            "global": f"0x{int(global_ptr, 16):08x}",
+            "read_mode_flag": int(read_flag, 16),
+            "element_size": int(elem_size, 16),
+            "element_count": int(count, 16),
+        }
+        for buf, file_handle, global_ptr, read_flag, elem_size, count
+        in SELECTOR_STREAM.findall(raw)
+    ]
+    selector_stream = next(
+        (sample for sample in stream_samples if helper_dest is not None
+         and sample["buffer"] == f"0x{helper_dest:08x}"), None
+    )
+    matched_stream_io = (
+        next((item for item in stream_io
+              if selector_stream and item["file"] == selector_stream["file"]), None)
+    )
+
     return {
+        "file_open_attempt_count": len(open_attempts),
+        "file_open_success_count": sum(handle != 0 for handle in open_attempts),
+        "file_open_failed_count": sum(handle == 0 for handle in open_attempts),
+        "selector_stream_samples": stream_samples,
+        "matched_selector_stream": selector_stream,
+        "matching_stream_io": matched_stream_io,
+        "serializer_file_handle_is_null": (
+            selector_stream["file"] == "0x00000000" if selector_stream else None
+        ),
         "events": events,
         "observations": observations,
         "helper_destination": None if helper_dest is None else f"0x{helper_dest:08x}",
