@@ -343,6 +343,7 @@ EGLBoolean egl_backend_swap_buffers(EGLDisplay display, EGLSurface surface);
 void egl_backend_shutdown(void);
 void input_pump(void);
 void input_shutdown(void);
+void input_diagnostic_tap_step(int pressed);
 void audio_shutdown(void);
 int32_t audio_unit_backend_set_callbacks(void *capture_callback, void *render_callback);
 int32_t audio_unit_backend_start(void);
