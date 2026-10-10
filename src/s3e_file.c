@@ -482,7 +482,7 @@ static int file_rw_trace_enabled(void) {
 }
 
 uint32_t s3eFileRead(void *buffer, uint32_t elem_size, uint32_t count, void *file) {
-    int traced = file_rw_trace_enabled();
+    int traced = file_rw_trace_enabled() && elem_size == 4u && count == 1u;
     long start = traced && file ? ftell((FILE *)file) : -1;
     uint32_t result = file ? (uint32_t)fread(buffer, elem_size, count, (FILE *)file) : 0;
     if (traced) {
@@ -505,7 +505,7 @@ uint32_t s3eFileRead(void *buffer, uint32_t elem_size, uint32_t count, void *fil
 }
 
 uint32_t s3eFileWrite(const void *buffer, uint32_t elem_size, uint32_t count, void *file) {
-    int traced = file_rw_trace_enabled();
+    int traced = file_rw_trace_enabled() && elem_size == 4u && count == 1u;
     long start = traced && file ? ftell((FILE *)file) : -1;
     uint32_t result = file ? (uint32_t)fwrite(buffer, elem_size, count, (FILE *)file) : 0;
     if (traced) {
