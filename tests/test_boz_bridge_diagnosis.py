@@ -73,5 +73,21 @@ class TestCrashBridge(unittest.TestCase):
         self.assertEqual(result["post_mov_matches"], 1)
 
 
+    def test_verify_instruction_boundaries(self):
+        rows = [
+            (0xDA79A, "da79a: 4620  mov r0, r4"),
+            (0xDA79C, "da79c: b005  add sp, #20"),
+            (0xDA79E, "da79e: e8bd 8ff0  ldmia sp!, {..., pc}"),
+        ]
+        self.assertTrue(module.is_owner_after_mov_safe(rows))
+        self.assertFalse(module.is_owner_after_mov_safe([
+            (0xDA79A, "da79a: 4620  mov r0, r4"), (0xDA79E, "wrong boundary")
+        ]))
+        self.assertFalse(module.is_owner_after_mov_safe([
+            (0xDA79A, "da79a: 4620  mov r1, r4"), (0xDA79C, "next")
+        ]))
+
+
+
 if __name__ == "__main__":
     unittest.main()
