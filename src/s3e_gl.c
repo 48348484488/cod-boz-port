@@ -568,6 +568,14 @@ static EGLBoolean host_eglSwapBuffers(EGLDisplay display, EGLSurface surface) {
     ++swap_count;
     if (!first_swap_ms) first_swap_ms = monotonic_us() / 1000u;
     input_pump();
+    const char *auto_tap = getenv("BOZ_DIAGNOSTIC_AUTO_TAP");
+    if (auto_tap && strcmp(auto_tap, "1") == 0) {
+        if (swap_count == 5u) {
+            input_diagnostic_tap_step(1);
+        } else if (swap_count == 6u) {
+            input_diagnostic_tap_step(0);
+        }
+    }
     dispatch_due_timers();
     GLuint previous_framebuffer = g_bound_framebuffer;
     if (previous_framebuffer) {
