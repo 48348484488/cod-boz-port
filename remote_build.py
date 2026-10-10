@@ -553,12 +553,62 @@ def stage_public_reference_s3e(report: dict) -> pathlib.Path | None:
         return None
 
 
+
+def stage_public_loader_archive(image: pathlib.Path, report: dict) -> pathlib.Path | None:
+    """Stage verified loader DTRZ only with the public reference S3E.
+
+    The blob is retrieved at runtime, not checked into this repository.
+    Does not replace user-supplied local assets.
+    """
+    if not report.get("reference_s3e_unpacked_sha256"):
+        return None
+    if os.environ.get("BOZ_STAGE_REFERENCE_LOADER", "1") != "1":
+        return None
+    path = image.parent.parent / "assets" / "blackops_loader.dz"
+    expected = "41f00e3418ca2833e2bc5cb936c7600083b7c757500e0646912d92fda899a597"
+    if path.exists():
+        actual = hashlib.sha256(path.read_bytes()).hexdigest()
+        report["loader_archive_sha256"] = actual
+        if actual == expected:
+            report["loader_archive_path"] = str(path)
+        else:
+            report["loader_archive_warning"] = "existing archive SHA differs; untouched"
+        return path if actual == expected else None
+
+    url = os.environ.get(
+        "BOZ_REFERENCE_LOADER_URL",
+        "https://raw.githubusercontent.com/eugene373/COD-BOZ-Partially-Decompiled/master/app/src/main/assets/blackops_loader.dz",
+    )
+    try:
+        print("[RUNNER] fetching verified public loader DTRZ", flush=True)
+        with urllib.request.urlopen(url, timeout=60) as response:
+            payload = response.read(MAX_UPLOAD_BYTES + 1)
+        actual = hashlib.sha256(payload).hexdigest()
+        report["loader_archive_sha256"] = actual
+        report["loader_archive_size"] = len(payload)
+        if (len(payload) != 5289707 or actual != expected or
+                payload[:4] != b"DTRZ"):
+            print("[RUNNER] loader DTRZ rejected: unexpected size, digest or header", flush=True)
+            return None
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(payload)
+        report["loader_archive_path"] = str(path)
+        print("[RUNNER] staged verified loader DTRZ with console.bin", flush=True)
+        return path
+    except Exception as exc:
+        report["loader_archive_error"] = repr(exc)
+        print(f"[RUNNER] loader DTRZ staging failed: {exc!r}", flush=True)
+        return None
+
+
 def run_boz_diagnostic(report: dict) -> int:
     trace = pathlib.Path("/tmp/boz_gl_upload_trace.log")
     trace.unlink(missing_ok=True)
     image = discover_game_image()
     if not image and os.environ.get("BOZ_FETCH_REFERENCE_S3E", "1") == "1":
         image = stage_public_reference_s3e(report)
+    if image:
+        stage_public_loader_archive(image, report)
     report["game_image"] = str(image) if image else None
     report["game_image_size"] = image.stat().st_size if image else None
     report["gl_upload_trace"] = str(trace)
