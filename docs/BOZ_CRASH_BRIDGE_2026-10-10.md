@@ -48,3 +48,39 @@ specific caller trace.
 4. Re-test the game. This diagnostic change is not yet a crash fix.
 
 No copyrighted BOZ resources are stored in the public repository.
+
+## Subsequent confirmed factory path (2026-10-10)
+
+Live QEMU/Render probes proved that the first fallback pointer survives
+DA79A MOV: before the instruction, r4=0x40B34B50 and r0=0;
+at DA79C, *after* MOV, r0=0x40B34B50. The apparent null owner
+return was an instrumentation interpretation error, now fixed.
+
+The next call at DB31C entered the DA6AC path with r2=0.
+At DA70A, r2 was still 0. D94E4 (the primary factory) returned zero
+and the caller later crashed at DB31E.
+
+The following instructions prove the primary factory's null-argument
+short-circuit, for this observed binary/version only:
+
+| Address | Thumb instruction | Effect |
+| --- | --- | --- |
+| D94EE | mov r4,r2 | Preserve argument r2 |
+| D94F2 | cmp r2,#0 | Test argument for null |
+| D94F4 | beq 0xD95BC | Jump directly to return on null |
+| D95BC | mov r0,r4 | Place null into return register |
+| D95BE | ldmia.w sp!,{...,pc} | Return to caller |
+
+C++-style **partial** behavioral reconstruction, with no claim of
+recovering source variable names or entire function:
+
+    if (arg_r2 == nullptr) return nullptr;
+
+The remaining unknown is why the caller provides a null r2 for the
+second invocation. The immediate null factory result is by design;
+the crash occurs when subsequent code assumes the return is non-null.
+
+Current investigation inspects the Thumb instructions around DB31C
+and preserves their disassembly as a separate artifact. Do not patch
+the factory to invent a non-null object without identifying the
+required argument and initialization path.
