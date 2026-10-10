@@ -3215,6 +3215,7 @@ def run_boz_diagnostic(report: dict) -> int:
                                                                                             elif stripped.startswith((
                                                                                                 "[S3E_FILE_RW]",
                                                                                                 "[S3E_FILE_OPEN]",
+                                                                                                "[S3E_FILE_EXISTS]",
                                                                                                 "[S3E_FILE_MEMORY_OPEN]",
                                                                                             )):
                                                                                                 bridge_events.append({
