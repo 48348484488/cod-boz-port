@@ -128,5 +128,22 @@ class TestCrashBridge(unittest.TestCase):
 
 
 
+    def test_deferred_second_fallback_null_is_distinct(self):
+        log = "\n".join([
+            "[TREE_PROBE] off=0da71c r3=7c955bf1 r8=40b35010",
+            "[TREE_PROBE] off=0da728 r0=4065d090 r8=40b35010",
+            "[TREE_PROBE] off=0da72c r0=00000000 r8=40b35010",
+            "[TREE_PROBE] off=0da730 r0=00000000 r8=40b35010",
+            "[TREE_PROBE] off=0da702 r0=00000000 r3=00000000 r8=40b35010",
+        ])
+        result = module.analyze(module.parse_trace(log))
+        self.assertEqual(result["second_selector_probe_count"], 1)
+        self.assertEqual(result["second_selector_unequal_count"], 1)
+        self.assertEqual(result["second_selector_equal_count"], 0)
+        self.assertEqual(result["second_fallback_return_count"], 1)
+        self.assertEqual(result["second_fallback_null_count"], 1)
+
+
+
 if __name__ == "__main__":
     unittest.main()
