@@ -21,6 +21,7 @@ import threading
 from tools.boz_bridge_diagnosis import (
     analyze as analyze_crash_bridge_events,
     is_owner_after_mov_safe,
+    verify_primary_factory_null_path,
 )
 
 ROOT = pathlib.Path(__file__).resolve().parent
@@ -1102,12 +1103,20 @@ def run_boz_diagnostic(report: dict) -> int:
                                         if 0xD94E4 <= off < 0xD9720
                                     ]
                                     if primary_window:
+                                        primary_null_path = verify_primary_factory_null_path(parsed_disasm)
+                                        report["boz_primary_factory_null_path"] = primary_null_path
+                                        print(
+                                            "[PRIMARY_FACTORY] null_r2_shortcircuit_verified="
+                                            + str(primary_null_path["r2_zero_short_circuit_verified"]).lower(),
+                                            flush=True,
+                                        )
                                         primary_path = PUBLIC / "boz-primary-factory-disasm.json"
                                         primary_path.write_text(
                                             json.dumps({
                                                 "entry": "0xd94e4",
                                                 "window_end_exclusive": "0xd9720",
                                                 "instructions": primary_window,
+                                                "null_path_verification": primary_null_path,
                                             }, indent=2) + "\n",
                                             encoding="utf-8",
                                         )
