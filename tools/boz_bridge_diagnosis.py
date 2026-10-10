@@ -25,6 +25,20 @@ SITES = {
 }
 
 
+
+def is_owner_after_mov_safe(disassembly_rows: list[tuple[int, str]]) -> bool:
+    """Accept DA79C only if the preceding DA79A instruction is MOV r0,r4."""
+    for index, (off, instruction) in enumerate(disassembly_rows):
+        if off != 0xDA79A:
+            continue
+        return (
+            index + 1 < len(disassembly_rows)
+            and disassembly_rows[index + 1][0] == 0xDA79C
+            and re.search(r"\bmov(?:\.n)?\s+r0,\s*r4\b", instruction.lower()) is not None
+        )
+    return False
+
+
 def parse_trace(text: str) -> list[dict]:
     events = []
     for line_number, line in enumerate(text.splitlines(), 1):
