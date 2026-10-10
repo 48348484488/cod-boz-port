@@ -84,3 +84,31 @@ Current investigation inspects the Thumb instructions around DB31C
 and preserves their disassembly as a separate artifact. Do not patch
 the factory to invent a non-null object without identifying the
 required argument and initialization path.
+
+
+## Deferred probes: second invocation conclusively isolated
+
+2026-10-10 Render deployment dep-db529it9fdbs73bbvntg used
+BOZ_DEFER_OWNER_SECOND=1, arming 9 Thumb probes when hitting the
+0xDB31C dispatch breakpoint. The ARMHF loader built successfully,
+14 Python diagnosis regression tests passed and the QEMU run
+reproduced the crash at 0xDB31E (RC 139).
+
+The *second* owner invocation (rather than an earlier first-shot
+observation) hit:
+- 0xDA71C: r8=0x40B34AC0, r3=0x7C955BF1 -> NOT equal.
+- 0xDA728: fallback call with r2=0x40B34AC0.
+- 0xDA72C: **fallback returned r0=0**.
+- 0xDA72E/0xDA730: zero result detected, taken branch back to
+  0xDA702 according to confirmed disassembly.
+- 0xD94E4: primary factory called with r2=0.
+- 0xD95BE: primary factory returned r0=0 as specified by the
+  0xD94F2 null short-circuit.
+- 0xDB31E: caller dereferenced null; exit status 139.
+
+The exact fallback rejection reason inside BOZ+0xD8F0E is
+NOT YET KNOWN. The factory might reject the provided selector,
+a missing resource, or an unsupported host service; do not
+assign a cause without probing. The next investigation targets
+D8F0E and its return paths on the **second** invocation. No
+memory patch or non-null fabricated object was introduced.
