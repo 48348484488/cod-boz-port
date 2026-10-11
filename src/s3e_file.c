@@ -8,6 +8,72 @@ static void make_path(char *out, size_t out_size, const char *name) {
     }
 }
 
+/* Read-only instrumentation: prove the original game actually consumes
+ * frontend group bytes, rather than merely opening the DTRZ entry. */
+enum { BOZ_RESOURCE_WATCH_SLOTS = 12 };
+struct boz_resource_watch {
+    FILE *file;
+    char name[100];
+    uint64_t bytes_read;
+    unsigned calls;
+    unsigned seeks;
+    unsigned errors;
+    long max_position;
+};
+static struct boz_resource_watch g_resource_watch[BOZ_RESOURCE_WATCH_SLOTS];
+
+static int boz_resource_watch_enabled(void) {
+    const char *enabled = getenv("BOZ_RESOURCE_CONSUMPTION_TRACE");
+    return enabled && strcmp(enabled, "1") == 0;
+}
+
+static struct boz_resource_watch *boz_resource_watch_find(FILE *file) {
+    if (!file) return NULL;
+    for (unsigned i = 0; i < BOZ_RESOURCE_WATCH_SLOTS; ++i) {
+        if (g_resource_watch[i].file == file) return &g_resource_watch[i];
+    }
+    return NULL;
+}
+
+static void boz_resource_watch_note(FILE *file) {
+    struct boz_resource_watch *w = boz_resource_watch_find(file);
+    if (!w) return;
+    long pos = ftell(file);
+    if (pos > w->max_position) w->max_position = pos;
+}
+
+static void boz_resource_watch_open(FILE *file, const char *name) {
+    if (!boz_resource_watch_enabled() || !file || !name) return;
+    if (!strstr(name, ".group.bin")) return;
+    for (unsigned i = 0; i < BOZ_RESOURCE_WATCH_SLOTS; ++i) {
+        struct boz_resource_watch *w = &g_resource_watch[i];
+        if (w->file) continue;
+        memset(w, 0, sizeof(*w));
+        w->file = file;
+        snprintf(w->name, sizeof(w->name), "%s", name);
+        long start = ftell(file);
+        long size = -1;
+        if (start >= 0 && fseek(file, 0, SEEK_END) == 0) {
+            size = ftell(file);
+            (void)fseek(file, start, SEEK_SET);
+        }
+        fprintf(stderr, "[BOZ_RESOURCE_OPEN] file=%08lx name=%s bytes=%ld\n",
+                (unsigned long)(uintptr_t)file, w->name, size);
+        return;
+    }
+}
+
+static void boz_resource_watch_close(FILE *file) {
+    struct boz_resource_watch *w = boz_resource_watch_find(file);
+    if (!w) return;
+    boz_resource_watch_note(file);
+    fprintf(stderr, "[BOZ_RESOURCE_CLOSE] name=%s reads=%u bytes_read=%llu "
+            "seeks=%u errors=%u max_position=%ld eof=%d\n",
+            w->name, w->calls, (unsigned long long)w->bytes_read,
+            w->seeks, w->errors, w->max_position, feof(file));
+    memset(w, 0, sizeof(*w));
+}
+
 static int path_exists(const char *path) {
     return access(path, F_OK) == 0;
 }
@@ -462,6 +528,7 @@ void *s3eFileOpen(const char *name, const char *mode) {
     if (!file && is_read_mode(safe_mode) && strcmp(base_name(safe_name), "console.bin") == 0) {
         file = fopen("/dev/null", "rb");
     }
+    boz_resource_watch_open(file, safe_name);
     const char *rw_trace = getenv("BOZ_FILE_RW_TRACE");
     if (rw_trace && strcmp(rw_trace, "1") == 0) {
         fprintf(stderr,
@@ -476,6 +543,7 @@ int32_t s3eFileClose(void *file) {
     if (!file) {
         return -1;
     }
+    boz_resource_watch_close((FILE *)file);
     if (close_memory_file((FILE *)file)) {
         return 0;
     }
@@ -497,6 +565,13 @@ uint32_t s3eFileRead(void *buffer, uint32_t elem_size, uint32_t count, void *fil
     int traced = file_rw_trace_enabled() && elem_size == 4u && count == 1u;
     long start = traced && file ? ftell((FILE *)file) : -1;
     uint32_t result = file ? (uint32_t)fread(buffer, elem_size, count, (FILE *)file) : 0;
+    struct boz_resource_watch *watched = boz_resource_watch_find((FILE *)file);
+    if (watched) {
+        ++watched->calls;
+        watched->bytes_read += (uint64_t)result * elem_size;
+        if (result < count && ferror((FILE *)file)) ++watched->errors;
+        boz_resource_watch_note((FILE *)file);
+    }
     if (traced) {
         unsigned word = 0;
         if (result && elem_size == 4u && buffer) {
@@ -535,7 +610,15 @@ uint32_t s3eFileWrite(const void *buffer, uint32_t elem_size, uint32_t count, vo
 }
 
 int32_t s3eFileGetChar(void *file) {
-    return file ? fgetc((FILE *)file) : -1;
+    int32_t ch = file ? fgetc((FILE *)file) : -1;
+    struct boz_resource_watch *watched = boz_resource_watch_find((FILE *)file);
+    if (watched) {
+        ++watched->calls;
+        if (ch != -1) ++watched->bytes_read;
+        else if (ferror((FILE *)file)) ++watched->errors;
+        boz_resource_watch_note((FILE *)file);
+    }
+    return ch;
 }
 
 int32_t s3eFilePutChar(int32_t c, void *file) {
@@ -547,7 +630,14 @@ int32_t s3eFileFlush(void *file) {
 }
 
 int32_t s3eFileSeek(void *file, int32_t offset, int32_t origin) {
-    return file ? fseek((FILE *)file, offset, origin) : -1;
+    int32_t rc = file ? fseek((FILE *)file, offset, origin) : -1;
+    struct boz_resource_watch *watched = boz_resource_watch_find((FILE *)file);
+    if (watched) {
+        ++watched->seeks;
+        if (rc != 0) ++watched->errors;
+        boz_resource_watch_note((FILE *)file);
+    }
+    return rc;
 }
 
 int32_t s3eFileTell(void *file) {
