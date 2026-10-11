@@ -33,6 +33,14 @@ def color_counts(frame: dict) -> tuple[tuple[str, int], ...]:
     ))
 
 
+def parse_draw_census(line: str) -> dict[str, int]:
+    """Return integer-only counters from a BOZ_GL_DRAW_CENSUS diagnostic."""
+    if not line.startswith("[BOZ_GL_DRAW_CENSUS] "):
+        return {}
+    return {name: int(value) for name, value in
+            re.findall(r"\\b([a-z_0-9]+)=(\\d+)\\b", line)}
+
+
 def summarize(report: dict) -> dict:
     runtime = report.get("fast_property") or {}
     resource_lines = report.get("fast_resource_consumption") or []
@@ -48,6 +56,9 @@ def summarize(report: dict) -> dict:
     texture = report.get("fast_texture_evidence") or {}
     texture_draws = texture.get("draws") or []
     sampled_dimensions = [draw_dimensions(line) for line in texture_draws]
+    census_lines = (texture.get("draw_census") or [])[-16:]
+    census = [parse_draw_census(line) for line in census_lines]
+    census = [item for item in census if item]
     images = runtime.get("captured_pngs") or []
     frames = []
     for img in images:
@@ -89,6 +100,9 @@ def summarize(report: dict) -> dict:
             if 100 in frame_lookup and 140 in frame_lookup else None
         ),
         "sampled_draws_total": len(texture_draws),
+        "per_frame_draw_census": census,
+        "last_draw_census": census[-1] if census else None,
+        "unit0_binding_transitions": (texture.get("unit0_binds") or [])[-24:],
         "sampled_draws_with_2x2_texture": sum(
             size == (2, 2) for size in sampled_dimensions
         ),
@@ -124,7 +138,8 @@ def main() -> int:
         f"[BOZ_CI_SUMMARY] run={summary['provenance']['run_id']} "
         f"frames={len(summary['frame_hashes'])} "
         f"frontend_closed={summary['frontend_close'] is not None} "
-        f"tap_events={len(summary['late_tap_events'])}",
+        f"tap_events={len(summary['late_tap_events'])} "
+        f"census_samples={len(summary['per_frame_draw_census'])}",
         flush=True,
     )
     return 0
