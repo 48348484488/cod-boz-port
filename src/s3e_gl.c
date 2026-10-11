@@ -90,12 +90,22 @@ struct boz_tex_meta {
     unsigned long long sample_hash;
     unsigned char first_rgba[16];
     unsigned first_bytes;
+    unsigned compressed;
 };
 static GLuint g_boz_tex_bound[BOZ_TEX_UNITS];
 static GLenum g_boz_tex_active = 0x84c0u; /* GL_TEXTURE0 */
 static struct boz_tex_meta g_boz_tex_meta[BOZ_TEX_SLOTS];
 static unsigned g_boz_tex_meta_count;
 static unsigned g_boz_tex_uploads;
+static unsigned g_boz_tex_size_2x2;
+static unsigned g_boz_tex_size_large;
+static unsigned g_boz_tex_size_other;
+static unsigned g_boz_tex_sub_uploads;
+static unsigned g_boz_tex_compressed_uploads;
+static unsigned g_boz_tex_compressed_unresolved;
+static GLsizei g_boz_tex_max_width;
+static GLsizei g_boz_tex_max_height;
+static unsigned g_boz_tex_large_printed;
 
 static bool boz_texture_diag_enabled(void) {
     const char *flag = getenv("BOZ_GL_TEX_PROVENANCE");
@@ -226,11 +236,12 @@ static S3E_SOFTFP void host_glDrawElements(GLenum mode, GLsizei count, GLenum ty
             struct boz_tex_meta *meta = boz_find_tex(sampler_texture, false);
             fprintf(stderr,
                     "[BOZ_GL_TEXTURE_DRAW] seq=%u sampler0_tex=%u active=%04x "
-                    "active_bound=%d upload_count=%u image=%dx%d hash64=%016llx "
+                    "active_bound=%d upload_count=%u image=%dx%d compressed=%u hash64=%016llx "
                     "first=%02x%02x%02x%02x\n",
                     g_boz_gl_draw_elements_count, sampler_texture,
                     (unsigned)active_texture, active_bound, meta ? meta->uploads : 0u,
                     meta ? (int)meta->width : 0, meta ? (int)meta->height : 0,
+                    meta ? meta->compressed : 0u,
                     meta ? meta->sample_hash : 0ULL,
                     meta ? meta->first_rgba[0] : 0u,
                     meta ? meta->first_rgba[1] : 0u,
@@ -606,7 +617,14 @@ static void boz_track_tex_upload(GLenum target, GLint level, GLsizei width,
     if (!meta) return;
     ++meta->uploads;
     ++g_boz_tex_uploads;
+    if (width == 2 && height == 2) ++g_boz_tex_size_2x2;
+    else if (width > 2 || height > 2) ++g_boz_tex_size_large;
+    else ++g_boz_tex_size_other;
+    if (sub_image) ++g_boz_tex_sub_uploads;
+    if (width > g_boz_tex_max_width) g_boz_tex_max_width = width;
+    if (height > g_boz_tex_max_height) g_boz_tex_max_height = height;
     if (!sub_image) {
+        meta->compressed = 0;
         meta->width = width;
         meta->height = height;
     }
@@ -621,12 +639,76 @@ static void boz_track_tex_upload(GLenum target, GLint level, GLsizei width,
         meta->first_bytes = (unsigned)(available < 16 ? available : 16);
         memcpy(meta->first_rgba, pixels, meta->first_bytes);
     }
-    if (g_boz_tex_uploads <= 36u)
+    if (g_boz_tex_uploads <= 36u ||
+        ((width > 2 || height > 2) && g_boz_tex_large_printed++ < 20u))
         fprintf(stderr,
                 "[BOZ_GL_TEXTURE_UPLOAD] n=%u tex=%u sub=%d size=%dx%d "
                 "fmt=%04x type=%04x hash64=%016llx\n",
                 g_boz_tex_uploads, texture, (int)sub_image, (int)width, (int)height,
                 format, type, meta->sample_hash);
+}
+
+/* Compressed GLES uploads are separate entry points from glTexImage2D.
+ * Record only metadata, preserve the original driver invocation, and never
+ * materialize or store compressed texture payloads. */
+static S3E_SOFTFP void host_glCompressedTexImage2D(
+    GLenum target, GLint level, GLenum internalformat, GLsizei width,
+    GLsizei height, GLint border, GLsizei imageSize, const void *data) {
+    void (*real)(GLenum, GLint, GLenum, GLsizei, GLsizei, GLint, GLsizei, const void *) =
+        lookup_gl("glCompressedTexImage2D");
+    if (boz_texture_diag_enabled()) {
+        ++g_boz_tex_compressed_uploads;
+        if (!real) ++g_boz_tex_compressed_unresolved;
+        GLuint tex = 0;
+        if (target == 0x0de1u && level == 0 && g_boz_tex_active >= 0x84c0u &&
+            g_boz_tex_active < 0x84c0u + BOZ_TEX_UNITS) {
+            tex = g_boz_tex_bound[g_boz_tex_active - 0x84c0u];
+            struct boz_tex_meta *meta = boz_find_tex(tex, true);
+            if (meta) {
+                ++meta->uploads;
+                meta->compressed = 1;
+                meta->width = width;
+                meta->height = height;
+                meta->first_bytes = 0;
+                meta->sample_hash = data && imageSize > 0 ?
+                    trace_gl_hash64(data, (size_t)imageSize < 512u ? (size_t)imageSize : 512u) : 0;
+            }
+        }
+        if (g_boz_tex_compressed_uploads <= 24u) {
+            fprintf(stderr,
+                    "[BOZ_GL_COMPRESSED_UPLOAD] n=%u tex=%u format=%04x level=%d "
+                    "size=%dx%d image_bytes=%d resolved=%d\n",
+                    g_boz_tex_compressed_uploads, tex, internalformat, level,
+                    width, height, imageSize, real != NULL);
+        }
+    }
+    if (real) real(target, level, internalformat, width, height, border, imageSize, data);
+}
+
+static S3E_SOFTFP void host_glCompressedTexSubImage2D(
+    GLenum target, GLint level, GLint xoffset, GLint yoffset,
+    GLsizei width, GLsizei height, GLenum format, GLsizei imageSize, const void *data) {
+    void (*real)(GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLsizei, const void *) =
+        lookup_gl("glCompressedTexSubImage2D");
+    if (boz_texture_diag_enabled()) {
+        ++g_boz_tex_compressed_uploads;
+        if (!real) ++g_boz_tex_compressed_unresolved;
+        GLuint tex = 0;
+        if (target == 0x0de1u && level == 0 && g_boz_tex_active >= 0x84c0u &&
+            g_boz_tex_active < 0x84c0u + BOZ_TEX_UNITS) {
+            tex = g_boz_tex_bound[g_boz_tex_active - 0x84c0u];
+            struct boz_tex_meta *meta = boz_find_tex(tex, true);
+            if (meta) ++meta->uploads;
+        }
+        if (g_boz_tex_compressed_uploads <= 24u) {
+            fprintf(stderr,
+                    "[BOZ_GL_COMPRESSED_SUBUPLOAD] n=%u tex=%u fmt=%04x level=%d "
+                    "xy=%d,%d size=%dx%d image_bytes=%d resolved=%d\n",
+                    g_boz_tex_compressed_uploads, tex, format, level, xoffset, yoffset,
+                    width, height, imageSize, real != NULL);
+        }
+    }
+    if (real) real(target, level, xoffset, yoffset, width, height, format, imageSize, data);
 }
 
 static S3E_SOFTFP void host_glTexImage2D(GLenum target, GLint level, GLint internal_format,
@@ -906,6 +988,19 @@ static EGLBoolean host_eglSwapBuffers(EGLDisplay display, EGLSurface surface) {
                 g_boz_gl_clear_count, g_boz_gl_draw_arrays_count,
                 g_boz_gl_draw_elements_count, g_boz_gl_draw_tex_count);
     }
+    if (boz_texture_diag_enabled() &&
+        (swap_count == 5u || swap_count == 60u || swap_count == 100u ||
+         swap_count == 150u || swap_count == 200u)) {
+        fprintf(stderr,
+                "[BOZ_GL_TEX_SIZE_TOTAL] swap=%u uploads=%u two_by_two=%u "
+                "larger=%u other=%u subuploads=%u compressed=%u compressed_unresolved=%u "
+                "max_size=%dx%d known_textures=%u\n",
+                swap_count, g_boz_tex_uploads, g_boz_tex_size_2x2,
+                g_boz_tex_size_large, g_boz_tex_size_other,
+                g_boz_tex_sub_uploads, g_boz_tex_compressed_uploads,
+                g_boz_tex_compressed_unresolved, g_boz_tex_max_width,
+                g_boz_tex_max_height, g_boz_tex_meta_count);
+    }
     pace_frame();
     return result;
 }
@@ -1086,6 +1181,8 @@ static const struct host_symbol WRAPPED_SYMBOLS[] = {
     WRAPPED(glClearDepthf),
     WRAPPED(glClearDepthfOES),
     WRAPPED(glColor4f),
+    WRAPPED(glCompressedTexImage2D),
+    WRAPPED(glCompressedTexSubImage2D),
     WRAPPED(glCopyTexImage2D),
     WRAPPED(glCopyTexSubImage2D),
     WRAPPED(glCreateProgram),
