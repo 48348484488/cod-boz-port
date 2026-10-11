@@ -1094,6 +1094,76 @@ def run_boz_diagnostic(report: dict) -> int:
         # Stream the process output to disk so a timeout cannot discard the
         # critical pre-fault register trace. Kill the entire Xvfb/QEMU process
         # group when the time budget is exhausted.
+        # Opt-in host-side sampling of the real qemu-arm process. /proc reads
+        # don't instrument guest instructions and therefore avoid changing the
+        # execution path we need to diagnose.
+        host_profile_samples = []
+        host_profile_stop = threading.Event()
+        host_profile_thread = None
+
+        def sample_qemu_host_cpu():
+            ticks = os.sysconf("SC_CLK_TCK")
+            last_cpu = None
+            last_at = None
+            target_pid = None
+            started_at = time.monotonic()
+            while not host_profile_stop.is_set():
+                try:
+                    if target_pid is None or not pathlib.Path(
+                            f"/proc/{target_pid}/stat").exists():
+                        target_pid = None
+                        for candidate in pathlib.Path("/proc").iterdir():
+                            if not candidate.name.isdigit():
+                                continue
+                            try:
+                                argv = (candidate / "cmdline").read_bytes().split(b"\\0")
+                            except (OSError, PermissionError):
+                                continue
+                            if (any(b"qemu-arm" in arg for arg in argv[:1])
+                                    and any(b"codboz_s3e_loader" in arg for arg in argv)):
+                                target_pid = int(candidate.name)
+                                last_cpu = None
+                                last_at = None
+                                break
+                    if target_pid is not None:
+                        proc_dir = pathlib.Path(f"/proc/{target_pid}")
+                        raw = (proc_dir / "stat").read_text()
+                        fields = raw[raw.rfind(") ")+2:].split()
+                        cpu_seconds = (int(fields[11]) + int(fields[12])) / ticks
+                        now = time.monotonic()
+                        wall_delta = (now - last_at) if last_at is not None else 0
+                        cpu_cores = round(
+                            (cpu_seconds - last_cpu) / wall_delta, 3
+                        ) if last_cpu is not None and wall_delta > 0 else None
+                        try:
+                            wait_reason = (proc_dir / "wchan").read_text().strip()
+                        except OSError:
+                            wait_reason = "unavailable"
+                        host_profile_samples.append({
+                            "elapsed_s": round(now-started_at, 1),
+                            "pid": target_pid,
+                            "state": fields[0],
+                            "cpu_s": round(cpu_seconds, 2),
+                            "cpu_cores": cpu_cores,
+                            "threads": int(fields[17]),
+                            "rss_mib": round(int(fields[21]) *
+                                             os.sysconf("SC_PAGE_SIZE") /
+                                             1048576, 1),
+                            "wchan": wait_reason[:60],
+                        })
+                        last_cpu = cpu_seconds
+                        last_at = now
+                except (OSError, ValueError, IndexError):
+                    # A process may exit while we sample its procfs entries.
+                    target_pid = None
+                host_profile_stop.wait(4)
+
+        if os.environ.get("BOZ_QEMU_HOST_PROFILING", "0") == "1":
+            host_profile_thread = threading.Thread(
+                target=sample_qemu_host_cpu, daemon=True)
+            host_profile_thread.start()
+            print("[FAST_QEMU_HOST_PROFILE] enabled interval_s=4", flush=True)
+
         fast_trace = PUBLIC / "boz-fast-property.log"
         timed_out = False
         with fast_trace.open("w", encoding="utf-8") as trial_log:
@@ -1112,6 +1182,29 @@ def run_boz_diagnostic(report: dict) -> int:
                 proc.wait()
                 trial_rc = 124
                 print("[FAST_PROPERTY] QEMU timed out; partial trace preserved", flush=True)
+        if host_profile_thread is not None:
+            host_profile_stop.set()
+            host_profile_thread.join(timeout=5)
+            core_samples = [
+                item["cpu_cores"] for item in host_profile_samples
+                if item["cpu_cores"] is not None
+            ]
+            host_profile_report = {
+                "samples": len(host_profile_samples),
+                "mean_cpu_cores": (
+                    round(sum(core_samples)/len(core_samples), 3)
+                    if core_samples else None
+                ),
+                "min_cpu_cores": min(core_samples) if core_samples else None,
+                "max_cpu_cores": max(core_samples) if core_samples else None,
+                "first": host_profile_samples[:3],
+                "last": host_profile_samples[-12:],
+                "observed_states": sorted(set(
+                    item["state"] for item in host_profile_samples
+                )),
+            }
+            print("[FAST_QEMU_HOST_PROFILE] " +
+                  json.dumps(host_profile_report), flush=True)
         trial_out = fast_trace.read_text(encoding="utf-8", errors="replace")
         trial_lines = trial_out.replace("\\n", "\n").splitlines()
         frame_outputs = []
