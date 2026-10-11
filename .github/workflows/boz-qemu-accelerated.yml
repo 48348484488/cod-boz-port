@@ -113,6 +113,18 @@ jobs:
               print("::error::No verified frame after the late frontend tap")
               sys.exit(1)
           print("Actual late S3E pointer events:", *taps, sep="\\n")
+          import os
+          frames_by_swap = {
+              int(os.path.basename(item["file"]).split("-")[-1].split(".")[0]): item
+              for item in frames
+          }
+          for index in (100, 125, 130, 140, 150):
+              image = frames_by_swap.get(index)
+              print(f"BOZ_FRAME_CHECK swap={index} sha256={image['sha256'] if image else 'missing'} "
+                    f"colors={image['distinct_rgb_colors'] if image else 'missing'}")
+          if 100 in frames_by_swap and 140 in frames_by_swap:
+              print("BOZ_POST_TAP_FRAME_CHANGED=" +
+                    str(frames_by_swap[100]["sha256"] != frames_by_swap[140]["sha256"]).lower())
           texture_report = report.get("fast_texture_evidence") or {}
           snapshots = texture_report.get("size_totals") or []
           if not snapshots:
