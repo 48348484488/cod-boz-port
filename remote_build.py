@@ -1338,6 +1338,21 @@ def run_boz_diagnostic(report: dict) -> int:
             "failed": sum("status=failed" in ln for ln in zlib_events),
             "events": zlib_events[:32],
         }), flush=True)
+        texture_events = [
+            line for line in trial_lines if line.startswith((
+                "[BOZ_GL_TEXTURE_DRAW]", "[BOZ_GL_TEXTURE_UPLOAD]",
+                "[BOZ_GL_TEXTURE_BIND]"))
+        ]
+        report["fast_texture_evidence"] = {
+            "draws": [ln for ln in texture_events
+                      if ln.startswith("[BOZ_GL_TEXTURE_DRAW]")][:12],
+            "uploads": [ln for ln in texture_events
+                        if ln.startswith("[BOZ_GL_TEXTURE_UPLOAD]")][:36],
+            "recent_binds": [ln for ln in texture_events
+                             if ln.startswith("[BOZ_GL_TEXTURE_BIND]")][-24:],
+        }
+        print("[FAST_TEXTURE_SUMMARY] " +
+              json.dumps(report["fast_texture_evidence"]), flush=True)
         print("[FAST_TRACE_SUMMARY] " + json.dumps({
             "lines": len(trial_lines),
             "bytes": len(trial_out.encode("utf-8", errors="replace")),
@@ -1364,6 +1379,8 @@ def run_boz_diagnostic(report: dict) -> int:
                 "[BOZ_GL_PROGRAM_CREATE]", "[BOZ_GL_PROGRAM_LINK]",
                 "[BOZ_GL_PROGRAM_LOG]", "[BOZ_GL_PROGRAM_USE]",
                 "[BOZ_PNG_PATCH]", "[BOZ_ZLIB_DECOMP]",
+                "[BOZ_GL_TEXTURE_DRAW]", "[BOZ_GL_TEXTURE_UPLOAD]",
+                "[BOZ_GL_TEXTURE_BIND]",
                 "[BOZ_NULL_PROPERTY_ORIGIN]", "signal 11 ", "stack:",
                 "[S3E_FILE_EXISTS]",
             )) and not line.startswith("[S3E_FILE_EXISTS]"):
