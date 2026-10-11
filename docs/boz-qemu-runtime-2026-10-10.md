@@ -38,3 +38,55 @@ Repository: `48348484488/cod-boz-port`. Do not modify the upstream `Producdevity
 - `4687486`, `ec23436`, `5685f19`: actual framebuffer captures and PNG/palette evidence.
 - `039599a`, `e208376`, `ef8b5d9`: GL geometry draw counters and longer frame capture milestones.
 - `2d2f089`: isolated A/B auto tap experiment (pending runtime validation at the time of this note).
+
+## 2026-10-10 follow-up: original CDN and boot resource restoration
+
+Evidence source: Render service `srv-daqv1a0473hc73978pv0`; logs at approximately
+2026-10-11T00:34Z through 00:43Z.
+
+1. **Input experiment (commit `2d2f089`)**: one S3E pointer-button callback
+   did receive synthetic press at (320,240) on frame 5 and release on frame 6;
+   no touch callback was registered; the background remained blank through at
+   least 30 swaps. In this test all three geometry draw counters stayed zero.
+2. **Resource resolution (commit `bf51957`)**: observed missing existence
+   checks for `data-gles1/splash/splash.group.bin`,
+   `data-gles1/fixed/fixed.group.bin`, and
+   `data-gles1/frontend/frontend.group.bin`. The loader bundle contained
+   `console.bin`, `bootstrap.group.bin`, and `style.group.bin` and opened
+   them successfully. Only one ordinary file-open failed: `__ng__.dat` on
+   initial read; it was then created, so that failure is not the frontend cause.
+3. **Checked original CDN**: the verified S3E advertises
+   `http://cdn-boz-android.callofduty.com/PROD/CODBOZ/1_0_9`.
+   HEAD returned 200: `blackops_gles1.dz` length **337,594,086**;
+   `blackops_etc.dz` length **487,603,915**.
+   The public `blackops_loader.dz` contained 12 index entries, and
+   **does not** contain splash/fixed/frontend group files.
+4. **Partial exact-byte recovery (commit `e5ae89c`)**: HTTP 206 Range
+   reads of the original `blackops_gles1.dz` DTRZ index (189 entries)
+   recovered seven real group files, totaling **49,495,971 bytes**:
+   - `frontend.group.bin` 39,214,526 bytes, SHA256 `016dd7ef792cad328d276c526cf934a3c520e9f2de0138d56e269b996d4306fa`
+   - `fixed.group.bin` 1,334,029 bytes, SHA256 `d168ec622886f24054567f6ba45b4553a9dfeb81bf45ce06bbde6b296e88aa9a`
+   - `splash.group.bin` 788,036 bytes, SHA256 `8c6ebf2c6a45d65b021d6e0187106e9c5ba80438cfca2f3709fb37b5c810c3af`
+   - `splash_droid.group.bin`, `loading.group.bin`,
+     `loading_droid.group.bin`, and `shared.group.bin` also recovered.
+   These are staged to temporary `/tmp/assets/data-gles1` in the runtime.
+   **No copyrighted game data was committed to GitHub.**
+5. **QEMU A/B result with recovered groups**: all three previously missing
+   group resources were opened successfully. GL texture upload records
+   increased from **59 to 83** and `glDrawElements` from **0 to 4**
+   by the fifth swap. Neither experimental null-object bypass was triggered
+   (0 skip events; 0 SIGSEGVs observed). The fifth frame was still almost
+   solid `#C0C0FF` plus cursor; no menu confirmed. Decode/render under QEMU
+   became much slower (~97 seconds until fifth swap); 110-second timeout
+   still applied.
+6. **Full authentic archive experiment**: `stage_official_game_archive`
+   opt-in support was committed separately to the fork; commit `33df707`
+   pins SHA-256 for `blackops_gles1.dz` and `blackops_etc.dz` from the
+   existing `codboz_setup`. This should be tested against the game-provided
+   official CDN, rather than trusting file size alone. Download/playability
+   is **not confirmed** in this note.
+
+Next test: stage and verify complete `blackops_gles1.dz` before entering
+the BOZ QEMU runtime, then inspect `S3E_FILE_OPEN`, `GL_UPLOAD_TRACE`,
+`glDrawElements`, and real framebuffer snapshots. If still blank, inspect
+render context/viewport/GL errors and additional missing asset requests.
