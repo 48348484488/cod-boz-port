@@ -1313,6 +1313,18 @@ def run_boz_diagnostic(report: dict) -> int:
             "errors": sum(ln.startswith("[BOZ_GL_DRAW_ERROR]") for ln in draw_trace),
             "events": draw_trace[:26],
         }), flush=True)
+        shader_events = [
+            ln[:650] for ln in trial_lines
+            if ln.startswith(("[BOZ_GL_PROGRAM_CREATE]", "[BOZ_GL_PROGRAM_LINK]",
+                              "[BOZ_GL_PROGRAM_LOG]", "[BOZ_GL_PROGRAM_USE]"))
+        ]
+        report["fast_shader_diagnostic"] = shader_events[:100]
+        print("[FAST_SHADER_SUMMARY] " + json.dumps({
+            "created": sum(ln.startswith("[BOZ_GL_PROGRAM_CREATE]") for ln in shader_events),
+            "linked": sum(ln.startswith("[BOZ_GL_PROGRAM_LINK]") for ln in shader_events),
+            "used": sum(ln.startswith("[BOZ_GL_PROGRAM_USE]") for ln in shader_events),
+            "events": shader_events[:70],
+        }), flush=True)
         print("[FAST_TRACE_SUMMARY] " + json.dumps({
             "lines": len(trial_lines),
             "bytes": len(trial_out.encode("utf-8", errors="replace")),
@@ -1334,6 +1346,8 @@ def run_boz_diagnostic(report: dict) -> int:
                 "[BOZ_GL_DRAW]", "[BOZ_GL_DRAW_ERROR]",
                 "[BOZ_GL_PROGRAM]", "[BOZ_GL_ACTIVE_ATTRIB]",
                 "[BOZ_GL_VERTEX_ATTRIB]",
+                "[BOZ_GL_PROGRAM_CREATE]", "[BOZ_GL_PROGRAM_LINK]",
+                "[BOZ_GL_PROGRAM_LOG]", "[BOZ_GL_PROGRAM_USE]",
                 "[BOZ_NULL_PROPERTY_ORIGIN]", "signal 11 ", "stack:",
                 "[S3E_FILE_EXISTS]",
             )) and not line.startswith("[S3E_FILE_EXISTS]"):
