@@ -1077,6 +1077,19 @@ def run_boz_diagnostic(report: dict) -> int:
             "BOZ_FAST_FILE_TRACE", "1"
         )
         quick_env["BOZ_FRAME_CAPTURE_DIR"] = str(PUBLIC)
+        if os.environ.get("BOZ_FAST_MINIMAL_TRACE", "0") == "1":
+            # GL_UPLOAD_TRACE hashes / scans every texture's pixels. This is
+            # expensive under qemu-arm software GL and can stall asset
+            # streaming. Preserve real swaps, frame captures, and per-file
+            # progress while omitting redundant high-volume diagnostics.
+            quick_env["GL_UPLOAD_TRACE"] = "0"
+            quick_env["BOZ_FILE_RW_TRACE"] = "0"
+            quick_env["BOZ_GL_TEX_PROVENANCE"] = "0"
+            quick_env["BOZ_GL_DRAW_DIAGNOSTIC"] = "0"
+            quick_env["BOZ_GL_SHADER_DIAGNOSTIC"] = "0"
+            quick_env["BOZ_ZLIB_TRACE"] = "0"
+            print("[FAST_MINIMAL_TRACE] pixel_scan=off file_rw=off "
+                  "texture_diag=off resource_progress=on", flush=True)
         print("[FAST_PROPERTY] QEMU A/B run without 60+ unrelated probes", flush=True)
         # Stream the process output to disk so a timeout cannot discard the
         # critical pre-fault register trace. Kill the entire Xvfb/QEMU process
