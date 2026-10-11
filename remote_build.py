@@ -19,6 +19,7 @@ import zlib
 import struct
 import base64
 import urllib.request
+import urllib.parse
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import threading
 
