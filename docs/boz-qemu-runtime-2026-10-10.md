@@ -90,3 +90,19 @@ Next test: stage and verify complete `blackops_gles1.dz` before entering
 the BOZ QEMU runtime, then inspect `S3E_FILE_OPEN`, `GL_UPLOAD_TRACE`,
 `glDrawElements`, and real framebuffer snapshots. If still blank, inspect
 render context/viewport/GL errors and additional missing asset requests.
+
+
+## Resource recovery and first geometry draws — 2026-10-11 (confirmed)
+
+- Tested original APK and Library archives: the 49–50 MB APK contains `blackops_loader.dz` but not the full resource packs or OBB payload. Its download database declares `main.1031105.com.atv.blackops.obb`, expected 494,902,736 bytes, with zero downloaded bytes.
+- The verified BOZ `boz.s3e` binary includes a ResDownloadLink at the **original Activision CDN**: `http://cdn-boz-android.callofduty.com/PROD/CODBOZ/1_0_9`. Render verified HTTP HEAD 200 for `blackops_gles1.dz` (337,594,086 bytes) and `blackops_etc.dz` (487,603,915 bytes).
+- Public reference `blackops_loader.dz` contains 12 DTRZ entries; it has bootstrap, style, console and localization, but **no** `splash.group.bin`, `fixed.group.bin` or `frontend.group.bin`. Diagnostic `BOZ_FILE_RW_TRACE` proved corresponding `s3eFileCheckExists` failures.
+- Opt-in Range staging (`BOZ_STAGE_REMOTE_FRONTEND=1`, commit `e5ae89c`) downloaded and verified **seven genuine first-launch groups** (49,495,971 bytes) from `blackops_gles1.dz`: splash, splash_droid, fixed, frontend, loading, loading_droid and shared. The original frontend group is 39,214,526 bytes, SHA-256 `016dd7ef792cad328d276c526cf934a3c520e9f2de0138d56e269b996d4306fa`. This stage does not persist game data into Git.
+- Subsequent opt-in full-download test (`BOZ_FETCH_OFFICIAL_GAME_ARCHIVE=1`, commit `eb3116a`) fetched all **337,594,086 bytes** of `blackops_gles1.dz` in Render, SHA-256 **`60846cf7a121ebaa200be82bd6811adcec44c607414b41086a6ffa1bd339b12c`**, validated 189 DTRZ entries and installed it under `/tmp/assets/`. The official legacy HTTPS endpoint has a certificate name mismatch, so this diagnostic used HTTP to the exact original official host after strict domain/size validation; a later commit `33df707` pins expected SHA before install.
+- First runtime with seven groups, without the full archive: 83 GL texture-upload trace lines versus earlier 59; frame 5 background changed from `#8080FF` to `#C0C0FF`. Still no visible menu.
+- **Full DTRZ runtime** (deploy `dep-db5dlu59mjac738edceg`): 132 GL texture-upload lines, five successful frame swaps, and **four real `glDrawElements` calls** in the first five frames versus **zero** before full resource recovery. Frame 5 remains nearly uniform `#C0C0FF` with cursor, with no visible menu. The test stopped at 135-second timeout, not SIGSEGV. No null-pointer protection hits or memory faults were logged in that limited run.
+- Historical user-owned `BOZ_RENDER_TRACE_300.json` from September shows ~300 swaps and repeated pairs of `glDrawElements` (`count=6` and `count=792`) per frame. This is a different execution and useful only as a comparison, not a direct proof of equivalence.
+- New diagnostic opt-in `BOZ_GL_DRAW_DIAGNOSTIC=1` (`cd425f6` and `13fdd61`) records up to 12 draw calls with GLES program, framebuffer, element buffer, viewport, scissor state and GL error. Its QEMU result was pending when this update was authored.
+
+### Next bottleneck
+Identify the precise render state and GL error for geometry drawn against a flat `#C0C0FF` framebuffer; determine whether the larger (`count=792`) draw seen in the historical trace is missing. Do **not** assert the frontend is fixed or game is playable until captured frames contain recognisable menu content.
