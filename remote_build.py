@@ -678,7 +678,11 @@ def run_boz_diagnostic(report: dict) -> int:
         )
         quick_env["BOZ_SWAP_PROGRESS"] = "1"
         quick_env["BOZ_DIAGNOSTIC_AUTO_TAP"] = os.environ.get(
-            "BOZ_DIAGNOSTIC_AUTO_TAP", "1"
+            "BOZ_DIAGNOSTIC_AUTO_TAP", "0"
+        )
+        # Read-only resource open/exists trace in this isolated diagnostic lane.
+        quick_env["BOZ_FILE_RW_TRACE"] = os.environ.get(
+            "BOZ_FAST_FILE_TRACE", "1"
         )
         quick_env["BOZ_FRAME_CAPTURE_DIR"] = str(PUBLIC)
         print("[FAST_PROPERTY] QEMU A/B run without 60+ unrelated probes", flush=True)
@@ -880,10 +884,39 @@ def run_boz_diagnostic(report: dict) -> int:
             for line in trial_lines
             if line.startswith("[") and "]" in line
         )
+        asset_opens = [
+            ln for ln in trial_lines if ln.startswith("[S3E_FILE_OPEN]")
+        ]
+        asset_missing = [
+            ln for ln in asset_opens
+            if ln.rsplit(" file=", 1)[-1].strip() in ("00000000", "0")
+        ]
+        asset_exists_missing = [
+            ln for ln in trial_lines
+            if ln.startswith("[S3E_FILE_EXISTS]") and " exists=0 " in ln
+        ]
+        asset_related = [
+            ln for ln in trial_lines
+            if ln.startswith(("[S3E_FILE_OPEN]", "[S3E_FILE_EXISTS]"))
+            and any(key in ln.lower() for key in (
+                "frontend", "group", "texture", ".bin", ".dz", "menu", "common"
+            ))
+        ]
+        asset_summary = {
+            "opens": len(asset_opens),
+            "failed_open_count": len(asset_missing),
+            "failed_opens": asset_missing[:35],
+            "missing_exists_count": len(asset_exists_missing),
+            "missing_exists": asset_exists_missing[:35],
+            "frontend_related": asset_related[:60],
+            "opened_prefix": asset_opens[:25],
+        }
+        report["fast_asset_trace"] = asset_summary
+        print("[FAST_ASSET_SUMMARY] " + json.dumps(asset_summary), flush=True)
         print("[FAST_TRACE_SUMMARY] " + json.dumps({
             "lines": len(trial_lines),
             "bytes": len(trial_out.encode("utf-8", errors="replace")),
-            "categories": phase_counts.most_common(24),
+            "categories": phase_counts.most_common(30),
             "timed_out": timed_out,
         }), flush=True)
         for index, line in enumerate(trial_lines[:35]):
@@ -897,7 +930,7 @@ def run_boz_diagnostic(report: dict) -> int:
                 "[BOZ_PC_SAMPLE]", "[BOZ_PC_SAMPLER]",
                 "[BOZ_MODULE_MAP]", "[egl]", "[GL_UPLOAD_TRACE]",
                 "[BOZ_SWAP_PROGRESS]", "[BOZ_FRAME_CAPTURE]",
-                "[BOZ_DIAGNOSTIC_TAP]",
+                "[BOZ_DIAGNOSTIC_TAP]", "[S3E_FILE_OPEN]", "[S3E_FILE_EXISTS]",
                 "[BOZ_NULL_PROPERTY_ORIGIN]", "signal 11 ", "stack:",
                 "[S3E_FILE_EXISTS]",
             )) and not line.startswith("[S3E_FILE_EXISTS]"):
