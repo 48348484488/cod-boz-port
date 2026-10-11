@@ -1088,6 +1088,15 @@ def run_boz_diagnostic(report: dict) -> int:
             quick_env["BOZ_GL_DRAW_DIAGNOSTIC"] = "0"
             quick_env["BOZ_GL_SHADER_DIAGNOSTIC"] = "0"
             quick_env["BOZ_ZLIB_TRACE"] = "0"
+            if os.environ.get("BOZ_FAST_LATE_GL_DIAGNOSTIC", "0") == "1":
+                # Bounded game-state samples (first 12, then every 25 draws).
+                # Keep GL_UPLOAD_TRACE unset: the full pixel scanner is costly.
+                quick_env["BOZ_GL_TEX_PROVENANCE"] = "1"
+                quick_env["BOZ_GL_DRAW_DIAGNOSTIC"] = "1"
+                quick_env["BOZ_GL_LATE_FRAMES"] = "1"
+                quick_env["BOZ_GL_SHADER_DIAGNOSTIC"] = "1"
+                print("[FAST_LATE_GL_DIAGNOSTIC] first=12 every=25 "
+                      "texture_metadata=on pixel_scan=off", flush=True)
             print("[FAST_MINIMAL_TRACE] pixel_scan=off file_rw=off "
                   "texture_diag=off resource_progress=on", flush=True)
         print("[FAST_PROPERTY] QEMU A/B run without 60+ unrelated probes", flush=True)
@@ -1492,11 +1501,12 @@ def run_boz_diagnostic(report: dict) -> int:
                               "[BOZ_GL_UNIFORM]", "[BOZ_GL_MATRIX4]",
                               "[BOZ_GL_VERTEX_BYTES]"))
         ]
-        report["fast_draw_diagnostic"] = draw_trace[:30]
+        report["fast_draw_diagnostic"] = draw_trace[:30] + draw_trace[-30:]
         print("[FAST_DRAW_SUMMARY] " + json.dumps({
             "draws": sum(ln.startswith("[BOZ_GL_DRAW]") for ln in draw_trace),
             "errors": sum(ln.startswith("[BOZ_GL_DRAW_ERROR]") for ln in draw_trace),
-            "events": draw_trace[:26],
+            "first_events": draw_trace[:12],
+            "last_events": draw_trace[-24:],
         }), flush=True)
         shader_events = [
             ln[:650] for ln in trial_lines
@@ -1527,7 +1537,10 @@ def run_boz_diagnostic(report: dict) -> int:
         ]
         report["fast_texture_evidence"] = {
             "draws": [ln for ln in texture_events
-                      if ln.startswith("[BOZ_GL_TEXTURE_DRAW]")][:12],
+                      if ln.startswith("[BOZ_GL_TEXTURE_DRAW]")][:12] + [
+                          ln for ln in texture_events
+                          if ln.startswith("[BOZ_GL_TEXTURE_DRAW]")
+                      ][-16:],
             "uploads": [ln for ln in texture_events
                         if ln.startswith("[BOZ_GL_TEXTURE_UPLOAD]")][:36],
             "recent_binds": [ln for ln in texture_events
