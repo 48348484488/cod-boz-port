@@ -6,6 +6,8 @@ on:
     branches: [master]
     paths:
       - ".github/workflows/boz-qemu-accelerated.yml"
+      - "src/s3e_gl.c"
+      - "remote_build.py"
 
 permissions:
   contents: read
@@ -102,6 +104,12 @@ jobs:
           if p.get("signal_11_count"):
               print("::error::BOZ ARM runtime crashed with signal 11")
               sys.exit(1)
+          texture_report = report.get("fast_texture_evidence") or {}
+          snapshots = texture_report.get("size_totals") or []
+          if not snapshots:
+              print("::error::Texture dimension diagnostics were not recorded")
+              sys.exit(1)
+          print("Texture dimension snapshots:", *snapshots[-3:], sep="\\n")
           print(f"Validated genuine frame swaps: {len(swaps)}, PNG captures: {len(frames)}")
           print("BOZ diagnostic completed; visible menu and gameplay remain unverified.")
           PY
