@@ -23,6 +23,7 @@ HOST_TESTS := \
   $(BUILD_DIR)/tests/mdns_wire_test \
   $(BUILD_DIR)/tests/s3e_zeroconf_test \
   $(BUILD_DIR)/tests/s3e_timer_test \
+  $(BUILD_DIR)/tests/s3e_compression_test \
   $(BUILD_DIR)/tests/s3e_memory_test \
   $(BUILD_DIR)/tests/device_id_test \
   $(BUILD_DIR)/tests/s3e_audio_test \
@@ -163,6 +164,13 @@ $(BUILD_DIR)/tests/s3e_timer_test: tests/s3e_timer_test.c src/s3e_timer.c \
 	mkdir -p $(dir $@)
 	$(HOST_CC) $(PROJECT_CPPFLAGS) $(HOST_TEST_CFLAGS) $(PROJECT_CFLAGS) -pthread \
 	  -o $@ tests/s3e_timer_test.c src/s3e_timer.c $(HOST_TEST_LDFLAGS)
+
+$(BUILD_DIR)/tests/s3e_compression_test: tests/s3e_compression_test.c src/s3e_runtime.c \
+                                     include/s3e_host_internal.h | $(BUILD_DIR)
+	mkdir -p $(dir $@)
+	$(HOST_CC) $(PROJECT_CPPFLAGS) $(HOST_TEST_CFLAGS) $(PROJECT_CFLAGS) \
+	  -ffunction-sections -fdata-sections -Wl,--gc-sections -ldl -pthread \
+	  -o $@ tests/s3e_compression_test.c src/s3e_runtime.c $(HOST_TEST_LDFLAGS)
 
 $(BUILD_DIR)/tests/s3e_memory_test: tests/s3e_memory_test.c src/s3e_memory.c \
                                      include/s3e_host_internal.h | $(BUILD_DIR)
