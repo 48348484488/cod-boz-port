@@ -12,6 +12,59 @@
 #include <sys/time.h>
 
 #if defined(__arm__)
+/* Opt-in patch recovered from the validated ReviveOS BOZ PNG reader.
+ * The function is never installed unless BOTH verified code regions match. */
+static uint64_t boz_png_fnv1a64(const uint8_t *data, size_t length) {
+    uint64_t hash = UINT64_C(0xcbf29ce484222325);
+    for (size_t i = 0; i < length; ++i) {
+        hash ^= data[i];
+        hash *= UINT64_C(0x100000001b3);
+    }
+    return hash;
+}
+
+static void install_verified_boz_png_length_fix(const struct s3e_loaded_image *loaded) {
+    const char *enabled = getenv("BOZ_COMPAT_PNG_INPUT_LENGTH_FIX");
+    if (!enabled || strcmp(enabled, "1") != 0) return;
+    const size_t append_off = 0x2534dcu;
+    const size_t append_size = 0x68u;
+    const size_t reader_off = 0x253544u;
+    const size_t reader_size = 0x210u;
+    const size_t patch_off = 0x2535ccu;
+    static const uint8_t original[4] = {0x04, 0x00, 0x93, 0xe5};
+    static const uint8_t replacement[4] = {0x03, 0x00, 0x93, 0xe9};
+    if (!loaded || !loaded->base || loaded->map_size < reader_off + reader_size ||
+        patch_off + sizeof(original) > loaded->map_size) {
+        fprintf(stderr, "[BOZ_PNG_PATCH] status=rejected reason=map_size\n");
+        return;
+    }
+    uint8_t *target = loaded->base + patch_off;
+    if (memcmp(target, original, sizeof(original)) != 0) {
+        fprintf(stderr, "[BOZ_PNG_PATCH] status=rejected reason=opcode\n");
+        return;
+    }
+    const uint64_t append_hash =
+        boz_png_fnv1a64(loaded->base + append_off, append_size);
+    const uint64_t reader_hash =
+        boz_png_fnv1a64(loaded->base + reader_off, reader_size);
+    if (append_hash != UINT64_C(0x74324030cafffef2) ||
+        reader_hash != UINT64_C(0x967a3b0f5b7425fa)) {
+        fprintf(stderr,
+                "[BOZ_PNG_PATCH] status=rejected reason=signature "
+                "append=%016llx reader=%016llx\n",
+                (unsigned long long)append_hash, (unsigned long long)reader_hash);
+        return;
+    }
+    memcpy(target, replacement, sizeof(replacement));
+    __builtin___clear_cache((char *)target, (char *)target + sizeof(replacement));
+    fprintf(stderr,
+            "[BOZ_PNG_PATCH] status=installed offset=%08x original=040093e5 "
+            "replacement=030093e9 input_length=native_idat_sum\n",
+            (unsigned)patch_off);
+}
+#endif
+
+#if defined(__arm__)
 static uintptr_t g_loaded_base;
 static const char g_empty_string[8] __attribute__((aligned(8))) = "";
 static uint32_t g_bucket_allocator_table[33] __attribute__((aligned(8)));
@@ -1297,6 +1350,7 @@ int main(int argc, char **argv) {
 #endif
     if (run) {
 #if defined(__arm__)
+        install_verified_boz_png_length_fix(&loaded);
         install_boz_pc_sampler();
 #endif
         int (*entry)(void) = (int (*)(void))(uintptr_t)(loaded.base + loaded.entry_offset);
