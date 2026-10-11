@@ -106,3 +106,14 @@ render context/viewport/GL errors and additional missing asset requests.
 
 ### Next bottleneck
 Identify the precise render state and GL error for geometry drawn against a flat `#C0C0FF` framebuffer; determine whether the larger (`count=792`) draw seen in the historical trace is missing. Do **not** assert the frontend is fixed or game is playable until captured frames contain recognisable menu content.
+
+
+## Texture provenance and actual zlib contract — 2026-10-11 10:20 UTC
+
+The last QEMU diagnostic (deploy `dep-db5m480473hc73bl43og`, commit `578311de`) built ARM and passed all host tests, including the zlib ABI regression tests. It staged the official SHA-256-pinned `blackops_gles1.dz`, and loaded the signature-verified experimental PNG fix. QEMU ran for 115 seconds and captured five swaps without SIGSEGV, with frame 5 still nearly solid `#c0c0ff`.
+
+**Confirmed from direct OpenGL state:** the full-screen geometry (`glDrawElements`, count 6, program 6, sampler 0) has `GL_TEXTURE_2D` object **58** bound in texture unit zero. That object was uploaded once as a **2 × 2 RGBA** image, first pixel `ff ff ff 80`, first-512-byte FNV hash `7eea891d3aca0693`. The exact same minuscule upload appears for dozens of texture IDs. Every one of the first five draws still samples texture 58, with no real-size update. This confirms a placeholder texture is bound where an actual frontend image should eventually appear; it does not yet prove whether the cause is failed resource resolution, failed decoder, or an incomplete frontend transition.
+
+`s3eCompressionDecomp` was corrected from its failing stub to the five-argument ARM Marmalade interface using zlib (commits `55d26d5`, `9bf8418`) and tested. However, this BOZ execution logged **zero calls** to the decompressor, so that fix is not yet proven to affect the frontend. Similarly, program 9 and the 792-index draw in the older 300-frame trace have not appeared.
+
+**Next:** enable resource open/check trace while the full DTRZ is present and run a controlled smaller viewport to reach more frames; compare when (or whether) `frontend.group.bin` is accessed, then trace the actual texture source. Avoid artificially substituting a non-game background.
