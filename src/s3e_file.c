@@ -19,6 +19,8 @@ struct boz_resource_watch {
     unsigned seeks;
     unsigned errors;
     long max_position;
+    uint64_t next_report_bytes;
+    unsigned progress_reports;
 };
 static struct boz_resource_watch g_resource_watch[BOZ_RESOURCE_WATCH_SLOTS];
 
@@ -40,6 +42,20 @@ static void boz_resource_watch_note(FILE *file) {
     if (!w) return;
     long pos = ftell(file);
     if (pos > w->max_position) w->max_position = pos;
+    /* Frontend may stay open throughout the diagnostic; report progress while
+     * it is being parsed instead of relying only on the final close event. */
+    if (!strstr(w->name, "frontend.group.bin") || w->progress_reports >= 80u)
+        return;
+    if (w->calls != 1u && w->bytes_read < w->next_report_bytes)
+        return;
+    ++w->progress_reports;
+    fprintf(stderr,
+            "[BOZ_RESOURCE_PROGRESS] name=%s reads=%u bytes_read=%llu "
+            "max_position=%ld errors=%u report=%u\n",
+            w->name, w->calls, (unsigned long long)w->bytes_read,
+            w->max_position, w->errors, w->progress_reports);
+    while (w->next_report_bytes <= w->bytes_read)
+        w->next_report_bytes += 262144u;
 }
 
 static void boz_resource_watch_open(FILE *file, const char *name) {
@@ -50,6 +66,7 @@ static void boz_resource_watch_open(FILE *file, const char *name) {
         if (w->file) continue;
         memset(w, 0, sizeof(*w));
         w->file = file;
+        w->next_report_bytes = 262144u;
         snprintf(w->name, sizeof(w->name), "%s", name);
         long start = ftell(file);
         long size = -1;
