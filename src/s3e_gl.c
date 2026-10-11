@@ -91,6 +91,7 @@ struct boz_tex_meta {
     unsigned char first_rgba[16];
     unsigned first_bytes;
     unsigned compressed;
+    unsigned drawn;
 };
 static GLuint g_boz_tex_bound[BOZ_TEX_UNITS];
 static GLenum g_boz_tex_active = 0x84c0u; /* GL_TEXTURE0 */
@@ -106,6 +107,7 @@ static unsigned g_boz_tex_compressed_unresolved;
 static GLsizei g_boz_tex_max_width;
 static GLsizei g_boz_tex_max_height;
 static unsigned g_boz_tex_large_printed;
+static unsigned g_boz_unit0_bind_changes;
 
 static bool boz_texture_diag_enabled(void) {
     const char *flag = getenv("BOZ_GL_TEX_PROVENANCE");
@@ -125,7 +127,17 @@ static S3E_SOFTFP void host_glBindTexture(GLenum target, GLuint texture) {
     if (real && target == 0x0de1u && g_boz_tex_active >= 0x84c0u &&
         g_boz_tex_active < 0x84c0u + BOZ_TEX_UNITS) {
         unsigned unit = (unsigned)(g_boz_tex_active - 0x84c0u);
+        GLuint previous = g_boz_tex_bound[unit];
         g_boz_tex_bound[unit] = texture;
+        if (boz_texture_diag_enabled() && unit == 0u && previous != texture) {
+            ++g_boz_unit0_bind_changes;
+            if (g_boz_unit0_bind_changes <= 20u ||
+                g_boz_unit0_bind_changes % 32u == 0u)
+                fprintf(stderr,
+                        "[BOZ_GL_UNIT0_BIND] seq=%u draw=%u old=%u tex=%u\n",
+                        g_boz_unit0_bind_changes, g_boz_gl_draw_elements_count,
+                        previous, texture);
+        }
         if (boz_texture_diag_enabled() && g_boz_gl_draw_elements_count < 1u)
             fprintf(stderr, "[BOZ_GL_TEXTURE_BIND] unit=%u texture=%u\n", unit, texture);
     }
@@ -142,6 +154,71 @@ static struct boz_tex_meta *boz_find_tex(GLuint texture, bool create) {
     return meta;
 }
 
+
+/* Track every actual guest draw independently of the bounded sampled log.
+ * Only GL metadata is counted. No texture pixel bytes are persisted. */
+static unsigned g_boz_census_total_draws;
+static unsigned g_boz_census_total_2x2;
+static unsigned g_boz_census_total_large;
+static unsigned g_boz_census_total_unknown;
+static unsigned g_boz_census_frame_draws;
+static unsigned g_boz_census_frame_2x2;
+static unsigned g_boz_census_frame_large;
+static unsigned g_boz_census_frame_unknown;
+static GLuint g_boz_census_last_tex;
+
+static void boz_census_draw(void) {
+    if (!boz_texture_diag_enabled()) return;
+    GLuint texture = g_boz_tex_bound[0];
+    struct boz_tex_meta *meta = boz_find_tex(texture, false);
+    ++g_boz_census_total_draws;
+    ++g_boz_census_frame_draws;
+    g_boz_census_last_tex = texture;
+    if (meta) ++meta->drawn;
+    if (meta && meta->width == 2 && meta->height == 2) {
+        ++g_boz_census_total_2x2;
+        ++g_boz_census_frame_2x2;
+    } else if (meta && (meta->width > 2 || meta->height > 2)) {
+        ++g_boz_census_total_large;
+        ++g_boz_census_frame_large;
+    } else {
+        ++g_boz_census_total_unknown;
+        ++g_boz_census_frame_unknown;
+    }
+}
+
+static void boz_census_swap(unsigned swap) {
+    if (!boz_texture_diag_enabled()) return;
+    if (swap == 1u || swap == 5u || swap == 60u || swap == 100u ||
+        swap == 125u || swap == 130u || swap == 140u || swap == 150u ||
+        swap == 200u || swap == 250u || swap == 300u) {
+        unsigned large_known = 0;
+        unsigned large_drawn = 0;
+        for (unsigned i = 0; i < g_boz_tex_meta_count; ++i) {
+            const struct boz_tex_meta *meta = &g_boz_tex_meta[i];
+            if (meta->width > 2 || meta->height > 2) {
+                ++large_known;
+                if (meta->drawn) ++large_drawn;
+            }
+        }
+        struct boz_tex_meta *last = boz_find_tex(g_boz_census_last_tex, false);
+        fprintf(stderr,
+                "[BOZ_GL_DRAW_CENSUS] swap=%u frame_draws=%u frame_2x2=%u "
+                "frame_large=%u frame_unknown=%u total_draws=%u total_2x2=%u "
+                "total_large=%u total_unknown=%u large_known=%u large_drawn=%u "
+                "last_tex=%u last_size=%dx%d\n",
+                swap, g_boz_census_frame_draws, g_boz_census_frame_2x2,
+                g_boz_census_frame_large, g_boz_census_frame_unknown,
+                g_boz_census_total_draws, g_boz_census_total_2x2,
+                g_boz_census_total_large, g_boz_census_total_unknown,
+                large_known, large_drawn, g_boz_census_last_tex,
+                last ? (int)last->width : 0, last ? (int)last->height : 0);
+    }
+    g_boz_census_frame_draws = 0;
+    g_boz_census_frame_2x2 = 0;
+    g_boz_census_frame_large = 0;
+    g_boz_census_frame_unknown = 0;
+}
 
 static bool boz_shader_diag_enabled(void) {
     const char *value = getenv("BOZ_GL_SHADER_DIAGNOSTIC");
@@ -201,12 +278,14 @@ static S3E_SOFTFP void host_glClear(GLbitfield mask) {
 
 static S3E_SOFTFP void host_glDrawArrays(GLenum mode, GLint first, GLsizei count) {
     ++g_boz_gl_draw_arrays_count;
+    boz_census_draw();
     void (*real)(GLenum, GLint, GLsizei) = lookup_gl("glDrawArrays");
     if (real) real(mode, first, count);
 }
 
 static S3E_SOFTFP void host_glDrawElements(GLenum mode, GLsizei count, GLenum type, const void *indices) {
     ++g_boz_gl_draw_elements_count;
+    boz_census_draw();
     void (*real)(GLenum, GLsizei, GLenum, const void *) = lookup_gl("glDrawElements");
     const char *trace = getenv("BOZ_GL_DRAW_DIAGNOSTIC");
     const char *late = getenv("BOZ_GL_LATE_FRAMES");
@@ -1016,6 +1095,7 @@ static EGLBoolean host_eglSwapBuffers(EGLDisplay display, EGLSurface surface) {
                 g_boz_tex_compressed_unresolved, g_boz_tex_max_width,
                 g_boz_tex_max_height, g_boz_tex_meta_count);
     }
+    boz_census_swap(swap_count);
     pace_frame();
     return result;
 }
