@@ -1107,6 +1107,7 @@ def run_boz_diagnostic(report: dict) -> int:
         # xvfb-run wrapper: the first qemu-arm-looking process may itself be a
         # launcher blocked in do_wait while its children do the real work.
         host_profile_samples = []
+        thread_cpu_totals = {}
         host_profile_stop = threading.Event()
         host_profile_thread = None
 
@@ -1128,7 +1129,6 @@ def run_boz_diagnostic(report: dict) -> int:
             page_size = os.sysconf("SC_PAGE_SIZE")
             prev_cpu = {}
             prev_thread_cpu = {}
-            thread_cpu_totals = {}
             prev_time = None
             started_at = time.monotonic()
             while not host_profile_stop.is_set():
