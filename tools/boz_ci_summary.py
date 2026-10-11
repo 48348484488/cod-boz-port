@@ -38,7 +38,7 @@ def parse_draw_census(line: str) -> dict[str, int]:
     if not line.startswith("[BOZ_GL_DRAW_CENSUS] "):
         return {}
     return {name: int(value) for name, value in
-            re.findall(r"\\b([a-z_0-9]+)=(\\d+)\\b", line)}
+            re.findall(r"\b([a-z_0-9]+)=(\d+)\b", line)}
 
 
 def summarize(report: dict) -> dict:
