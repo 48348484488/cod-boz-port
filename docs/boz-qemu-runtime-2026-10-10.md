@@ -186,3 +186,29 @@ a committed workflow with a successfully executed job.
 - **Conclusion limited to observations:** fully reading the frontend asset group is not sufficient for real GL images or larger frontend geometry to become active; investigate actual texture allocation/decompression and scene transition independently.
 - Commit `8809eb2` adds size distribution accounting and read-only `glCompressedTexImage2D`/`glCompressedTexSubImage2D` forwarding diagnostics, emitting `[BOZ_GL_TEX_SIZE_TOTAL]` at swaps 5/60/100/150. Commit `8a94495` collects these counters; workflow update `2b427e8` adds a CI assertion for real texture-size snapshots. **These new counters have not yet been verified by a completed run**.
 - A separate Render profiler experiment `220f7c3` initially failed from `NameError: thread_cpu_totals` and a legacy HTTPS certificate mismatch. Commit `e92566b` fixes the scope bug, and the strict SHA-pinned official-host HTTP option was restored for its next deploy. Do not cite the failed test as a valid thread profile.
+
+
+## 2026-10-11 late frontend pointer test (implementation committed; outcome pending)
+
+The accelerated QEMU trace loaded all 39,214,526 bytes of
+`frontend.group.bin` and closed it **between guest swaps 100 and 125**.
+Previous `BOZ_DIAGNOSTIC_AUTO_TAP=1` used frames 5/6, before the
+frontend was ready, so it could not conclusively test the expected
+"touch screen to continue" transition. Do not claim it disproved input gating.
+
+Commit `67a4290` adds a strictly opt-in `BOZ_DIAGNOSTIC_LATE_TAP=1`
+experiment: call the existing S3E pointer dispatch **press at swap 125**
+and **release at 126**; capture actual original framebuffer at swaps
+125, 130 and 140 (plus previous 100 and 150 milestones).
+It leaves normal game runs unchanged. Commit `fed756a` enables the
+experiment in the accelerated GitHub Actions workflow and verifies that
+both callback attempts and post-tap frame swaps occurred. Commit
+`5eea07d` prints before/after framebuffer hashes and palette sizes
+so differences can be compared with the zero-tap historical run.
+A different image hash alone is **not** proof of the actual menu; actual
+visible content and associated input transitions are required.
+
+**Awaiting actual run evidence:** callback registration and consumption,
+frame-100 versus frame-140 screenshot hashes and GL texture/geometry
+post-tap changes. A committed workflow is not an executed or successful
+experiment until logs and artifacts confirm the result.
