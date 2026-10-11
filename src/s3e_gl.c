@@ -728,6 +728,28 @@ static void boz_track_tex_upload(GLenum target, GLint level, GLsizei width,
         meta->first_bytes = (unsigned)(available < 16 ? available : 16);
         memcpy(meta->first_rgba, pixels, meta->first_bytes);
     }
+    /* Check sparse byte samples across each large image, not just its first 512 bytes.
+     * This distinguishes a genuine empty atlas from a transparent initial row.
+     * No source image or complete scan is retained. */
+    if (!sub_image && pixels && width > 2 && height > 2 && bpp &&
+        (size_t)width <= SIZE_MAX / (size_t)height / bpp) {
+        size_t length = (size_t)width * (size_t)height * bpp;
+        const unsigned char *bytes = (const unsigned char *)pixels;
+        size_t sampled = 0, nonzero = 0;
+        for (unsigned window = 0; window < 5u; ++window) {
+            size_t start = window == 4u ? (length > 64u ? length - 64u : 0u)
+                                         : length / 4u * window;
+            size_t take = length - start < 64u ? length - start : 64u;
+            for (size_t i = 0; i < take; ++i)
+                if (bytes[start + i] != 0u) ++nonzero;
+            sampled += take;
+        }
+        fprintf(stderr,
+                "[BOZ_GL_TEXTURE_OCCUPANCY] tex=%u size=%dx%d format=%04x type=%04x "
+                "sample_bytes=%zu nonzero_bytes=%zu\n",
+                texture, (int)width, (int)height, (unsigned)format, (unsigned)type,
+                sampled, nonzero);
+    }
     if (g_boz_tex_uploads <= 36u ||
         ((width > 2 || height > 2) && g_boz_tex_large_printed++ < 20u))
         fprintf(stderr,
@@ -1004,8 +1026,10 @@ static void frontend_overlay_gl_present(void) {
 
 /* Diagnostic-only, opt-in real framebuffer capture before a swap.
  * PPM is intentionally used here so the ARM loader needs no PNG dependency. */
-static void boz_capture_swap_frame(unsigned frame) {
+static void boz_capture_swap_frame(unsigned frame, bool pre_overlay) {
     const char *dir = getenv("BOZ_FRAME_CAPTURE_DIR");
+    if (pre_overlay && frame != 275u && frame != 300u && frame != 325u)
+        return;
     if (!dir || !*dir ||
         (frame != 1u && frame != 5u && frame != 10u && frame != 15u &&
          frame != 60u && frame != 100u && frame != 125u &&
@@ -1045,7 +1069,9 @@ static void boz_capture_swap_frame(unsigned frame) {
         }
     }
     char filename[512];
-    int len = snprintf(filename, sizeof(filename), "%s/boz-swap-%05u.ppm", dir, frame);
+    int len = snprintf(filename, sizeof(filename), pre_overlay ?
+                       "%s/boz-pre-overlay-%05u.ppm" : "%s/boz-swap-%05u.ppm",
+                       dir, frame);
     FILE *fp = len > 0 && (size_t)len < sizeof(filename) ? fopen(filename, "wb") : NULL;
     if (fp) {
         fprintf(fp, "P6\n%zu %zu\n255\n", width, height);
@@ -1096,8 +1122,11 @@ static EGLBoolean host_eglSwapBuffers(EGLDisplay display, EGLSurface surface) {
     if (previous_framebuffer) {
         driver_bind_framebuffer(0);
     }
+    if (trace_enabled && (swap_count == 275u || swap_count == 300u ||
+                          swap_count == 325u))
+        boz_capture_swap_frame(swap_count, true);
     frontend_overlay_gl_present();
-    if (trace_enabled) boz_capture_swap_frame(swap_count);
+    if (trace_enabled) boz_capture_swap_frame(swap_count, false);
     if (previous_framebuffer) {
         driver_bind_framebuffer(previous_framebuffer);
     }

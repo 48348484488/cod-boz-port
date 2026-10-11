@@ -167,6 +167,7 @@ jobs:
             public/runner-report.json
             public/boz-fast-property.log
             public/boz-swap-*.png
+            public/boz-pre-overlay-*.png
             public/boz_gl_upload_trace.log
 
       - name: Publish minimal results to separate diagnostics branch

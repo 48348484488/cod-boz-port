@@ -104,6 +104,14 @@ def summarize(report: dict) -> dict:
         "last_draw_census": census[-1] if census else None,
         "unit0_binding_transitions": (texture.get("unit0_binds") or [])[-24:],
         "gl_guest_callsites": (texture.get("gl_callsites") or [])[-70:],
+        "texture_occupancy": (texture.get("texture_occupancy") or [])[-32:],
+        "before_overlay_frame_hashes": [
+            {"file": img.get("file"), "sha256": img.get("sha256"),
+             "distinct_rgb_colors": img.get("distinct_rgb_colors"),
+             "top_rgb": (img.get("top_rgb") or [])[:3]}
+            for img in images
+            if "boz-pre-overlay-" in str(img.get("file", ""))
+        ],
         "sampled_draws_with_2x2_texture": sum(
             size == (2, 2) for size in sampled_dimensions
         ),

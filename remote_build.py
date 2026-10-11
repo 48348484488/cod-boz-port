@@ -1322,7 +1322,8 @@ def run_boz_diagnostic(report: dict) -> int:
         trial_out = fast_trace.read_text(encoding="utf-8", errors="replace")
         trial_lines = trial_out.replace("\\n", "\n").splitlines()
         frame_outputs = []
-        for ppm in sorted(PUBLIC.glob("boz-swap-*.ppm")):
+        for ppm in sorted([*PUBLIC.glob("boz-swap-*.ppm"),
+                           *PUBLIC.glob("boz-pre-overlay-*.ppm")]):
             try:
                 parts = ppm.read_bytes().split(bytes([10]), 3)
                 if len(parts) != 4 or parts[0] != b"P6" or parts[2] != b"255":
@@ -1591,7 +1592,7 @@ def run_boz_diagnostic(report: dict) -> int:
                 "[BOZ_GL_TEXTURE_DRAW]", "[BOZ_GL_TEXTURE_UPLOAD]",
                 "[BOZ_GL_TEXTURE_BIND]", "[BOZ_GL_TEX_SIZE_TOTAL]",
                 "[BOZ_GL_UNIT0_BIND]", "[BOZ_GL_DRAW_CENSUS]",
-                "[BOZ_GL_CALLSITE]",
+                "[BOZ_GL_CALLSITE]", "[BOZ_GL_TEXTURE_OCCUPANCY]",
                 "[BOZ_GL_COMPRESSED_UPLOAD]", "[BOZ_GL_COMPRESSED_SUBUPLOAD]"))
         ]
         report["fast_texture_evidence"] = {
@@ -1615,6 +1616,8 @@ def run_boz_diagnostic(report: dict) -> int:
                             if ln.startswith("[BOZ_GL_DRAW_CENSUS]")][-16:],
             "gl_callsites": [ln for ln in texture_events
                              if ln.startswith("[BOZ_GL_CALLSITE]")][-70:],
+            "texture_occupancy": [ln for ln in texture_events
+                                  if ln.startswith("[BOZ_GL_TEXTURE_OCCUPANCY]")][-32:],
         }
         print("[FAST_TEXTURE_SUMMARY] " +
               json.dumps(report["fast_texture_evidence"]), flush=True)
@@ -1647,6 +1650,7 @@ def run_boz_diagnostic(report: dict) -> int:
                 "[BOZ_GL_TEXTURE_DRAW]", "[BOZ_GL_TEXTURE_UPLOAD]",
                 "[BOZ_GL_TEXTURE_BIND]", "[BOZ_GL_UNIT0_BIND]",
                 "[BOZ_GL_DRAW_CENSUS]", "[BOZ_GL_CALLSITE]",
+                "[BOZ_GL_TEXTURE_OCCUPANCY]",
                 "[BOZ_RESOURCE_OPEN]", "[BOZ_RESOURCE_CLOSE]", "[BOZ_RESOURCE_PROGRESS]",
                 "[BOZ_NULL_PROPERTY_ORIGIN]", "signal 11 ", "stack:",
                 "[S3E_FILE_EXISTS]",
