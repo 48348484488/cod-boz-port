@@ -76,6 +76,59 @@ static unsigned g_boz_gl_clear_count;
 static unsigned g_boz_gl_draw_arrays_count;
 static unsigned g_boz_gl_draw_elements_count;
 static unsigned g_boz_gl_draw_tex_count;
+static unsigned g_boz_gl_program_creates;
+static unsigned g_boz_gl_program_links;
+static unsigned g_boz_gl_program_uses;
+static GLuint g_boz_last_program;
+
+static bool boz_shader_diag_enabled(void) {
+    const char *value = getenv("BOZ_GL_SHADER_DIAGNOSTIC");
+    return value && strcmp(value, "1") == 0;
+}
+
+static S3E_SOFTFP GLuint host_glCreateProgram(void) {
+    GLuint (*real)(void) = lookup_gl("glCreateProgram");
+    GLuint program = real ? real() : 0;
+    ++g_boz_gl_program_creates;
+    if (boz_shader_diag_enabled() && g_boz_gl_program_creates <= 24u)
+        fprintf(stderr, "[BOZ_GL_PROGRAM_CREATE] seq=%u program=%u resolved=%d\n",
+                g_boz_gl_program_creates, program, real != NULL);
+    return program;
+}
+
+static S3E_SOFTFP void host_glLinkProgram(GLuint program) {
+    void (*real)(GLuint) = lookup_gl("glLinkProgram");
+    if (real) real(program);
+    ++g_boz_gl_program_links;
+    if (boz_shader_diag_enabled() && g_boz_gl_program_links <= 24u) {
+        GLint linked = -1;
+        void (*get_program_iv)(GLuint, GLenum, GLint *) = lookup_gl("glGetProgramiv");
+        if (get_program_iv) get_program_iv(program, 0x8b82u, &linked);
+        fprintf(stderr, "[BOZ_GL_PROGRAM_LINK] seq=%u program=%u linked=%d resolved=%d\n",
+                g_boz_gl_program_links, program, linked, real != NULL);
+        if (linked == 0) {
+            void (*get_log)(GLuint, GLsizei, GLsizei *, char *) = lookup_gl("glGetProgramInfoLog");
+            if (get_log) {
+                char info[256] = {0};
+                GLsizei length = 0;
+                get_log(program, 255, &length, info);
+                fprintf(stderr, "[BOZ_GL_PROGRAM_LOG] program=%u length=%d text=%.250s\n",
+                        program, (int)length, info);
+            }
+        }
+    }
+}
+
+static S3E_SOFTFP void host_glUseProgram(GLuint program) {
+    void (*real)(GLuint) = lookup_gl("glUseProgram");
+    if (real) real(program);
+    ++g_boz_gl_program_uses;
+    if (boz_shader_diag_enabled() &&
+        (g_boz_gl_program_uses <= 24u || program != g_boz_last_program))
+        fprintf(stderr, "[BOZ_GL_PROGRAM_USE] seq=%u program=%u prev=%u resolved=%d\n",
+                g_boz_gl_program_uses, program, g_boz_last_program, real != NULL);
+    g_boz_last_program = program;
+}
 
 /* Count actual GL commands, not merely successful window swaps. */
 static S3E_SOFTFP void host_glClear(GLbitfield mask) {
@@ -859,6 +912,7 @@ static const struct host_symbol WRAPPED_SYMBOLS[] = {
     WRAPPED(glColor4f),
     WRAPPED(glCopyTexImage2D),
     WRAPPED(glCopyTexSubImage2D),
+    WRAPPED(glCreateProgram),
     WRAPPED(glDepthRangef),
     WRAPPED(glDepthRangefOES),
     WRAPPED(glDrawArrays),
@@ -871,6 +925,7 @@ static const struct host_symbol WRAPPED_SYMBOLS[] = {
     WRAPPED(glLightModelf),
     WRAPPED(glLightf),
     WRAPPED(glLineWidth),
+    WRAPPED(glLinkProgram),
     WRAPPED(glMaterialf),
     WRAPPED(glMultiTexCoord4f),
     WRAPPED(glNormal3f),
@@ -889,6 +944,7 @@ static const struct host_symbol WRAPPED_SYMBOLS[] = {
     WRAPPED(glTranslatef),
     WRAPPED(glUniform1f),
     WRAPPED(glUniform4f),
+    WRAPPED(glUseProgram),
     WRAPPED(glViewport),
     WRAPPED(eglGetProcAddress),
     WRAPPED(eglSwapBuffers),
