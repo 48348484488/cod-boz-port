@@ -186,6 +186,56 @@ static S3E_SOFTFP void host_glDrawElements(GLenum mode, GLsizei count, GLenum ty
             fprintf(stderr,
                     "[BOZ_GL_PROGRAM] id=%d linked=%d attributes=%d uniforms=%d\n",
                     program, link, active_attribs, active_uniforms);
+            if (type == 0x1403u && count == 6 && indices && index_buffer == 0) {
+                uint16_t first_indices[6] = {0};
+                memcpy(first_indices, indices, sizeof(first_indices));
+                fprintf(stderr,
+                        "[BOZ_GL_INDEX_SAMPLE] seq=1 i=%u,%u,%u,%u,%u,%u\n",
+                        (unsigned)first_indices[0], (unsigned)first_indices[1],
+                        (unsigned)first_indices[2], (unsigned)first_indices[3],
+                        (unsigned)first_indices[4], (unsigned)first_indices[5]);
+            }
+            void (*get_uniform)(GLuint, GLuint, GLsizei, GLsizei *, GLint *,
+                                GLenum *, char *) = lookup_gl("glGetActiveUniform");
+            GLint (*get_location)(GLuint, const char *) = lookup_gl("glGetUniformLocation");
+            void (*get_uniformfv)(GLuint, GLint, GLfloat *) = lookup_gl("glGetUniformfv");
+            void (*get_uniformiv)(GLuint, GLint, GLint *) = lookup_gl("glGetUniformiv");
+            if (get_uniform && get_location) {
+                for (GLint uniform = 0; uniform < active_uniforms && uniform < 12; ++uniform) {
+                    char name[96] = {0};
+                    GLsizei name_len = 0;
+                    GLint array_size = 0;
+                    GLenum uniform_type = 0;
+                    get_uniform((GLuint)program, (GLuint)uniform, (GLsizei)sizeof(name),
+                                &name_len, &array_size, &uniform_type, name);
+                    GLint location = get_location((GLuint)program, name);
+                    GLfloat values[16] = {0};
+                    if (location >= 0 && get_uniformfv && uniform_type != 0x8b5eu)
+                        get_uniformfv((GLuint)program, location, values);
+                    GLint texture_unit = -1;
+                    if (location >= 0 && get_uniformiv && uniform_type == 0x8b5eu)
+                        get_uniformiv((GLuint)program, location, &texture_unit);
+                    fprintf(stderr,
+                            "[BOZ_GL_UNIFORM] n=%d name=%s type=%04x size=%d loc=%d "
+                            "sampler=%d v=%g,%g,%g,%g\n",
+                            uniform, name, (unsigned)uniform_type, array_size, location,
+                            texture_unit, (double)values[0], (double)values[1],
+                            (double)values[2], (double)values[3]);
+                    if (uniform_type == 0x8b5cu) {
+                        fprintf(stderr,
+                                "[BOZ_GL_MATRIX4] name=%s m=%g,%g,%g,%g;%g,%g,%g,%g;"
+                                "%g,%g,%g,%g;%g,%g,%g,%g\n",
+                                name, (double)values[0], (double)values[1],
+                                (double)values[2], (double)values[3],
+                                (double)values[4], (double)values[5],
+                                (double)values[6], (double)values[7],
+                                (double)values[8], (double)values[9],
+                                (double)values[10], (double)values[11],
+                                (double)values[12], (double)values[13],
+                                (double)values[14], (double)values[15]);
+                    }
+                }
+            }
             if (get_active_attrib) {
                 for (GLint attribute = 0; attribute < active_attribs && attribute < 12; ++attribute) {
                     char name[96] = {0};
@@ -219,6 +269,18 @@ static S3E_SOFTFP void host_glDrawElements(GLenum mode, GLsizei count, GLenum ty
                             "stride=%d vbo=%d norm=%d ptr=%08lx\n",
                             attribute, enabled, size, vtype, stride, vbo, norm,
                             (unsigned long)(uintptr_t)pointer);
+                    if (vbo == 0 && pointer && (uintptr_t)pointer > 0x10000u) {
+                        unsigned char bytes[16];
+                        memcpy(bytes, pointer, sizeof(bytes));
+                        fprintf(stderr,
+                                "[BOZ_GL_VERTEX_BYTES] loc=%u bytes="
+                                "%02x%02x%02x%02x%02x%02x%02x%02x"
+                                "%02x%02x%02x%02x%02x%02x%02x%02x\n",
+                                attribute, bytes[0], bytes[1], bytes[2], bytes[3],
+                                bytes[4], bytes[5], bytes[6], bytes[7],
+                                bytes[8], bytes[9], bytes[10], bytes[11],
+                                bytes[12], bytes[13], bytes[14], bytes[15]);
+                    }
                 }
             }
         }
