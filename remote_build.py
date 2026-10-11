@@ -1476,7 +1476,7 @@ def run_boz_diagnostic(report: dict) -> int:
             if line.startswith("[BOZ_RESOURCE_PROGRESS]")
         ]
         report["fast_resource_consumption"] = consumption[:60]
-        report["fast_resource_progress"] = progress[:80]
+        report["fast_resource_progress"] = progress[-192:]
         print("[FAST_RESOURCE_CONSUMPTION] " + json.dumps({
             "opened": sum(line.startswith("[BOZ_RESOURCE_OPEN]") for line in consumption),
             "closed": sum(line.startswith("[BOZ_RESOURCE_CLOSE]") for line in consumption),
