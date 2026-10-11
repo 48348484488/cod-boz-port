@@ -103,6 +103,7 @@ def summarize(report: dict) -> dict:
         "per_frame_draw_census": census,
         "last_draw_census": census[-1] if census else None,
         "unit0_binding_transitions": (texture.get("unit0_binds") or [])[-24:],
+        "gl_guest_callsites": (texture.get("gl_callsites") or [])[-70:],
         "sampled_draws_with_2x2_texture": sum(
             size == (2, 2) for size in sampled_dimensions
         ),
