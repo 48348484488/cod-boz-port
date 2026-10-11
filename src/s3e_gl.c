@@ -317,6 +317,21 @@ static S3E_SOFTFP void host_glDrawElements(GLenum mode, GLsizei count, GLenum ty
             get_int(0x8895u, &index_buffer); /* GL_ELEMENT_ARRAY_BUFFER_BINDING */
         }
         int scissor_enabled = is_enabled ? (int)is_enabled(0x0c11u) : -1;
+        if (boz_texture_diag_enabled()) {
+            GLint src_rgb = -1, dst_rgb = -1;
+            if (get_int) {
+                get_int(0x80c9u, &src_rgb); /* GL_BLEND_SRC_RGB */
+                get_int(0x80c8u, &dst_rgb); /* GL_BLEND_DST_RGB */
+            }
+            fprintf(stderr,
+                    "[BOZ_GL_DRAW_STATE] seq=%u program=%d blend=%d "
+                    "src=%04x dst=%04x depth=%d cull=%d\n",
+                    g_boz_gl_draw_elements_count, program,
+                    is_enabled ? (int)is_enabled(0x0be2u) : -1,
+                    (unsigned)src_rgb, (unsigned)dst_rgb,
+                    is_enabled ? (int)is_enabled(0x0b71u) : -1,
+                    is_enabled ? (int)is_enabled(0x0b44u) : -1);
+        }
         if (boz_texture_diag_enabled() && get_int) {
             GLint active_texture = 0, active_bound = 0;
             get_int(0x84e0u, &active_texture); /* GL_ACTIVE_TEXTURE */
@@ -697,7 +712,8 @@ static size_t trace_gl_bpp(GLenum format, GLenum type) {
     if (type == 0x8033 || type == 0x8034 || type == 0x8363 || type == 0x8362) return 2;
     if (type == 0x1401 && format == 0x1907) return 3;
     if (type == 0x1401 && format == 0x1908) return 4;
-    if (type == 0x1401 && (format == 0x1909 || format == 0x190A)) return 1;
+    if (type == 0x1401 && format == 0x1909) return 1;
+    if (type == 0x1401 && format == 0x190A) return 2;
     return 0;
 }
 
@@ -780,20 +796,38 @@ static void boz_track_tex_upload(GLenum target, GLint level, GLsizei width,
         (size_t)width <= SIZE_MAX / (size_t)height / bpp) {
         size_t length = (size_t)width * (size_t)height * bpp;
         const unsigned char *bytes = (const unsigned char *)pixels;
-        size_t sampled = 0, nonzero = 0;
+        size_t sampled = 0, nonzero = 0, alpha_pixels = 0;
+        size_t alpha_nonzero = 0, alpha_opaque = 0;
+        unsigned alpha_max = 0;
+        if (format == 0x1908u && type == 0x8033u) alpha_max = 15u;
+        else if (format == 0x1908u && type == 0x8034u) alpha_max = 1u;
+        else if (format == 0x1908u && type == 0x1401u) alpha_max = 255u;
+        else if (format == 0x190au && type == 0x1401u) alpha_max = 255u;
         for (unsigned window = 0; window < 5u; ++window) {
             size_t start = window == 4u ? (length > 64u ? length - 64u : 0u)
                                          : length / 4u * window;
+            start -= start % bpp;
             size_t take = length - start < 64u ? length - start : 64u;
             for (size_t i = 0; i < take; ++i)
                 if (bytes[start + i] != 0u) ++nonzero;
             sampled += take;
+            if (!alpha_max) continue;
+            for (size_t i = 0; i + bpp <= take; i += bpp) {
+                unsigned alpha = 0;
+                if (type == 0x8033u) alpha = bytes[start + i] & 0x0fu;
+                else if (type == 0x8034u) alpha = bytes[start + i] & 1u;
+                else alpha = bytes[start + i + bpp - 1u];
+                ++alpha_pixels;
+                if (alpha != 0u) ++alpha_nonzero;
+                if (alpha == alpha_max) ++alpha_opaque;
+            }
         }
         fprintf(stderr,
                 "[BOZ_GL_TEXTURE_OCCUPANCY] tex=%u size=%dx%d format=%04x type=%04x "
-                "sample_bytes=%zu nonzero_bytes=%zu\n",
+                "sample_bytes=%zu nonzero_bytes=%zu alpha_pixels=%zu "
+                "alpha_nonzero=%zu alpha_opaque=%zu\n",
                 texture, (int)width, (int)height, (unsigned)format, (unsigned)type,
-                sampled, nonzero);
+                sampled, nonzero, alpha_pixels, alpha_nonzero, alpha_opaque);
     }
     if (g_boz_tex_uploads <= 36u ||
         ((width > 2 || height > 2) && g_boz_tex_large_printed++ < 20u))
