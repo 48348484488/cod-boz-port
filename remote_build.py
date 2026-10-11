@@ -1305,7 +1305,9 @@ def run_boz_diagnostic(report: dict) -> int:
             ln[:650] for ln in trial_lines
             if ln.startswith(("[BOZ_GL_DRAW]", "[BOZ_GL_DRAW_ERROR]",
                               "[BOZ_GL_PROGRAM]", "[BOZ_GL_ACTIVE_ATTRIB]",
-                              "[BOZ_GL_VERTEX_ATTRIB]"))
+                              "[BOZ_GL_VERTEX_ATTRIB]", "[BOZ_GL_INDEX_SAMPLE]",
+                              "[BOZ_GL_UNIFORM]", "[BOZ_GL_MATRIX4]",
+                              "[BOZ_GL_VERTEX_BYTES]"))
         ]
         report["fast_draw_diagnostic"] = draw_trace[:30]
         print("[FAST_DRAW_SUMMARY] " + json.dumps({
@@ -1345,7 +1347,9 @@ def run_boz_diagnostic(report: dict) -> int:
                 "[BOZ_DIAGNOSTIC_TAP]", "[S3E_FILE_OPEN]", "[S3E_FILE_EXISTS]",
                 "[BOZ_GL_DRAW]", "[BOZ_GL_DRAW_ERROR]",
                 "[BOZ_GL_PROGRAM]", "[BOZ_GL_ACTIVE_ATTRIB]",
-                "[BOZ_GL_VERTEX_ATTRIB]",
+                "[BOZ_GL_VERTEX_ATTRIB]", "[BOZ_GL_INDEX_SAMPLE]",
+                "[BOZ_GL_UNIFORM]", "[BOZ_GL_MATRIX4]",
+                "[BOZ_GL_VERTEX_BYTES]",
                 "[BOZ_GL_PROGRAM_CREATE]", "[BOZ_GL_PROGRAM_LINK]",
                 "[BOZ_GL_PROGRAM_LOG]", "[BOZ_GL_PROGRAM_USE]",
                 "[BOZ_PNG_PATCH]",
