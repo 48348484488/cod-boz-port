@@ -35,6 +35,7 @@ jobs:
       BOZ_FAST_SKIP_NULL_REGISTRATION: "1"
       BOZ_FAST_MINIMAL_TRACE: "1"
       BOZ_FAST_LATE_GL_DIAGNOSTIC: "1"
+      BOZ_DIAGNOSTIC_LATE_TAP: "1"
       BOZ_RESOURCE_CONSUMPTION_TRACE: "1"
       BOZ_PC_SAMPLE_UNGUARDED: "1"
       BOZ_PC_SAMPLE_INTERVAL: "4"
@@ -104,6 +105,14 @@ jobs:
           if p.get("signal_11_count"):
               print("::error::BOZ ARM runtime crashed with signal 11")
               sys.exit(1)
+          taps = p.get("diagnostic_tap_events") or []
+          if len(taps) != 2:
+              print(f"::error::Late frontend tap did not produce press/release: {taps}")
+              sys.exit(1)
+          if not any("n=130" in swap for swap in swaps):
+              print("::error::No verified frame after the late frontend tap")
+              sys.exit(1)
+          print("Actual late S3E pointer events:", *taps, sep="\\n")
           texture_report = report.get("fast_texture_evidence") or {}
           snapshots = texture_report.get("size_totals") or []
           if not snapshots:
