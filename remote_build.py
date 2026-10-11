@@ -1352,20 +1352,27 @@ def run_boz_diagnostic(report: dict) -> int:
                 })
             except ValueError:
                 continue
-        sampled_addrs = set()
+        from collections import Counter as _Counter
+        # Prioritize actual hot guest PCs, not numerically smallest addresses:
+        # libc wait loops can dominate later samples and would otherwise be
+        # missed when there are >10 unique address samples.
+        pc_frequencies = _Counter()
         for trace_line in trial_lines:
             if not trace_line.startswith("[BOZ_PC_SAMPLE]"):
                 continue
             for field in trace_line.split():
-                if not (field.startswith("pc=") or field.startswith("lr=")):
-                    continue
-                try:
-                    sampled_addrs.add(int(field.split("=", 1)[1], 16) & ~1)
-                except ValueError:
-                    continue
+                if field.startswith("pc="):
+                    try:
+                        pc_frequencies[int(field.split("=", 1)[1], 16) & ~1] += 1
+                    except ValueError:
+                        pass
+        print("[FAST_PC_HOTSPOTS] " + json.dumps([
+            {"pc": hex(addr), "samples": count}
+            for addr, count in pc_frequencies.most_common(12)
+        ]), flush=True)
         elf_samples = []
         sym_cache = {}
-        for addr in sorted(sampled_addrs)[:10]:
+        for addr, _count in pc_frequencies.most_common(10):
             mapped = next(
                 (item for item in arm_maps
                  if item["start"] <= addr < item["end"]), None
