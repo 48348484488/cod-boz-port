@@ -1348,6 +1348,7 @@ def run_boz_diagnostic(report: dict) -> int:
                 "[BOZ_GL_VERTEX_ATTRIB]",
                 "[BOZ_GL_PROGRAM_CREATE]", "[BOZ_GL_PROGRAM_LINK]",
                 "[BOZ_GL_PROGRAM_LOG]", "[BOZ_GL_PROGRAM_USE]",
+                "[BOZ_PNG_PATCH]",
                 "[BOZ_NULL_PROPERTY_ORIGIN]", "signal 11 ", "stack:",
                 "[S3E_FILE_EXISTS]",
             )) and not line.startswith("[S3E_FILE_EXISTS]"):
@@ -1424,6 +1425,10 @@ def run_boz_diagnostic(report: dict) -> int:
                 if line.startswith("[BOZ_DIAGNOSTIC_TAP]")
             ],
             "gl_upload_line_count": len(upload_lines),
+            "png_patch_events": [
+                line for line in trial_lines
+                if line.startswith("[BOZ_PNG_PATCH]")
+            ],
             "parent_lr": hex(saved_parent) if saved_parent is not None else None,
             "parent": parent_label,
             "grandparent_lr": (
