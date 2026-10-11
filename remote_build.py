@@ -1309,11 +1309,18 @@ def run_boz_diagnostic(report: dict) -> int:
             line for line in trial_lines
             if line.startswith(("[BOZ_RESOURCE_OPEN]", "[BOZ_RESOURCE_CLOSE]"))
         ]
+        progress = [
+            line for line in trial_lines
+            if line.startswith("[BOZ_RESOURCE_PROGRESS]")
+        ]
         report["fast_resource_consumption"] = consumption[:60]
+        report["fast_resource_progress"] = progress[:80]
         print("[FAST_RESOURCE_CONSUMPTION] " + json.dumps({
             "opened": sum(line.startswith("[BOZ_RESOURCE_OPEN]") for line in consumption),
             "closed": sum(line.startswith("[BOZ_RESOURCE_CLOSE]") for line in consumption),
             "events": consumption[:36],
+            "progress_events": len(progress),
+            "last_progress": progress[-10:],
         }), flush=True)
         draw_trace = [
             ln[:650] for ln in trial_lines
@@ -1394,7 +1401,7 @@ def run_boz_diagnostic(report: dict) -> int:
                 "[BOZ_PNG_PATCH]", "[BOZ_ZLIB_DECOMP]",
                 "[BOZ_GL_TEXTURE_DRAW]", "[BOZ_GL_TEXTURE_UPLOAD]",
                 "[BOZ_GL_TEXTURE_BIND]",
-                "[BOZ_RESOURCE_OPEN]", "[BOZ_RESOURCE_CLOSE]",
+                "[BOZ_RESOURCE_OPEN]", "[BOZ_RESOURCE_CLOSE]", "[BOZ_RESOURCE_PROGRESS]",
                 "[BOZ_NULL_PROPERTY_ORIGIN]", "signal 11 ", "stack:",
                 "[S3E_FILE_EXISTS]",
             )) and not line.startswith("[S3E_FILE_EXISTS]"):
