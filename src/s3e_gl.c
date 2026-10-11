@@ -93,7 +93,42 @@ static S3E_SOFTFP void host_glDrawArrays(GLenum mode, GLint first, GLsizei count
 static S3E_SOFTFP void host_glDrawElements(GLenum mode, GLsizei count, GLenum type, const void *indices) {
     ++g_boz_gl_draw_elements_count;
     void (*real)(GLenum, GLsizei, GLenum, const void *) = lookup_gl("glDrawElements");
+    const char *trace = getenv("BOZ_GL_DRAW_DIAGNOSTIC");
+    const bool diagnostic = trace && strcmp(trace, "1") == 0 &&
+                            g_boz_gl_draw_elements_count <= 12u;
+    if (diagnostic) {
+        void (*get_int)(GLenum, GLint *) = lookup_gl("glGetIntegerv");
+        GLboolean (*is_enabled)(GLenum) = lookup_gl("glIsEnabled");
+        GLint viewport[4] = {0}, scissor[4] = {0};
+        GLint program = -1, framebuffer = -1, array_buffer = -1, index_buffer = -1;
+        if (get_int) {
+            get_int(0x0ba2u, viewport); /* GL_VIEWPORT */
+            get_int(0x0c10u, scissor);  /* GL_SCISSOR_BOX */
+            get_int(0x8b8du, &program); /* GL_CURRENT_PROGRAM */
+            get_int(0x8ca6u, &framebuffer); /* GL_FRAMEBUFFER_BINDING */
+            get_int(0x8894u, &array_buffer); /* GL_ARRAY_BUFFER_BINDING */
+            get_int(0x8895u, &index_buffer); /* GL_ELEMENT_ARRAY_BUFFER_BINDING */
+        }
+        int scissor_enabled = is_enabled ? (int)is_enabled(0x0c11u) : -1;
+        fprintf(stderr,
+                "[BOZ_GL_DRAW] seq=%u mode=%04x count=%d type=%04x indices=%08lx "
+                "program=%d fbo_host=%u fbo_gl=%d arr_buf=%d idx_buf=%d "
+                "viewport=%d,%d,%d,%d scissor=%d,%d,%d,%d scissor_on=%d resolved=%d\n",
+                g_boz_gl_draw_elements_count, mode, count, type,
+                (unsigned long)(uintptr_t)indices, program, g_bound_framebuffer,
+                framebuffer, array_buffer, index_buffer,
+                viewport[0], viewport[1], viewport[2], viewport[3],
+                scissor[0], scissor[1], scissor[2], scissor[3],
+                scissor_enabled, real != NULL);
+    }
     if (real) real(mode, count, type, indices);
+    if (diagnostic) {
+        GLenum (*get_error)(void) = lookup_gl("glGetError");
+        if (get_error) {
+            fprintf(stderr, "[BOZ_GL_DRAW_ERROR] seq=%u gl_error=0x%04x\n",
+                    g_boz_gl_draw_elements_count, (unsigned)get_error());
+        }
+    }
 }
 
 static void driver_bind_framebuffer(GLuint framebuffer) {
