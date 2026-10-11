@@ -29,8 +29,8 @@ jobs:
           "$RUNNER_TEMP/clang-format/bin/pip" install \
             --disable-pip-version-check clang-format==21.1.8
           echo "$RUNNER_TEMP/clang-format/bin" >> "$GITHUB_PATH"
-      - name: Run host checks
-        run: make check
+      - name: Run host functional tests
+        run: make test-host
       - name: Run sanitizers
         run: make test-host-sanitize
       - name: Build ARMHF package
@@ -43,3 +43,11 @@ jobs:
           name: codboz-portmaster
           path: build/codboz.zip
           if-no-files-found: error
+      # Style debt remains visible but must not obscure compile/test outcomes.
+      - name: Check formatting and shell scripts
+        if: always()
+        run: |
+          format_rc=0
+          make format-check || format_rc=$?
+          make shellcheck || exit $?
+          exit "$format_rc"
