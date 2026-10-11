@@ -20,7 +20,7 @@ def swap_from_name(filename: str) -> int | None:
 
 
 def draw_dimensions(line: str) -> tuple[int, int] | None:
-    match = re.search(r"\\bimage=(\\d+)x(\\d+)\\b", line)
+    match = re.search(r"\bimage=(\d+)x(\d+)\b", line)
     if not match:
         return None
     return int(match.group(1)), int(match.group(2))
