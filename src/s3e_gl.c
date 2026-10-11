@@ -81,6 +81,58 @@ static unsigned g_boz_gl_program_links;
 static unsigned g_boz_gl_program_uses;
 static GLuint g_boz_last_program;
 
+/* Read-only, opt-in texture provenance; no texture pixels are persisted. */
+enum { BOZ_TEX_SLOTS = 512, BOZ_TEX_UNITS = 16 };
+struct boz_tex_meta {
+    GLuint id;
+    GLsizei width, height;
+    unsigned uploads;
+    unsigned long long sample_hash;
+    unsigned char first_rgba[16];
+    unsigned first_bytes;
+};
+static GLuint g_boz_tex_bound[BOZ_TEX_UNITS];
+static GLenum g_boz_tex_active = 0x84c0u; /* GL_TEXTURE0 */
+static struct boz_tex_meta g_boz_tex_meta[BOZ_TEX_SLOTS];
+static unsigned g_boz_tex_meta_count;
+static unsigned g_boz_tex_uploads;
+
+static bool boz_texture_diag_enabled(void) {
+    const char *flag = getenv("BOZ_GL_TEX_PROVENANCE");
+    return flag && strcmp(flag, "1") == 0;
+}
+
+static S3E_SOFTFP void host_glActiveTexture(GLenum texture) {
+    void (*real)(GLenum) = lookup_gl("glActiveTexture");
+    if (real) real(texture);
+    if (real && texture >= 0x84c0u && texture < 0x84c0u + BOZ_TEX_UNITS)
+        g_boz_tex_active = texture;
+}
+
+static S3E_SOFTFP void host_glBindTexture(GLenum target, GLuint texture) {
+    void (*real)(GLenum, GLuint) = lookup_gl("glBindTexture");
+    if (real) real(target, texture);
+    if (real && target == 0x0de1u && g_boz_tex_active >= 0x84c0u &&
+        g_boz_tex_active < 0x84c0u + BOZ_TEX_UNITS) {
+        unsigned unit = (unsigned)(g_boz_tex_active - 0x84c0u);
+        g_boz_tex_bound[unit] = texture;
+        if (boz_texture_diag_enabled() && g_boz_gl_draw_elements_count < 1u)
+            fprintf(stderr, "[BOZ_GL_TEXTURE_BIND] unit=%u texture=%u\n", unit, texture);
+    }
+}
+
+static struct boz_tex_meta *boz_find_tex(GLuint texture, bool create) {
+    if (!texture) return NULL;
+    for (unsigned i = 0; i < g_boz_tex_meta_count; ++i)
+        if (g_boz_tex_meta[i].id == texture) return &g_boz_tex_meta[i];
+    if (!create || g_boz_tex_meta_count >= BOZ_TEX_SLOTS) return NULL;
+    struct boz_tex_meta *meta = &g_boz_tex_meta[g_boz_tex_meta_count++];
+    memset(meta, 0, sizeof(*meta));
+    meta->id = texture;
+    return meta;
+}
+
+
 static bool boz_shader_diag_enabled(void) {
     const char *value = getenv("BOZ_GL_SHADER_DIAGNOSTIC");
     return value && strcmp(value, "1") == 0;
@@ -163,6 +215,25 @@ static S3E_SOFTFP void host_glDrawElements(GLenum mode, GLsizei count, GLenum ty
             get_int(0x8895u, &index_buffer); /* GL_ELEMENT_ARRAY_BUFFER_BINDING */
         }
         int scissor_enabled = is_enabled ? (int)is_enabled(0x0c11u) : -1;
+        if (boz_texture_diag_enabled() && get_int) {
+            GLint active_texture = 0, active_bound = 0;
+            get_int(0x84e0u, &active_texture); /* GL_ACTIVE_TEXTURE */
+            get_int(0x8069u, &active_bound);   /* GL_TEXTURE_BINDING_2D */
+            GLuint sampler_texture = g_boz_tex_bound[0];
+            struct boz_tex_meta *meta = boz_find_tex(sampler_texture, false);
+            fprintf(stderr,
+                    "[BOZ_GL_TEXTURE_DRAW] seq=%u sampler0_tex=%u active=%04x "
+                    "active_bound=%d upload_count=%u image=%dx%d hash64=%016llx "
+                    "first=%02x%02x%02x%02x\n",
+                    g_boz_gl_draw_elements_count, sampler_texture,
+                    (unsigned)active_texture, active_bound, meta ? meta->uploads : 0u,
+                    meta ? (int)meta->width : 0, meta ? (int)meta->height : 0,
+                    meta ? meta->sample_hash : 0ULL,
+                    meta ? meta->first_rgba[0] : 0u,
+                    meta ? meta->first_rgba[1] : 0u,
+                    meta ? meta->first_rgba[2] : 0u,
+                    meta ? meta->first_rgba[3] : 0u);
+        }
         fprintf(stderr,
                 "[BOZ_GL_DRAW] seq=%u mode=%04x count=%d type=%04x indices=%08lx "
                 "program=%d fbo_host=%u fbo_gl=%d arr_buf=%d idx_buf=%d "
@@ -521,6 +592,40 @@ static void trace_gl_upload_diag(const char *name, GLenum target, GLint level, G
     fclose(fp);
 }
 
+static void boz_track_tex_upload(GLenum target, GLint level, GLsizei width,
+                                 GLsizei height, GLenum format, GLenum type,
+                                 const void *pixels, bool sub_image) {
+    if (!boz_texture_diag_enabled() || target != 0x0de1u || level != 0 ||
+        g_boz_tex_active < 0x84c0u || g_boz_tex_active >= 0x84c0u + BOZ_TEX_UNITS)
+        return;
+    GLuint texture = g_boz_tex_bound[g_boz_tex_active - 0x84c0u];
+    struct boz_tex_meta *meta = boz_find_tex(texture, true);
+    if (!meta) return;
+    ++meta->uploads;
+    ++g_boz_tex_uploads;
+    if (!sub_image) {
+        meta->width = width;
+        meta->height = height;
+    }
+    meta->sample_hash = 0;
+    meta->first_bytes = 0;
+    size_t bpp = trace_gl_bpp(format, type);
+    if (pixels && width > 0 && height > 0 && bpp &&
+        (size_t)width <= SIZE_MAX / (size_t)height / bpp) {
+        size_t available = (size_t)width * (size_t)height * bpp;
+        size_t sample = available < 512 ? available : 512;
+        meta->sample_hash = trace_gl_hash64(pixels, sample);
+        meta->first_bytes = (unsigned)(available < 16 ? available : 16);
+        memcpy(meta->first_rgba, pixels, meta->first_bytes);
+    }
+    if (g_boz_tex_uploads <= 36u)
+        fprintf(stderr,
+                "[BOZ_GL_TEXTURE_UPLOAD] n=%u tex=%u sub=%d size=%dx%d "
+                "fmt=%04x type=%04x hash64=%016llx\n",
+                g_boz_tex_uploads, texture, (int)sub_image, (int)width, (int)height,
+                format, type, meta->sample_hash);
+}
+
 static S3E_SOFTFP void host_glTexImage2D(GLenum target, GLint level, GLint internal_format,
                                           GLsizei width, GLsizei height, GLint border,
                                           GLenum format, GLenum type, const void *pixels) {
@@ -528,6 +633,7 @@ static S3E_SOFTFP void host_glTexImage2D(GLenum target, GLint level, GLint inter
         lookup_gl("glTexImage2D");
     trace_gl_upload_diag("glTexImage2D", target, level, (GLenum)internal_format, width, height,
                          border, format, type, pixels);
+    boz_track_tex_upload(target, level, width, height, format, type, pixels, false);
     if (real) real(target, level, internal_format, width, height, border, format, type, pixels);
 }
 
@@ -537,6 +643,7 @@ static S3E_SOFTFP void host_glTexSubImage2D(GLenum target, GLint level, GLint xo
     void (*real)(GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum,
                  const void *) = lookup_gl("glTexSubImage2D");
     trace_gl_upload_diag("glTexSubImage2D", target, level, 0, width, height, 0, format, type, pixels);
+    boz_track_tex_upload(target, level, width, height, format, type, pixels, true);
     if (real) real(target, level, xoffset, yoffset, width, height, format, type, pixels);
 }
 
@@ -964,6 +1071,8 @@ static const struct host_symbol HOST_SYMBOLS[] = {
 
 static const struct host_symbol WRAPPED_SYMBOLS[] = {
     WRAPPED(glAlphaFunc),
+    WRAPPED(glActiveTexture),
+    WRAPPED(glBindTexture),
     WRAPPED(glBindFramebuffer),
     WRAPPED(glBindFramebufferOES),
     WRAPPED(glBlendColor),
