@@ -337,6 +337,51 @@ static S3E_SOFTFP void host_glDrawElements(GLenum mode, GLsizei count, GLenum ty
                     meta ? meta->first_rgba[2] : 0u,
                     meta ? meta->first_rgba[3] : 0u);
         }
+        /* The shader decides which texture unit is sampled. Unit zero alone
+         * cannot prove what an indexed draw actually uses. Log bound sampler
+         * units without accessing or retaining any texture pixels. */
+        if (boz_texture_diag_enabled() && program > 0) {
+            void (*get_program_iv)(GLuint, GLenum, GLint *) =
+                lookup_gl("glGetProgramiv");
+            void (*get_active_uniform)(GLuint, GLuint, GLsizei, GLsizei *,
+                                       GLint *, GLenum *, char *) =
+                lookup_gl("glGetActiveUniform");
+            GLint (*get_uniform_location)(GLuint, const char *) =
+                lookup_gl("glGetUniformLocation");
+            void (*get_uniform_iv)(GLuint, GLint, GLint *) =
+                lookup_gl("glGetUniformiv");
+            if (get_program_iv && get_active_uniform &&
+                get_uniform_location && get_uniform_iv) {
+                GLint n_uniforms = 0;
+                get_program_iv((GLuint)program, 0x8b86u, &n_uniforms);
+                for (GLint n = 0; n < n_uniforms && n < 20; ++n) {
+                    char uniform_name[96] = {0};
+                    GLsizei name_len = 0;
+                    GLint uniform_count = 0;
+                    GLenum uniform_type = 0;
+                    get_active_uniform((GLuint)program, (GLuint)n,
+                                       (GLsizei)sizeof(uniform_name),
+                                       &name_len, &uniform_count,
+                                       &uniform_type, uniform_name);
+                    if (uniform_type != 0x8b5eu && uniform_type != 0x8b60u)
+                        continue;
+                    GLint location = get_uniform_location((GLuint)program, uniform_name);
+                    GLint unit = -1;
+                    if (location >= 0) get_uniform_iv((GLuint)program, location, &unit);
+                    GLuint bound_tex = (unit >= 0 && unit < BOZ_TEX_UNITS) ?
+                        g_boz_tex_bound[unit] : 0u;
+                    struct boz_tex_meta *tex = boz_find_tex(bound_tex, false);
+                    fprintf(stderr,
+                            "[BOZ_GL_SAMPLER_BIND] seq=%u program=%d name=%s "
+                            "type=%04x unit=%d tex=%u image=%dx%d uploads=%u\n",
+                            g_boz_gl_draw_elements_count, program,
+                            uniform_name, (unsigned)uniform_type, unit,
+                            bound_tex, tex ? (int)tex->width : 0,
+                            tex ? (int)tex->height : 0,
+                            tex ? tex->uploads : 0u);
+                }
+            }
+        }
         fprintf(stderr,
                 "[BOZ_GL_DRAW] seq=%u mode=%04x count=%d type=%04x indices=%08lx "
                 "program=%d fbo_host=%u fbo_gl=%d arr_buf=%d idx_buf=%d "

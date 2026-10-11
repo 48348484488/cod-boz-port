@@ -51,6 +51,10 @@ class BozSummaryTests(unittest.TestCase):
                 "unit0_binds": [
                     "[BOZ_GL_UNIT0_BIND] seq=2 draw=1 old=58 tex=59"
                 ],
+                "sampler_bindings": [
+                    "[BOZ_GL_SAMPLER_BIND] seq=2 program=9 name=uTexture "
+                    "type=8b5e unit=15 tex=56 image=512x512 uploads=1"
+                ],
             },
         }
         result = summarize(report)
@@ -60,6 +64,7 @@ class BozSummaryTests(unittest.TestCase):
         self.assertEqual(result["sampled_draws_with_larger_texture"], 1)
         self.assertEqual(result["last_draw_census"]["large_drawn"], 0)
         self.assertEqual(len(result["unit0_binding_transitions"]), 1)
+        self.assertEqual(len(result["sampler_bindings"]), 1)
         self.assertFalse(result["visual_frontend_verified"])
 
 
