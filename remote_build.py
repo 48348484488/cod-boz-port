@@ -860,6 +860,126 @@ def stage_remote_frontend_groups(image: pathlib.Path, report: dict) -> None:
           json.dumps(report["front_group_staging"]), flush=True)
 
 
+
+def stage_official_game_archive(image: pathlib.Path, report: dict) -> None:
+    """Opt-in download from the official Activision endpoint embedded in the verified S3E.
+
+    Stream to a temporary file, enforce bounded size and validate the DTRZ
+    entry table before promoting into the game's assets directory.
+    """
+    if os.environ.get("BOZ_FETCH_OFFICIAL_GAME_ARCHIVE", "0") != "1":
+        return
+    probe = report.get("reference_resource_cdn_probe") or {}
+    base = (probe.get("resource_base") or "").rstrip("/")
+    archive_name = os.environ.get("BOZ_OFFICIAL_GAME_ARCHIVE", "blackops_gles1.dz")
+    if archive_name not in ("blackops_gles1.dz", "blackops_etc.dz"):
+        report["official_asset_error"] = "unsupported archive selection"
+        return
+    check = (probe.get("archives") or {}).get(archive_name) or {}
+    if check.get("http_status") != 200:
+        report["official_asset_error"] = "CDN HEAD check failed"
+        return
+    parsed = urllib.parse.urlsplit(base)
+    host = (parsed.hostname or "").lower()
+    if host != "callofduty.com" and not host.endswith(".callofduty.com"):
+        report["official_asset_error"] = "refusing unverified CDN host"
+        return
+    max_bytes = 650_000_000
+    try:
+        expected_bytes = int(check.get("content_length"))
+        if expected_bytes < 1024 or expected_bytes > max_bytes:
+            raise ValueError("asset size outside allowed bounds")
+    except (ValueError, TypeError) as exc:
+        report["official_asset_error"] = "invalid expected file size: " + str(exc)
+        return
+    target = image.parent.parent / "assets" / archive_name
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if target.is_file() and target.stat().st_size == expected_bytes:
+        report["official_asset_cached"] = str(target)
+        print("[OFFICIAL_ASSET] cached=" + str(target), flush=True)
+        return
+    temp = target.with_name("." + target.name + ".download")
+    result = {"name": archive_name, "expected_bytes": expected_bytes,
+              "source_host": host}
+    report["official_asset_download"] = result
+    candidates = []
+    if parsed.scheme == "https":
+        candidates.append(base + "/" + archive_name)
+    elif parsed.scheme == "http":
+        candidates.append("https://" + parsed.netloc + parsed.path.rstrip("/") + "/" + archive_name)
+        if os.environ.get("BOZ_ALLOW_LEGACY_OFFICIAL_HTTP", "0") == "1":
+            candidates.append(base + "/" + archive_name)
+    last_error = None
+    for url in candidates:
+        actual = 0
+        digest = hashlib.sha256()
+        try:
+            print("[OFFICIAL_ASSET] downloading host=" + urllib.parse.urlsplit(url).hostname +
+                  " file=" + archive_name, flush=True)
+            req = urllib.request.Request(
+                url, headers={"User-Agent": "CODBOZ-Loader-Resource-Restore/1.0"}
+            )
+            with urllib.request.urlopen(req, timeout=90) as stream:
+                end_host = (urllib.parse.urlsplit(stream.url).hostname or "").lower()
+                if end_host != "callofduty.com" and not end_host.endswith(".callofduty.com"):
+                    raise ValueError("redirect outside verified Activision CDN")
+                if stream.status != 200:
+                    raise ValueError("unexpected GET status " + str(stream.status))
+                with temp.open("wb") as sink:
+                    next_log = 64 * 1024 * 1024
+                    while True:
+                        chunk = stream.read(2 * 1024 * 1024)
+                        if not chunk:
+                            break
+                        actual += len(chunk)
+                        if actual > max_bytes or actual > expected_bytes:
+                            raise ValueError("asset exceeds verified advertised size")
+                        sink.write(chunk)
+                        digest.update(chunk)
+                        if actual >= next_log:
+                            print(f"[OFFICIAL_ASSET_PROGRESS] bytes={actual} total={expected_bytes}", flush=True)
+                            next_log += 64 * 1024 * 1024
+            if actual != expected_bytes:
+                raise ValueError(f"partial asset: {actual} != {expected_bytes}")
+            with temp.open("rb") as source:
+                hdr = source.read(9)
+                if len(hdr) < 9 or hdr[:4] != b"DTRZ":
+                    raise ValueError("downloaded file is not DTRZ")
+                count = int.from_bytes(hdr[4:6], "little")
+                if not 1 <= count <= 512:
+                    raise ValueError("invalid DTRZ entry count")
+                names = []
+                for _ in range(count):
+                    buf = bytearray()
+                    while True:
+                        ch = source.read(1)
+                        if not ch or len(buf) >= 191:
+                            raise ValueError("corrupted DTRZ name table")
+                        if ch == b"\x00":
+                            break
+                        buf += ch
+                    names.append(buf.decode("utf-8", "replace").split("/")[-1].lower())
+            result["entries"] = len(names)
+            result["found_groups"] = [
+                n for n in ("bootstrap.group.bin", "fixed.group.bin",
+                            "frontend.group.bin", "splash.group.bin", "style.group.bin")
+                if n in names
+            ]
+            if "frontend.group.bin" not in names:
+                raise ValueError("missing frontend.group.bin in downloaded archive")
+            os.replace(temp, target)
+            result.update({"installed_path": str(target), "bytes": actual,
+                           "sha256": digest.hexdigest(), "scheme": urllib.parse.urlsplit(url).scheme})
+            print("[OFFICIAL_ASSET_READY] " + json.dumps(result), flush=True)
+            return
+        except Exception as exc:
+            last_error = type(exc).__name__ + ": " + str(exc)[:240]
+            temp.unlink(missing_ok=True)
+            print("[OFFICIAL_ASSET_ATTEMPT_ERROR] " + last_error, flush=True)
+    result["error"] = last_error or "no allowed resource URL scheme"
+    report["official_asset_error"] = result["error"]
+    print("[OFFICIAL_ASSET_ERROR] " + json.dumps(result), flush=True)
+
 def run_boz_diagnostic(report: dict) -> int:
     trace = pathlib.Path("/tmp/boz_gl_upload_trace.log")
     trace.unlink(missing_ok=True)
@@ -870,6 +990,7 @@ def run_boz_diagnostic(report: dict) -> int:
         staged_loader = stage_public_loader_archive(image, report)
         if report.get("reference_s3e_unpacked_sha256"):
             inspect_resource_inventory(image, staged_loader, report)
+            stage_official_game_archive(image, report)
             if os.environ.get("BOZ_STAGE_REMOTE_FRONTEND", "0") == "1":
                 stage_remote_frontend_groups(image, report)
     report["game_image"] = str(image) if image else None
