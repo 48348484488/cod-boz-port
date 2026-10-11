@@ -19,6 +19,20 @@ def swap_from_name(filename: str) -> int | None:
     return int(match.group(1)) if match else None
 
 
+def draw_dimensions(line: str) -> tuple[int, int] | None:
+    match = re.search(r"\\bimage=(\\d+)x(\\d+)\\b", line)
+    if not match:
+        return None
+    return int(match.group(1)), int(match.group(2))
+
+
+def color_counts(frame: dict) -> tuple[tuple[str, int], ...]:
+    return tuple(sorted(
+        (str(item.get("rgb")), int(item.get("pixels", 0)))
+        for item in (frame.get("top_rgb") or [])
+    ))
+
+
 def summarize(report: dict) -> dict:
     runtime = report.get("fast_property") or {}
     resource_lines = report.get("fast_resource_consumption") or []
@@ -32,6 +46,8 @@ def summarize(report: dict) -> dict:
         line for line in progress_lines if "frontend.group.bin" in line
     ]
     texture = report.get("fast_texture_evidence") or {}
+    texture_draws = texture.get("draws") or []
+    sampled_dimensions = [draw_dimensions(line) for line in texture_draws]
     images = runtime.get("captured_pngs") or []
     frames = []
     for img in images:
@@ -65,6 +81,20 @@ def summarize(report: dict) -> dict:
         "after_tap_frame_changed": (
             frame_lookup[100]["sha256"] != frame_lookup[140]["sha256"]
             if 100 in frame_lookup and 140 in frame_lookup else None
+        ),
+        # Hash changes alone include diagnostic cursor movement. Unchanged
+        # color counts help avoid mistaking that movement for a menu transition.
+        "after_tap_color_counts_identical": (
+            color_counts(frame_lookup[100]) == color_counts(frame_lookup[140])
+            if 100 in frame_lookup and 140 in frame_lookup else None
+        ),
+        "sampled_draws_total": len(texture_draws),
+        "sampled_draws_with_2x2_texture": sum(
+            size == (2, 2) for size in sampled_dimensions
+        ),
+        "sampled_draws_with_larger_texture": sum(
+            size is not None and (size[0] > 2 or size[1] > 2)
+            for size in sampled_dimensions
         ),
         "frontend_close": frontend_closes[-1] if frontend_closes else None,
         "frontend_last_read_progress": (
