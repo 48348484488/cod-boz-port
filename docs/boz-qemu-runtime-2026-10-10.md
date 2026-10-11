@@ -175,3 +175,14 @@ a committed workflow with a successfully executed job.
 - Commit `e085118` additionally captures actual framebuffer screenshots at swaps 100 and 150 in future runs. The first successful archive contained images only through swap 60.
 
 **Next acceptance gate:** confirm whether late draws still bind the 2x2 placeholder and whether geometry grows beyond six indices/program 6. If yes, investigate frontend scene transition / texture source and decoder; otherwise inspect late GL state and shader program. The main CI `make format-check` failures on seven edited C/test files are a separate pending style issue, not a BOZ runtime regression.
+
+
+## 2026-10-11: confirmed late GL placeholder plateau (run 38136783823)
+
+- [GitHub Actions run 38136783823](https://github.com/48348484488/cod-boz-port/actions/runs/38136783823) finished successfully. ARM QEMU execution downloaded the original verified `blackops_gles1.dz`; its `frontend.group.bin` was **read completely and closed** with zero I/O errors.
+- Sparse GL state sampling logged **17** real `glDrawElements` records, each accompanied by `glGetError() == GL_NO_ERROR`. Samples through calls **1, 50, 75, 100 and 125** were all exactly `mode=GL_TRIANGLES count=6, program=6, fbo=0` and viewport `640x480`. The documented older 300-swap trace's `program=9 / count=792` transition did **not** appear.
+- Draws **1–75** sampled texture ID **58**, and draws **100–125** texture ID **59**; **both** were only `2x2 RGBA`, with a single upload and the exact same hash `7eea891d3aca0693` / first RGBA pixel `ff ff ff 80`. Texture 59 appearing is NOT evidence of real frontend background. Program 6 had 3 active attributes and 4 uniforms.
+- Actual framebuffer PNGs through swap 60 remained byte-identical `#c0c0ff` with the debug cursor, and no segmentation fault was reported. The diagnostic exited at the 260-second deadline without verified menu or gameplay.
+- **Conclusion limited to observations:** fully reading the frontend asset group is not sufficient for real GL images or larger frontend geometry to become active; investigate actual texture allocation/decompression and scene transition independently.
+- Commit `8809eb2` adds size distribution accounting and read-only `glCompressedTexImage2D`/`glCompressedTexSubImage2D` forwarding diagnostics, emitting `[BOZ_GL_TEX_SIZE_TOTAL]` at swaps 5/60/100/150. Commit `8a94495` collects these counters; workflow update `2b427e8` adds a CI assertion for real texture-size snapshots. **These new counters have not yet been verified by a completed run**.
+- A separate Render profiler experiment `220f7c3` initially failed from `NameError: thread_cpu_totals` and a legacy HTTPS certificate mismatch. Commit `e92566b` fixes the scope bug, and the strict SHA-pinned official-host HTTP option was restored for its next deploy. Do not cite the failed test as a valid thread profile.
