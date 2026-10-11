@@ -213,15 +213,92 @@ int32_t s3eCompressionDecompFinal(void *context) {
     return -1;
 }
 
-int32_t s3eCompressionDecomp(const void *source, uint32_t source_len, void *target,
-                             uint32_t *target_len) {
-    (void)source;
-    (void)source_len;
-    (void)target;
-    if (target_len) {
-        *target_len = 0;
+/* Marmalade's one-shot compression ABI receives an output pointer slot,
+ * an in/out capacity slot, and a fifth stack argument specifying the codec.
+ * BOZ uses codec 2 (zlib). Never modify either slot on failure. */
+typedef int (*boz_zlib_uncompress_fn)(unsigned char *, unsigned long *,
+                                     const unsigned char *, unsigned long);
+static pthread_once_t g_boz_zlib_once = PTHREAD_ONCE_INIT;
+static void *g_boz_zlib_library;
+static boz_zlib_uncompress_fn g_boz_zlib_uncompress;
+static unsigned g_boz_zlib_calls;
+
+static void boz_open_zlib(void) {
+    g_boz_zlib_library = dlopen("libz.so.1", RTLD_NOW | RTLD_LOCAL);
+    if (!g_boz_zlib_library)
+        g_boz_zlib_library = dlopen("libz.so", RTLD_NOW | RTLD_LOCAL);
+    if (g_boz_zlib_library)
+        g_boz_zlib_uncompress =
+            (boz_zlib_uncompress_fn)dlsym(g_boz_zlib_library, "uncompress");
+}
+
+static int32_t boz_decompress_failure(unsigned sequence, uint32_t codec,
+                                       uint32_t input_size, uint32_t capacity,
+                                       int zlib_rc, const char *reason) {
+    const char *flag = getenv("BOZ_ZLIB_TRACE");
+    if (flag && strcmp(flag, "1") == 0 && sequence <= 32u)
+        fprintf(stderr,
+                "[BOZ_ZLIB_DECOMP] n=%u status=failed codec=%u input=%u "
+                "capacity=%u zlib_rc=%d reason=%s\n",
+                sequence, codec, input_size, capacity, zlib_rc, reason);
+    return 1;
+}
+
+int32_t s3eCompressionDecomp(const void *source, uint32_t source_len,
+                             void **target_slot, uint32_t *target_len,
+                             uint32_t method) {
+    const unsigned sequence = ++g_boz_zlib_calls;
+    const uint32_t max_bytes = 32u * 1024u * 1024u;
+    if (method != 2u || !source || !source_len || source_len > max_bytes ||
+        !target_slot || !target_len)
+        return boz_decompress_failure(sequence, method, source_len, 0, -1, "invalid_args");
+    void *existing = *target_slot;
+    uint32_t original_capacity = *target_len;
+    if (existing && (original_capacity == 0 || original_capacity > max_bytes))
+        return boz_decompress_failure(sequence, method, source_len,
+                                      original_capacity, -1, "capacity");
+    pthread_once(&g_boz_zlib_once, boz_open_zlib);
+    if (!g_boz_zlib_uncompress)
+        return boz_decompress_failure(sequence, method, source_len,
+                                      original_capacity, -1, "libz_missing");
+
+    uint32_t capacity = existing ? original_capacity : 128u * 1024u;
+    if (!existing && source_len > capacity) {
+        uint64_t request = (uint64_t)source_len * 2u;
+        capacity = (uint32_t)(request > max_bytes ? max_bytes : request);
     }
-    return -1;
+    int zlib_rc = -1;
+    for (;;) {
+        unsigned char *staging = malloc(capacity ? capacity : 1u);
+        if (!staging)
+            return boz_decompress_failure(sequence, method, source_len,
+                                          capacity, -1, "malloc");
+        unsigned long produced = capacity;
+        zlib_rc = g_boz_zlib_uncompress(staging, &produced,
+                                         (const unsigned char *)source,
+                                         (unsigned long)source_len);
+        if (zlib_rc == 0 && produced <= capacity) {
+            if (existing) {
+                memcpy(existing, staging, (size_t)produced);
+                free(staging);
+            } else {
+                *target_slot = staging;
+            }
+            *target_len = (uint32_t)produced;
+            const char *flag = getenv("BOZ_ZLIB_TRACE");
+            if (flag && strcmp(flag, "1") == 0 && sequence <= 32u)
+                fprintf(stderr,
+                        "[BOZ_ZLIB_DECOMP] n=%u status=ok codec=%u input=%u "
+                        "output=%lu allocated=%d\n",
+                        sequence, method, source_len, produced, existing == NULL);
+            return 0;
+        }
+        free(staging);
+        if (zlib_rc != -5 || existing || capacity >= max_bytes)
+            return boz_decompress_failure(sequence, method, source_len,
+                                          capacity, zlib_rc, "decompress");
+        capacity = capacity > max_bytes / 2u ? max_bytes : capacity * 2u;
+    }
 }
 
 int32_t s3eSurfaceRegister(uint32_t id, void *callback, void *user_data) {
