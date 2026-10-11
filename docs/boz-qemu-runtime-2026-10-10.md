@@ -128,3 +128,36 @@ The last QEMU diagnostic (deploy `dep-db5m480473hc73bl43og`, commit `578311de`) 
 - Added `.github/workflows/boz-qemu-accelerated.yml` (commit `040b56a`) with Ubuntu GitHub-hosted ARMHF/QEMU plus SDL2/GL software rendering dependencies, a longer 260-second timeout, real original-asset SHA checks, and diagnostic artifact uploads **excluding copyrighted game binaries**. The workflow is an alternative to upgrading the paid Render plan. **A completed GitHub Actions job and faster execution have not yet been verified**.
 
 **Next gating evidence**: assess the runtime guest PC sample distribution and verify the GitHub Actions job can install ARMHF dependencies and actually execute QEMU. Only then compare wall time to `frontend.group.bin` byte progress and frame count. Never call the game playable until rendered frames show recognizable BOZ frontend and input works.
+
+
+## 2026-10-11 single-thread Mesa comparison (verified)
+
+The controlled A/B under the **same Render 0.15-core quota**, the same original
+SHA-pinned `blackops_gles1.dz`, 640x480 viewport and 145-second timeout:
+
+| Metric | Mesa default | `LP_NUM_THREADS=1`, `GALLIUM_NUM_THREADS=1`, `MESA_GLTHREAD=false` |
+| --- | ---: | ---: |
+| QEMU total thread count (late sampling) | 19 | 5 |
+| Fifth swap since guest start | 101.1 s | 87.6 s |
+| `frontend.group.bin` bytes processed at timeout | 913,088 | 1,175,440 |
+| Frontend file read errors | 0 | 0 |
+| Captured framebuffer at swap 5 | `#c0c0ff` with blue cursor | unchanged |
+| CPU quota | 0.15 core | 0.15 core |
+
+Deploy `dep-db5n2a4s728c738cfu40` finished `live`. The fifth swap
+was **~13.4% faster**, and guest frontend resource consumption increased
+**~28.7%**, but five swaps still completed within the test window. The
+resource progress is measured *up to the test deadline*, not bytes used
+to draw a visible background. The game menu remains **unverified**.
+
+Guest PC sampling commit `ba70e01` yielded 35 samples: 24 consecutive late
+samples at ARM guest PC `0x3f6e4656` within ARM libc mapping, with null guard
+count still zero and no SIGSEGV. The most-frequent-address-first
+symbolication improvement is commit `4aa3c36`; it has not yet been
+measured in a new Render run.
+
+The updated GitHub Actions workflow `0440a8f` uses Debian bookworm
+multiarch and single-thread Mesa, and `remote_build.py` commit `08e214f`
+adds `BOZ_EXIT_AFTER_DIAGNOSTIC=1` to complete without idling an HTTP server.
+**GitHub Actions execution results are still unverified**; do not conflate
+a committed workflow with a successfully executed job.
