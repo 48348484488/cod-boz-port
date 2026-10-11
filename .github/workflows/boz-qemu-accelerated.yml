@@ -9,10 +9,12 @@ on:
       - "src/s3e_gl.c"
       - "src/s3e_input.c"
       - "tests/s3e_input_test.c"
+      - "tools/boz_ci_summary.py"
       - "remote_build.py"
 
+# CI only pushes a compact, asset-free status to a dedicated results branch.
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: boz-qemu-accelerated
@@ -150,3 +152,32 @@ jobs:
             public/boz-fast-property.log
             public/boz-swap-*.png
             public/boz_gl_upload_trace.log
+
+      - name: Publish minimal results to separate diagnostics branch
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -eu
+          # Keep original assets and captured PNGs exclusively in the
+          # short-lived Actions artifact, NOT Git history.
+          if [ ! -f public/runner-report.json ]; then
+            echo "No runner report; skipping diagnostics branch update."
+            exit 0
+          fi
+          python3 tools/boz_ci_summary.py \
+            public/runner-report.json /tmp/boz-latest-ci.json
+          git fetch origin \
+            boz-diagnostics:refs/remotes/origin/boz-diagnostics || true
+          if git show-ref --verify --quiet refs/remotes/origin/boz-diagnostics; then
+            git checkout -B boz-diagnostics refs/remotes/origin/boz-diagnostics
+          else
+            git checkout -b boz-diagnostics
+          fi
+          mkdir -p docs
+          cp /tmp/boz-latest-ci.json docs/boz-latest-ci.json
+          git add docs/boz-latest-ci.json
+          git -c user.name="BOZ Runtime CI" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "Record verified BOZ diagnostic run ${GITHUB_RUN_ID}" || exit 0
+          git push origin HEAD:boz-diagnostics
