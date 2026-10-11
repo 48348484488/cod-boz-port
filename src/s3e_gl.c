@@ -120,6 +120,55 @@ static S3E_SOFTFP void host_glDrawElements(GLenum mode, GLsizei count, GLenum ty
                 viewport[0], viewport[1], viewport[2], viewport[3],
                 scissor[0], scissor[1], scissor[2], scissor[3],
                 scissor_enabled, real != NULL);
+        if (g_boz_gl_draw_elements_count == 1u && program > 0) {
+            void (*get_program)(GLuint, GLenum, GLint *) = lookup_gl("glGetProgramiv");
+            void (*get_active_attrib)(GLuint, GLuint, GLsizei, GLsizei *, GLint *,
+                                      GLenum *, char *) = lookup_gl("glGetActiveAttrib");
+            GLint link = -1, active_attribs = 0, active_uniforms = 0;
+            if (get_program) {
+                get_program((GLuint)program, 0x8b82u, &link); /* LINK_STATUS */
+                get_program((GLuint)program, 0x8b89u, &active_attribs);
+                get_program((GLuint)program, 0x8b86u, &active_uniforms);
+            }
+            fprintf(stderr,
+                    "[BOZ_GL_PROGRAM] id=%d linked=%d attributes=%d uniforms=%d\n",
+                    program, link, active_attribs, active_uniforms);
+            if (get_active_attrib) {
+                for (GLint attribute = 0; attribute < active_attribs && attribute < 12; ++attribute) {
+                    char name[96] = {0};
+                    GLsizei name_len = 0;
+                    GLint attrib_size = 0;
+                    GLenum attrib_type = 0;
+                    get_active_attrib((GLuint)program, (GLuint)attribute, (GLsizei)sizeof(name),
+                                      &name_len, &attrib_size, &attrib_type, name);
+                    fprintf(stderr,
+                            "[BOZ_GL_ACTIVE_ATTRIB] n=%d name=%s size=%d type=%04x\n",
+                            attribute, name, attrib_size, (unsigned)attrib_type);
+                }
+            }
+            void (*get_vertex)(GLuint, GLenum, GLint *) = lookup_gl("glGetVertexAttribiv");
+            void (*get_pointer)(GLuint, GLenum, void **) = lookup_gl("glGetVertexAttribPointerv");
+            if (get_vertex) {
+                for (GLuint attribute = 0; attribute < 8u; ++attribute) {
+                    GLint enabled = 0, size = 0, vtype = 0, stride = 0;
+                    GLint vbo = 0, norm = 0;
+                    get_vertex(attribute, 0x8622u, &enabled); /* ARRAY_ENABLED */
+                    if (!enabled) continue;
+                    get_vertex(attribute, 0x8623u, &size);   /* ARRAY_SIZE */
+                    get_vertex(attribute, 0x8625u, &vtype);  /* ARRAY_TYPE */
+                    get_vertex(attribute, 0x8624u, &stride); /* ARRAY_STRIDE */
+                    get_vertex(attribute, 0x889fu, &vbo);    /* ARRAY_BUFFER_BINDING */
+                    get_vertex(attribute, 0x886au, &norm);   /* NORMALIZED */
+                    void *pointer = NULL;
+                    if (get_pointer) get_pointer(attribute, 0x8645u, &pointer);
+                    fprintf(stderr,
+                            "[BOZ_GL_VERTEX_ATTRIB] loc=%u enabled=%d size=%d type=%04x "
+                            "stride=%d vbo=%d norm=%d ptr=%08lx\n",
+                            attribute, enabled, size, vtype, stride, vbo, norm,
+                            (unsigned long)(uintptr_t)pointer);
+                }
+            }
+        }
     }
     if (real) real(mode, count, type, indices);
     if (diagnostic) {
