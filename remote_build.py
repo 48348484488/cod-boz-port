@@ -1590,6 +1590,7 @@ def run_boz_diagnostic(report: dict) -> int:
             line for line in trial_lines if line.startswith((
                 "[BOZ_GL_TEXTURE_DRAW]", "[BOZ_GL_TEXTURE_UPLOAD]",
                 "[BOZ_GL_TEXTURE_BIND]", "[BOZ_GL_TEX_SIZE_TOTAL]",
+                "[BOZ_GL_UNIT0_BIND]", "[BOZ_GL_DRAW_CENSUS]",
                 "[BOZ_GL_COMPRESSED_UPLOAD]", "[BOZ_GL_COMPRESSED_SUBUPLOAD]"))
         ]
         report["fast_texture_evidence"] = {
@@ -1607,6 +1608,10 @@ def run_boz_diagnostic(report: dict) -> int:
                                                     "[BOZ_GL_COMPRESSED_SUBUPLOAD]"))][:24],
             "recent_binds": [ln for ln in texture_events
                              if ln.startswith("[BOZ_GL_TEXTURE_BIND]")][-24:],
+            "unit0_binds": [ln for ln in texture_events
+                            if ln.startswith("[BOZ_GL_UNIT0_BIND]")][-32:],
+            "draw_census": [ln for ln in texture_events
+                            if ln.startswith("[BOZ_GL_DRAW_CENSUS]")][-16:],
         }
         print("[FAST_TEXTURE_SUMMARY] " +
               json.dumps(report["fast_texture_evidence"]), flush=True)
@@ -1637,7 +1642,8 @@ def run_boz_diagnostic(report: dict) -> int:
                 "[BOZ_GL_PROGRAM_LOG]", "[BOZ_GL_PROGRAM_USE]",
                 "[BOZ_PNG_PATCH]", "[BOZ_ZLIB_DECOMP]",
                 "[BOZ_GL_TEXTURE_DRAW]", "[BOZ_GL_TEXTURE_UPLOAD]",
-                "[BOZ_GL_TEXTURE_BIND]",
+                "[BOZ_GL_TEXTURE_BIND]", "[BOZ_GL_UNIT0_BIND]",
+                "[BOZ_GL_DRAW_CENSUS]",
                 "[BOZ_RESOURCE_OPEN]", "[BOZ_RESOURCE_CLOSE]", "[BOZ_RESOURCE_PROGRESS]",
                 "[BOZ_NULL_PROPERTY_ORIGIN]", "signal 11 ", "stack:",
                 "[S3E_FILE_EXISTS]",
