@@ -706,6 +706,160 @@ def inspect_resource_inventory(image: pathlib.Path, loader_archive: pathlib.Path
         report["reference_resource_cdn_probe_error"] = repr(exc)
         print("[RESOURCE_CDN_PROBE_ERROR] " + repr(exc), flush=True)
 
+def stage_remote_frontend_groups(image: pathlib.Path, report: dict) -> None:
+    """Fetch genuine first-launch groups by HTTP Range from the game's own CDN.
+
+    This is opt-in and never persists copyrighted assets to GitHub.
+    Range validation prevents an ignored Range request from downloading a
+    full 300-500 MB archive by accident.
+    """
+    evidence = report.get("reference_resource_cdn_probe")
+    if not isinstance(evidence, dict):
+        report["front_groups_error"] = "original resource CDN was not validated"
+        print("[BOZ_FRONT_GROUPS_ERROR] no checked CDN base", flush=True)
+        return
+    base = evidence.get("resource_base", "")
+    parsed = urllib.parse.urlsplit(base)
+    host = (parsed.hostname or "").lower()
+    if parsed.scheme not in ("http", "https") or not (
+        host == "callofduty.com" or host.endswith(".callofduty.com")
+    ):
+        report["front_groups_error"] = "unsafe/nonofficial resource host"
+        return
+    names_needed = (
+        "splash.group.bin", "splash_droid.group.bin",
+        "fixed.group.bin", "frontend.group.bin",
+        "loading.group.bin", "loading_droid.group.bin",
+        "shared.group.bin",
+    )
+    dst_root = image.parent.parent / "assets"
+    extracted = []
+    inventory = []
+    errors = []
+    total_written = 0
+    max_total = 128 * 1024 * 1024
+    for archive in ("blackops_gles1.dz", "blackops_etc.dz"):
+        metadata = evidence.get("archives", {}).get(archive) or {}
+        if metadata.get("http_status") != 200:
+            continue
+        try:
+            full_len = int(metadata["content_length"])
+            if full_len < 1024 or full_len > 600 * 1024 * 1024:
+                raise ValueError("resource size outside expected range")
+            url = base.rstrip("/") + "/" + archive
+            headers = {
+                "User-Agent": "CODBOZ-Loader-Diagnostic/1.0",
+                "Accept-Encoding": "identity",
+                "Range": "bytes=0-262143",
+            }
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=25) as response:
+                if response.status != 206:
+                    raise ValueError("CDN ignored byte Range for archive index")
+                prefix = response.read(262144)
+                content_range = response.headers.get("Content-Range", "")
+                if not content_range.startswith("bytes 0-") or not content_range.endswith("/" + str(full_len)):
+                    raise ValueError("unexpected DTRZ prefix Content-Range")
+            if len(prefix) < 128 or prefix[:4] != b"DTRZ":
+                raise ValueError("DTRZ index magic not found")
+            file_count = int.from_bytes(prefix[4:6], "little")
+            raw_group_count = int.from_bytes(prefix[6:8], "little")
+            groups = max(0, raw_group_count-1)
+            if not 1 <= file_count <= 512 or groups > 512:
+                raise ValueError("DTRZ entry count outside bounds")
+            cursor = 9
+            file_names = []
+            for j in range(file_count + groups):
+                stop = prefix.find(bytes([0]), cursor)
+                if stop < 0 or stop - cursor > 191:
+                    raise ValueError("DTRZ filename table incomplete")
+                if j < file_count:
+                    file_names.append(prefix[cursor:stop].decode("utf-8", "replace"))
+                cursor = stop + 1
+            if cursor + 4 + 6*file_count + 16*file_count > len(prefix):
+                raise ValueError("DTRZ entry table incomplete")
+            marker = struct.unpack_from("<I", prefix, cursor)[0]
+            if marker != 1:
+                raise ValueError("DTRZ marker mismatch")
+            cursor += 4 + 6*file_count
+            candidates = {}
+            for j, name in enumerate(file_names):
+                offset, size = struct.unpack_from("<II", prefix, cursor + 16*j)
+                leaf = name.split("/")[-1].lower()
+                if leaf in names_needed and leaf not in candidates:
+                    if (size <= 0 or size > 48*1024*1024 or offset+size > full_len):
+                        errors.append(f"{archive}:{leaf}: invalid offset/size")
+                    else:
+                        candidates[leaf] = (offset, size)
+            inventory.append({
+                "archive": archive, "file_count": file_count,
+                "found_groups": {n: {"offset": off, "size": size}
+                                 for n, (off, size) in candidates.items()},
+            })
+            for leaf in names_needed:
+                if leaf not in candidates or any(x["name"] == leaf for x in extracted):
+                    continue
+                offset, length = candidates[leaf]
+                if total_written+length > max_total:
+                    errors.append(f"{leaf}: cumulative 128 MiB limit exceeded")
+                    continue
+                end = offset + length - 1
+                request = urllib.request.Request(
+                    url, headers={
+                        "User-Agent": "CODBOZ-Loader-Diagnostic/1.0",
+                        "Accept-Encoding": "identity",
+                        "Range": f"bytes={offset}-{end}",
+                    },
+                )
+                try:
+                    with urllib.request.urlopen(request, timeout=50) as response:
+                        expected_range = f"bytes {offset}-{end}/{full_len}"
+                        observed_range = response.headers.get("Content-Range", "")
+                        if response.status != 206 or observed_range != expected_range:
+                            raise ValueError("CDN returned unexpected entry byte range")
+                        # C file resolver checks flat groups in assets/data-gles1/
+                        # and assets/; do not create a synthetic archive or data.
+                        destination = (dst_root / "data-gles1" / leaf
+                                       if archive == "blackops_gles1.dz"
+                                       else dst_root / leaf)
+                        destination.parent.mkdir(parents=True, exist_ok=True)
+                        temp = destination.with_suffix(destination.suffix + ".part")
+                        digest = hashlib.sha256()
+                        received = 0
+                        try:
+                            with temp.open("wb") as fp:
+                                while received < length:
+                                    chunk = response.read(min(1024*1024, length-received))
+                                    if not chunk:
+                                        raise IOError("unexpected end of partial group response")
+                                    received += len(chunk)
+                                    fp.write(chunk)
+                                    digest.update(chunk)
+                            if received != length:
+                                raise ValueError("DTRZ group byte count mismatch")
+                            temp.replace(destination)
+                        except Exception:
+                            temp.unlink(missing_ok=True)
+                            raise
+                        record = {
+                            "name": leaf, "source": archive, "size": received,
+                            "sha256": digest.hexdigest(), "path": str(destination),
+                        }
+                        extracted.append(record)
+                        total_written += received
+                        print("[BOZ_FRONT_GROUP_STAGED] " + json.dumps(record), flush=True)
+                except Exception as exc:
+                    errors.append(f"{archive}:{leaf}: {type(exc).__name__}: {str(exc)[:150]}")
+        except Exception as exc:
+            errors.append(f"{archive}: {type(exc).__name__}: {str(exc)[:150]}")
+    report["front_group_staging"] = {
+        "archives": inventory, "extracted": extracted, "errors": errors,
+        "total_bytes": total_written,
+    }
+    print("[BOZ_FRONT_GROUP_SUMMARY] " +
+          json.dumps(report["front_group_staging"]), flush=True)
+
+
 def run_boz_diagnostic(report: dict) -> int:
     trace = pathlib.Path("/tmp/boz_gl_upload_trace.log")
     trace.unlink(missing_ok=True)
@@ -716,6 +870,8 @@ def run_boz_diagnostic(report: dict) -> int:
         staged_loader = stage_public_loader_archive(image, report)
         if report.get("reference_s3e_unpacked_sha256"):
             inspect_resource_inventory(image, staged_loader, report)
+            if os.environ.get("BOZ_STAGE_REMOTE_FRONTEND", "0") == "1":
+                stage_remote_frontend_groups(image, report)
     report["game_image"] = str(image) if image else None
     report["game_image_size"] = image.stat().st_size if image else None
     report["gl_upload_trace"] = str(trace)
