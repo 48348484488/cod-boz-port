@@ -161,3 +161,17 @@ multiarch and single-thread Mesa, and `remote_build.py` commit `08e214f`
 adds `BOZ_EXIT_AFTER_DIAGNOSTIC=1` to complete without idling an HTTP server.
 **GitHub Actions execution results are still unverified**; do not conflate
 a committed workflow with a successfully executed job.
+
+
+## 2026-10-11 first successful CPU-unthrottled BOZ runtime (confirmed)
+
+- GitHub Actions workflow run [38136212818](https://github.com/48348484488/cod-boz-port/actions/runs/38136212818), commit `c266e32`, **completed successfully** and uploaded real diagnostic artifacts. Linux runner via Debian bookworm multiarch and ARMHF `qemu-arm`, SDL2, GLES1, GLX/EGL/Mesa software rendering. The unthrottled runner had cgroup `cpu.max = max 100000`, in contrast to Render's 0.15-core cap.
+- The binary was the SHA-256-pinned S3E reference, and original full `blackops_gles1.dz` (337,594,086 bytes) downloaded from the original Activision CDN with **known SHA-256 validation**, and a strict single-host HTTP compatibility fallback due to a stale TLS hostname. No game data was committed.
+- **`frontend.group.bin` was read completely and closed**: 39,214,526 / 39,214,526 bytes, 12,836 calls, 0 reported read errors, 0 seeks. Download and file availability are therefore no longer blocking this run's file parser.
+- QEMU successfully presented **150 swaps** during a 260-second diagnostic deadline; swap 150 was at **253,432 ms** from the first swap, cumulative `glClear=151`, `glDrawElements=149`, `glDrawArrays=0`. **No signal 11 / SIGSEGV**. This is a real executed ARM game under a software GL stack, not a synthetic renderer.
+- Actual 640x480 screenshots at swaps **5, 10, 15 and 60 are byte-identical** (PNG SHA-256 `ceb6fc52bfcc775ce8b07a503f4b5e5879efb3064c6583fd3ec244b47495d997`), containing only a nearly uniform `#c0c0ff` framebuffer and blue cursor. Thus **NO visible frontend and NO proven gameplay**, despite the game executing 150 swaps. The older Render trace had sampled a 2x2 placeholder texture with program 6/count 6, but it remained unproven that the same texture was bound at late frames.
+- Action failures preceding success were resolved incrementally: native `libc6-dev`, ARM GLES1, ARM `libGL.so.1` (Mesa GLX/EGL), and strict SHA-pinned HTTP fallback on the original official host. The one-shot runtime and real PNG/swap assertions are implemented without changing the game binaries.
+- Late draw / texture investigation: commits `1144bf4`, `0680092`, `2f2a98e` record first 12 and every 25th `glDrawElements` (GL program, geometry, FBO, texture ID/size/hash) without per-pixel GL_UPLOAD_TRACE. Workflow run [38136783823](https://github.com/48348484488/cod-boz-port/actions/runs/38136783823) was **in progress** when this note was updated; do not infer its result from the earlier 150-swap success.
+- Commit `e085118` additionally captures actual framebuffer screenshots at swaps 100 and 150 in future runs. The first successful archive contained images only through swap 60.
+
+**Next acceptance gate:** confirm whether late draws still bind the 2x2 placeholder and whether geometry grows beyond six indices/program 6. If yes, investigate frontend scene transition / texture source and decoder; otherwise inspect late GL state and shader program. The main CI `make format-check` failures on seven edited C/test files are a separate pending style issue, not a BOZ runtime regression.
