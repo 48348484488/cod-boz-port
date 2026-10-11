@@ -1110,10 +1110,11 @@ static void install_terminate_handlers(void) {
  * This deliberately does not modify registers or fabricate game objects. */
 #if defined(__arm__)
 static volatile sig_atomic_t g_pc_sample_seq;
+static volatile sig_atomic_t g_pc_sample_unguarded;
 static void boz_pc_sample_handler(int sig, siginfo_t *info, void *ctx) {
     (void)sig;
     (void)info;
-    if (!g_compat_null_registration_count) {
+    if (!g_compat_null_registration_count && !g_pc_sample_unguarded) {
         return;
     }
     ucontext_t *uc = (ucontext_t *)ctx;
@@ -1135,6 +1136,8 @@ static void boz_pc_sample_handler(int sig, siginfo_t *info, void *ctx) {
 }
 
 static void install_boz_pc_sampler(void) {
+    const char *unguarded = getenv("BOZ_PC_SAMPLE_UNGUARDED");
+    g_pc_sample_unguarded = (unguarded && strcmp(unguarded, "1") == 0);
     const char *setting = getenv("BOZ_PC_SAMPLE_INTERVAL");
     if (!setting || !*setting) return;
     char *end = NULL;
@@ -1150,7 +1153,8 @@ static void install_boz_pc_sampler(void) {
     timer.it_value.tv_sec = (time_t)seconds;
     timer.it_interval.tv_sec = (time_t)seconds;
     if (setitimer(ITIMER_REAL, &timer, NULL) == 0) {
-        fprintf(stderr, "[BOZ_PC_SAMPLER] interval=%lu enabled=1\n", seconds);
+        fprintf(stderr, "[BOZ_PC_SAMPLER] interval=%lu enabled=1 unguarded=%d\n",
+                seconds, (int)g_pc_sample_unguarded);
     }
     /* Memory maps identify which ARM shared object owns sampled PCs.
      * Limit the output to the guest shared-library address window. */
