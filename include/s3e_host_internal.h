@@ -391,8 +391,10 @@ void *s3eCompressionDecompInit(uint32_t type);
 int32_t s3eCompressionDecompRead(void *context, const void *source, uint32_t source_len,
                                  void *target, uint32_t *target_len);
 int32_t s3eCompressionDecompFinal(void *context);
-int32_t s3eCompressionDecomp(const void *source, uint32_t source_len, void *target,
-                             uint32_t *target_len);
+/* Original BOZ S3E five-argument ABI: r2 points at an output pointer,
+ * r3 points at its capacity, fifth stack argument is compression method. */
+int32_t s3eCompressionDecomp(const void *source, uint32_t source_len, void **target_slot,
+                             uint32_t *target_len, uint32_t method);
 
 uint64_t s3eTimerGetUST(void);
 uint64_t s3eTimerGetMs(void);
