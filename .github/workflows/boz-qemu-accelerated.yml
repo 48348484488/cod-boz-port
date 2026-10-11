@@ -7,6 +7,8 @@ on:
     paths:
       - ".github/workflows/boz-qemu-accelerated.yml"
       - "src/s3e_gl.c"
+      - "src/s3e_input.c"
+      - "tests/s3e_input_test.c"
       - "remote_build.py"
 
 permissions:
