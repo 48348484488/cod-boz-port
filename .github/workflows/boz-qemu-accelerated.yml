@@ -17,6 +17,9 @@ concurrency:
 jobs:
   qemu-boz:
     runs-on: ubuntu-24.04
+    # Debian carries armhf and amd64 packages in the same APT repositories.
+    # This avoids architecture-specific Ubuntu Ports repository mismatches.
+    container: debian:bookworm
     timeout-minutes: 20
     env:
       PYTHONUNBUFFERED: "1"
@@ -34,40 +37,51 @@ jobs:
       BOZ_COMPAT_PNG_INPUT_LENGTH_FIX: "1"
       BOZ_FAST_PROPERTY_TIMEOUT: "260"
       BOZ_DISPLAY_SIZE: "640x480"
+      BOZ_EXIT_AFTER_DIAGNOSTIC: "1"
       RUN_HOST_TESTS: "1"
+      LP_NUM_THREADS: "1"
+      GALLIUM_NUM_THREADS: "1"
+      MESA_GLTHREAD: "false"
       LIBGL_ALWAYS_SOFTWARE: "1"
       SDL_VIDEODRIVER: "x11"
 
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Install ARM hard-float emulator and software graphics
+      - name: Install QEMU and ARM hard-float Mesa/SDL2 libraries
+        shell: bash
         run: |
           set -eux
-          sudo dpkg --add-architecture armhf
-          sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            gcc-arm-linux-gnueabihf libc6-dev-armhf-cross make qemu-user \
-            xvfb xauth python3 \
-            libsdl2-2.0-0:armhf libegl1:armhf libgles2:armhf \
-            libgl1-mesa-dri:armhf libasound2t64:armhf
+          dpkg --add-architecture armhf
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            git ca-certificates curl python3 make gcc gcc-arm-linux-gnueabihf \
+            libc6-dev-armhf-cross binutils-arm-linux-gnueabihf qemu-user \
+            xvfb xauth libsdl2-2.0-0:armhf libegl1:armhf libgles2:armhf \
+            libgl1-mesa-dri:armhf libasound2:armhf
 
-      - name: Run actual BOZ ARM loader with verified original resources
+      - uses: actions/checkout@v4
+
+      - name: Run actual BOZ ARM loader with SHA-256-verified game resources
         shell: bash
         run: |
           set -uo pipefail
-          # The diagnostic server intentionally keeps listening after the
-          # measured QEMU test. Bound the whole job and preserve its report.
+          # The one-shot CI mode exits immediately after the genuine report.
           timeout --signal=INT --kill-after=15s 540s \
             python3 -u remote_build.py > boz-ci-session.log 2>&1
           status=$?
           echo "Diagnostic process exit status: $status"
-          grep -E '^\\[(FAST_QEMU_HOST_PROFILE|FAST_RESOURCE_CONSUMPTION|FAST_PROPERTY_RESULT|OFFICIAL_ASSET_READY|RUNNER)\\]' \
-            boz-ci-session.log | tail -n 18 || true
-          if ! grep -q '^\\[FAST_PROPERTY_RESULT\\]' boz-ci-session.log; then
+          grep -F -e '[FAST_QEMU_HOST_PROFILE]' \
+            -e '[FAST_RESOURCE_CONSUMPTION]' \
+            -e '[FAST_PROPERTY_RESULT]' \
+            -e '[OFFICIAL_ASSET_READY]' boz-ci-session.log | tail -n 18 || true
+          if ! grep -Fq '[FAST_PROPERTY_RESULT]' boz-ci-session.log; then
             echo "::error::BOZ QEMU did not produce a completed diagnostic report"
             exit 1
           fi
+          if ! grep -Fq '[OFFICIAL_ASSET_READY]' boz-ci-session.log; then
+            echo "::error::Original BOZ resource pack was not SHA-256 verified"
+            exit 1
+          fi
+          echo "BOZ ARM diagnostic completed; gameplay remains unverified."
 
       - name: Upload only diagnostics and captured frames (never game data)
         uses: actions/upload-artifact@v4
