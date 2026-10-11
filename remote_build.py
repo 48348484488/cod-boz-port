@@ -885,6 +885,10 @@ def stage_official_game_archive(image: pathlib.Path, report: dict) -> None:
         report["official_asset_error"] = "refusing unverified CDN host"
         return
     max_bytes = 650_000_000
+    expected_sha256 = {
+        "blackops_gles1.dz": "60846cf7a121ebaa200be82bd6811adcec44c607414b41086a6ffa1bd339b12c",
+        "blackops_etc.dz": "670cefce1951f1fb710d9c9d00d6103f4b81379c414885057af450a897baaedc",
+    }[archive_name]
     try:
         expected_bytes = int(check.get("content_length"))
         if expected_bytes < 1024 or expected_bytes > max_bytes:
@@ -895,9 +899,12 @@ def stage_official_game_archive(image: pathlib.Path, report: dict) -> None:
     target = image.parent.parent / "assets" / archive_name
     target.parent.mkdir(parents=True, exist_ok=True)
     if target.is_file() and target.stat().st_size == expected_bytes:
-        report["official_asset_cached"] = str(target)
-        print("[OFFICIAL_ASSET] cached=" + str(target), flush=True)
-        return
+        with target.open("rb") as saved:
+            cached_sha256 = hashlib.file_digest(saved, "sha256").hexdigest()
+        if cached_sha256 == expected_sha256:
+            report["official_asset_cached"] = str(target)
+            print("[OFFICIAL_ASSET] verified cached=" + str(target), flush=True)
+            return
     temp = target.with_name("." + target.name + ".download")
     result = {"name": archive_name, "expected_bytes": expected_bytes,
               "source_host": host}
@@ -941,6 +948,8 @@ def stage_official_game_archive(image: pathlib.Path, report: dict) -> None:
                             next_log += 64 * 1024 * 1024
             if actual != expected_bytes:
                 raise ValueError(f"partial asset: {actual} != {expected_bytes}")
+            if digest.hexdigest() != expected_sha256:
+                raise ValueError("downloaded DTRZ SHA-256 differs from known authentic archive")
             with temp.open("rb") as source:
                 hdr = source.read(9)
                 if len(hdr) < 9 or hdr[:4] != b"DTRZ":
