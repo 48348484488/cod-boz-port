@@ -44,7 +44,7 @@ static void boz_resource_watch_note(FILE *file) {
     if (pos > w->max_position) w->max_position = pos;
     /* Frontend may stay open throughout the diagnostic; report progress while
      * it is being parsed instead of relying only on the final close event. */
-    if (!strstr(w->name, "frontend.group.bin") || w->progress_reports >= 80u)
+    if (!strstr(w->name, "frontend.group.bin") || w->progress_reports >= 192u)
         return;
     if (w->calls != 1u && w->bytes_read < w->next_report_bytes)
         return;
