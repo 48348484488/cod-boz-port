@@ -1303,7 +1303,9 @@ def run_boz_diagnostic(report: dict) -> int:
         print("[FAST_ASSET_SUMMARY] " + json.dumps(asset_summary), flush=True)
         draw_trace = [
             ln[:650] for ln in trial_lines
-            if ln.startswith(("[BOZ_GL_DRAW]", "[BOZ_GL_DRAW_ERROR]"))
+            if ln.startswith(("[BOZ_GL_DRAW]", "[BOZ_GL_DRAW_ERROR]",
+                              "[BOZ_GL_PROGRAM]", "[BOZ_GL_ACTIVE_ATTRIB]",
+                              "[BOZ_GL_VERTEX_ATTRIB]"))
         ]
         report["fast_draw_diagnostic"] = draw_trace[:30]
         print("[FAST_DRAW_SUMMARY] " + json.dumps({
@@ -1330,6 +1332,8 @@ def run_boz_diagnostic(report: dict) -> int:
                 "[BOZ_SWAP_PROGRESS]", "[BOZ_FRAME_CAPTURE]",
                 "[BOZ_DIAGNOSTIC_TAP]", "[S3E_FILE_OPEN]", "[S3E_FILE_EXISTS]",
                 "[BOZ_GL_DRAW]", "[BOZ_GL_DRAW_ERROR]",
+                "[BOZ_GL_PROGRAM]", "[BOZ_GL_ACTIVE_ATTRIB]",
+                "[BOZ_GL_VERTEX_ATTRIB]",
                 "[BOZ_NULL_PROPERTY_ORIGIN]", "signal 11 ", "stack:",
                 "[S3E_FILE_EXISTS]",
             )) and not line.startswith("[S3E_FILE_EXISTS]"):
