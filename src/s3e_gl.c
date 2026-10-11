@@ -821,7 +821,9 @@ static void frontend_overlay_gl_present(void) {
  * PPM is intentionally used here so the ARM loader needs no PNG dependency. */
 static void boz_capture_swap_frame(unsigned frame) {
     const char *dir = getenv("BOZ_FRAME_CAPTURE_DIR");
-    if (!dir || !*dir || (frame != 1u && frame != 5u && frame != 10u && frame != 15u && frame != 60u)) return;
+    if (!dir || !*dir ||
+        (frame != 1u && frame != 5u && frame != 10u && frame != 15u &&
+         frame != 60u && frame != 100u && frame != 150u)) return;
     void (*read_pixels)(GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, void *) =
         lookup_gl("glReadPixels");
     if (!read_pixels) {
