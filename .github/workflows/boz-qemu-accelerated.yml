@@ -155,10 +155,12 @@ jobs:
 
       - name: Publish minimal results to separate diagnostics branch
         if: always()
-        continue-on-error: true
         shell: bash
         run: |
           set -eu
+          # Checkout is owned by the runner, while this step executes in Debian.
+          # Explicit trust is required before git fetch/checkout/commit/push.
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           # Keep original assets and captured PNGs exclusively in the
           # short-lived Actions artifact, NOT Git history.
           if [ ! -f public/runner-report.json ]; then
