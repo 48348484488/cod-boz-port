@@ -108,6 +108,8 @@ static GLsizei g_boz_tex_max_width;
 static GLsizei g_boz_tex_max_height;
 static unsigned g_boz_tex_large_printed;
 static unsigned g_boz_unit0_bind_changes;
+static unsigned g_boz_large_texture_callers;
+static unsigned g_boz_small_texture_callers;
 
 static bool boz_texture_diag_enabled(void) {
     const char *flag = getenv("BOZ_GL_TEX_PROVENANCE");
@@ -134,9 +136,10 @@ static S3E_SOFTFP void host_glBindTexture(GLenum target, GLuint texture) {
             if (g_boz_unit0_bind_changes <= 20u ||
                 g_boz_unit0_bind_changes % 32u == 0u)
                 fprintf(stderr,
-                        "[BOZ_GL_UNIT0_BIND] seq=%u draw=%u old=%u tex=%u\n",
+                        "[BOZ_GL_UNIT0_BIND] seq=%u draw=%u old=%u tex=%u caller=%08lx\n",
                         g_boz_unit0_bind_changes, g_boz_gl_draw_elements_count,
-                        previous, texture);
+                        previous, texture,
+                        (unsigned long)(uintptr_t)__builtin_return_address(0));
         }
         if (boz_texture_diag_enabled() && g_boz_gl_draw_elements_count < 1u)
             fprintf(stderr, "[BOZ_GL_TEXTURE_BIND] unit=%u texture=%u\n", unit, texture);
@@ -294,6 +297,11 @@ static S3E_SOFTFP void host_glDrawElements(GLenum mode, GLsizei count, GLenum ty
         (late_diag && (g_boz_gl_draw_elements_count % 25u) == 0u);
     const bool diagnostic = trace && strcmp(trace, "1") == 0 && draw_sample;
     if (diagnostic) {
+        fprintf(stderr,
+                "[BOZ_GL_CALLSITE] kind=draw seq=%u caller=%08lx sampler0=%u\n",
+                g_boz_gl_draw_elements_count,
+                (unsigned long)(uintptr_t)__builtin_return_address(0),
+                g_boz_tex_bound[0]);
         void (*get_int)(GLenum, GLint *) = lookup_gl("glGetIntegerv");
         GLboolean (*is_enabled)(GLenum) = lookup_gl("glIsEnabled");
         GLint viewport[4] = {0}, scissor[4] = {0};
@@ -798,6 +806,20 @@ static S3E_SOFTFP void host_glTexImage2D(GLenum target, GLint level, GLint inter
     trace_gl_upload_diag("glTexImage2D", target, level, (GLenum)internal_format, width, height,
                          border, format, type, pixels);
     boz_track_tex_upload(target, level, width, height, format, type, pixels, false);
+    if (boz_texture_diag_enabled() && target == 0x0de1u && level == 0) {
+        bool larger = width > 2 || height > 2;
+        unsigned seq = larger ? ++g_boz_large_texture_callers :
+                                ++g_boz_small_texture_callers;
+        if ((larger && seq <= 28u) || (!larger && (seq <= 8u || seq % 100u == 0u))) {
+            unsigned unit = g_boz_tex_active - 0x84c0u;
+            GLuint tex = unit < BOZ_TEX_UNITS ? g_boz_tex_bound[unit] : 0u;
+            fprintf(stderr,
+                    "[BOZ_GL_CALLSITE] kind=upload seq=%u caller=%08lx "
+                    "unit=%u tex=%u size=%dx%d\n",
+                    seq, (unsigned long)(uintptr_t)__builtin_return_address(0),
+                    unit, tex, (int)width, (int)height);
+        }
+    }
     if (real) real(target, level, internal_format, width, height, border, format, type, pixels);
 }
 
