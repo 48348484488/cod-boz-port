@@ -1082,7 +1082,7 @@ def run_boz_diagnostic(report: dict) -> int:
             # expensive under qemu-arm software GL and can stall asset
             # streaming. Preserve real swaps, frame captures, and per-file
             # progress while omitting redundant high-volume diagnostics.
-            quick_env["GL_UPLOAD_TRACE"] = "0"
+            quick_env.pop("GL_UPLOAD_TRACE", None)
             quick_env["BOZ_FILE_RW_TRACE"] = "0"
             quick_env["BOZ_GL_TEX_PROVENANCE"] = "0"
             quick_env["BOZ_GL_DRAW_DIAGNOSTIC"] = "0"
