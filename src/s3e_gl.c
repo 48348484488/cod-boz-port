@@ -905,7 +905,8 @@ static void boz_capture_swap_frame(unsigned frame) {
     const char *dir = getenv("BOZ_FRAME_CAPTURE_DIR");
     if (!dir || !*dir ||
         (frame != 1u && frame != 5u && frame != 10u && frame != 15u &&
-         frame != 60u && frame != 100u && frame != 150u)) return;
+         frame != 60u && frame != 100u && frame != 125u &&
+         frame != 130u && frame != 140u && frame != 150u)) return;
     void (*read_pixels)(GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, void *) =
         lookup_gl("glReadPixels");
     if (!read_pixels) {
@@ -961,6 +962,20 @@ static EGLBoolean host_eglSwapBuffers(EGLDisplay display, EGLSurface surface) {
     ++swap_count;
     if (!first_swap_ms) first_swap_ms = monotonic_us() / 1000u;
     input_pump();
+    /* Diagnostic tap after the genuine frontend group finishes loading.
+     * At 150-swap CI baseline, the group closes between swaps 100 and 125;
+     * the legacy frame-5 tap was prematurely delivered during loading.
+     * Never inject input into normal runs unless explicitly requested. */
+    const char *late_tap = getenv("BOZ_DIAGNOSTIC_LATE_TAP");
+    if (late_tap && strcmp(late_tap, "1") == 0) {
+        if (swap_count == 125u) {
+            fprintf(stderr, "[BOZ_LATE_TAP] swap=125 stage=press\n");
+            input_diagnostic_tap_step(1);
+        } else if (swap_count == 126u) {
+            fprintf(stderr, "[BOZ_LATE_TAP] swap=126 stage=release\n");
+            input_diagnostic_tap_step(0);
+        }
+    }
     const char *auto_tap = getenv("BOZ_DIAGNOSTIC_AUTO_TAP");
     if (auto_tap && strcmp(auto_tap, "1") == 0) {
         if (swap_count == 5u) {
