@@ -685,7 +685,7 @@ def inspect_resource_inventory(image: pathlib.Path, loader_archive: pathlib.Path
             raise ValueError("no verified callofduty.com resource base")
         result = {"resource_base": chosen.rstrip("/"), "sha256_checked_s3e": True,
                   "archives": {}}
-        for name in ("blackops_etc.dz", "blackops_gles1.dz"):
+        for name in ("blackops_etc.dz", "blackops_gles1.dz", "blackops_dxt.dz"):
             url = chosen.rstrip("/") + "/" + name
             try:
                 req = urllib.request.Request(url, method="HEAD",
