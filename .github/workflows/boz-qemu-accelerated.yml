@@ -58,7 +58,8 @@ jobs:
             git ca-certificates curl python3 make gcc libc6-dev:amd64 gcc-arm-linux-gnueabihf \
             libc6-dev-armhf-cross binutils-arm-linux-gnueabihf qemu-user \
             xvfb xauth libsdl2-2.0-0:armhf libegl1:armhf libgles2:armhf \
-            libgles1:armhf libgl1-mesa-dri:armhf libasound2:armhf
+            libgles1:armhf libgl1:armhf libglx-mesa0:armhf \
+            libegl-mesa0:armhf libgl1-mesa-dri:armhf libasound2:armhf
 
       - uses: actions/checkout@v4
 
@@ -67,9 +68,13 @@ jobs:
         run: |
           set -uo pipefail
           # The one-shot CI mode exits immediately after the genuine report.
+          # QEMU ending on its diagnostic deadline (rc=124) is expected.
+          # Run the report assertions instead of aborting on shell -e.
+          set +e
           timeout --signal=INT --kill-after=15s 540s \
             python3 -u remote_build.py > boz-ci-session.log 2>&1
           status=$?
+          set -e
           echo "Diagnostic process exit status: $status"
           grep -F -e '[FAST_QEMU_HOST_PROFILE]' \
             -e '[FAST_RESOURCE_CONSUMPTION]' \
@@ -83,7 +88,22 @@ jobs:
             echo "::error::Original BOZ resource pack was not SHA-256 verified"
             exit 1
           fi
-          echo "BOZ ARM diagnostic completed; gameplay remains unverified."
+          python3 - <<'PY'
+          import json, sys
+          with open("public/runner-report.json", encoding="utf-8") as f:
+              report = json.load(f)
+          p = report.get("fast_property") or {}
+          swaps = p.get("swap_progress_events") or []
+          frames = p.get("captured_pngs") or []
+          if not swaps or not frames:
+              print("::error::No real BOZ framebuffer swap and screenshot recorded")
+              sys.exit(1)
+          if p.get("signal_11_count"):
+              print("::error::BOZ ARM runtime crashed with signal 11")
+              sys.exit(1)
+          print(f"Validated genuine frame swaps: {len(swaps)}, PNG captures: {len(frames)}")
+          print("BOZ diagnostic completed; visible menu and gameplay remain unverified.")
+          PY
 
       - name: Upload only diagnostics and captured frames (never game data)
         uses: actions/upload-artifact@v4
