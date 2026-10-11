@@ -1589,7 +1589,8 @@ def run_boz_diagnostic(report: dict) -> int:
         texture_events = [
             line for line in trial_lines if line.startswith((
                 "[BOZ_GL_TEXTURE_DRAW]", "[BOZ_GL_TEXTURE_UPLOAD]",
-                "[BOZ_GL_TEXTURE_BIND]"))
+                "[BOZ_GL_TEXTURE_BIND]", "[BOZ_GL_TEX_SIZE_TOTAL]",
+                "[BOZ_GL_COMPRESSED_UPLOAD]", "[BOZ_GL_COMPRESSED_SUBUPLOAD]"))
         ]
         report["fast_texture_evidence"] = {
             "draws": [ln for ln in texture_events
@@ -1599,6 +1600,11 @@ def run_boz_diagnostic(report: dict) -> int:
                       ][-16:],
             "uploads": [ln for ln in texture_events
                         if ln.startswith("[BOZ_GL_TEXTURE_UPLOAD]")][:36],
+            "size_totals": [ln for ln in texture_events
+                            if ln.startswith("[BOZ_GL_TEX_SIZE_TOTAL]")],
+            "compressed_events": [ln for ln in texture_events
+                                  if ln.startswith(("[BOZ_GL_COMPRESSED_UPLOAD]",
+                                                    "[BOZ_GL_COMPRESSED_SUBUPLOAD]"))][:24],
             "recent_binds": [ln for ln in texture_events
                              if ln.startswith("[BOZ_GL_TEXTURE_BIND]")][-24:],
         }
