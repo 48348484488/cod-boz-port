@@ -609,6 +609,102 @@ def stage_public_loader_archive(image: pathlib.Path, report: dict) -> pathlib.Pa
         return None
 
 
+def inspect_resource_inventory(image: pathlib.Path, loader_archive: pathlib.Path | None,
+                               report: dict) -> None:
+    """Inspect only trusted staging data, without manufacturing any missing assets."""
+    manifest = {}
+    if loader_archive and loader_archive.is_file():
+        try:
+            with loader_archive.open("rb") as handle:
+                header = handle.read(9)
+                if len(header) < 9 or header[:4] != b"DTRZ":
+                    raise ValueError("invalid DTRZ header")
+                count = int.from_bytes(header[4:6], "little")
+                if not 0 < count <= 512:
+                    raise ValueError("invalid DTRZ file count")
+                names = []
+                for _ in range(count):
+                    parts = bytearray()
+                    while len(parts) <= 191:
+                        char = handle.read(1)
+                        if not char:
+                            raise ValueError("truncated DTRZ names")
+                        if char == bytes([0]):
+                            break
+                        parts.extend(char)
+                    names.append(parts.decode("utf-8", "replace"))
+            selected = ("console.bin", "bootstrap.group.bin", "style.group.bin",
+                        "splash.group.bin", "fixed.group.bin", "frontend.group.bin")
+            manifest = {
+                "archive": loader_archive.name, "count": len(names),
+                "required": {name: any(
+                    item.lower().split("/")[-1] == name
+                    for item in names) for name in selected},
+                "name_samples": names[:45],
+            }
+            report["reference_dtrz_manifest"] = manifest
+            print("[RESOURCE_ARCHIVE_MANIFEST] " + json.dumps(manifest), flush=True)
+        except (OSError, ValueError) as exc:
+            report["reference_dtrz_manifest_error"] = repr(exc)
+            print("[RESOURCE_ARCHIVE_MANIFEST_ERROR] " + repr(exc), flush=True)
+
+    # The public reference payload is pinned by SHA-256 before this helper runs.
+    # Mirror the already-checked-in apk_extract 'ResDownloadLink' parser.
+    try:
+        data = image.read_bytes()
+        marker = b'ResDownloadLink="'
+        offset = 0
+        urls = []
+        while len(urls) < 30:
+            pos = data.find(marker, offset)
+            if pos < 0:
+                break
+            start = pos + len(marker)
+            end = start
+            while end < len(data) and data[end] not in (0, 10, 13, 34):
+                end += 1
+            offset = end + 1
+            val = data[start:end].decode("ascii", "replace").strip()
+            if val:
+                urls.append(val)
+        official = [url for url in urls if
+                    urllib.parse.urlsplit(url).hostname and
+                    (urllib.parse.urlsplit(url).hostname.lower() == "callofduty.com" or
+                     urllib.parse.urlsplit(url).hostname.lower().endswith(".callofduty.com"))]
+        chosen = official[-1] if official else (urls[-1] if urls else None)
+        if not chosen:
+            raise ValueError("ResDownloadLink not found")
+        parsed = urllib.parse.urlsplit(chosen)
+        if parsed.scheme not in ("https", "http") or not parsed.hostname:
+            raise ValueError("invalid resource URL scheme")
+        # Only probe official Activision CDN discovered in the game binary;
+        # arbitrary URLs never receive automated traffic.
+        if not (parsed.hostname.lower() == "callofduty.com" or
+                parsed.hostname.lower().endswith(".callofduty.com")):
+            raise ValueError("no verified callofduty.com resource base")
+        result = {"resource_base": chosen.rstrip("/"), "sha256_checked_s3e": True,
+                  "archives": {}}
+        for name in ("blackops_etc.dz", "blackops_gles1.dz"):
+            url = chosen.rstrip("/") + "/" + name
+            try:
+                req = urllib.request.Request(url, method="HEAD",
+                                              headers={"User-Agent": "CODBOZ-Loader-Diagnostic/1.0"})
+                with urllib.request.urlopen(req, timeout=12) as response:
+                    result["archives"][name] = {
+                        "http_status": response.status,
+                        "content_length": response.headers.get("Content-Length"),
+                        "final_host": urllib.parse.urlsplit(response.url).hostname,
+                    }
+            except Exception as exc:
+                result["archives"][name] = {
+                    "error": type(exc).__name__ + ": " + str(exc)[:180]
+                }
+        report["reference_resource_cdn_probe"] = result
+        print("[RESOURCE_CDN_PROBE] " + json.dumps(result), flush=True)
+    except Exception as exc:
+        report["reference_resource_cdn_probe_error"] = repr(exc)
+        print("[RESOURCE_CDN_PROBE_ERROR] " + repr(exc), flush=True)
+
 def run_boz_diagnostic(report: dict) -> int:
     trace = pathlib.Path("/tmp/boz_gl_upload_trace.log")
     trace.unlink(missing_ok=True)
@@ -616,13 +712,18 @@ def run_boz_diagnostic(report: dict) -> int:
     if not image and os.environ.get("BOZ_FETCH_REFERENCE_S3E", "1") == "1":
         image = stage_public_reference_s3e(report)
     if image:
-        stage_public_loader_archive(image, report)
+        staged_loader = stage_public_loader_archive(image, report)
+        if report.get("reference_s3e_unpacked_sha256"):
+            inspect_resource_inventory(image, staged_loader, report)
     report["game_image"] = str(image) if image else None
     report["game_image_size"] = image.stat().st_size if image else None
     report["gl_upload_trace"] = str(trace)
     report["game_run_attempted"] = bool(image)
     if not image:
         print("[RUNNER] no BOZ .s3e/.s3e.unpacked asset supplied; game execution not attempted", flush=True)
+        return 0
+    if os.environ.get("BOZ_RESOURCE_PROBE_ONLY", "0") == "1":
+        print("[RUNNER] resource inventory completed (QEMU skipped by explicit diagnostic flag)", flush=True)
         return 0
 
     loader = ROOT / "build" / "codboz_s3e_loader"
