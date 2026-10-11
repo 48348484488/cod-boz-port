@@ -1127,6 +1127,8 @@ def run_boz_diagnostic(report: dict) -> int:
             ticks_per_second = os.sysconf("SC_CLK_TCK")
             page_size = os.sysconf("SC_PAGE_SIZE")
             prev_cpu = {}
+            prev_thread_cpu = {}
+            thread_cpu_totals = {}
             prev_time = None
             started_at = time.monotonic()
             while not host_profile_stop.is_set():
@@ -1191,7 +1193,54 @@ def run_boz_diagnostic(report: dict) -> int:
                             except OSError:
                                 pass
                         active.append(item)
+                    # The QEMU process may run worker threads while the
+                    # ARM main thread sleeps inside libc; identify the
+                    # exact host TIDs consuming the restricted CPU quota.
+                    active_threads = []
+                    next_thread_cpu = {}
+                    for item in active:
+                        if item["name"] != "qemu-arm":
+                            continue
+                        task_root = pathlib.Path(f'/proc/{item["pid"]}/task')
+                        try:
+                            tasks = list(task_root.iterdir())
+                        except OSError:
+                            tasks = []
+                        for task in tasks:
+                            if not task.name.isdigit():
+                                continue
+                            try:
+                                raw = (task / "stat").read_text()
+                                close = raw.rfind(")")
+                                fields = raw[close+2:].split()
+                                tid = int(task.name)
+                                cpu_s = (int(fields[11])+int(fields[12])) / ticks_per_second
+                                last = prev_thread_cpu.get(tid)
+                                interval_cores = (
+                                    round(max(0., cpu_s-last)/elapsed, 3)
+                                    if last is not None and elapsed > 0 else None
+                                )
+                                row = {
+                                    "tid": tid, "name": raw[raw.find("(")+1:close],
+                                    "state": fields[0], "cpu_s": round(cpu_s, 3),
+                                    "cpu_cores": interval_cores,
+                                }
+                                active_threads.append(row)
+                                next_thread_cpu[tid] = cpu_s
+                                if interval_cores is not None:
+                                    thread_cpu_totals[tid] = (
+                                        thread_cpu_totals.get(tid, 0.) +
+                                        interval_cores*elapsed
+                                    )
+                            except (OSError, ValueError, IndexError):
+                                continue
+                    prev_thread_cpu = next_thread_cpu
                     host_profile_samples.append({
+                        "top_threads": sorted(
+                            active_threads, key=lambda item: (
+                                item["cpu_cores"] or 0, item["cpu_s"]),
+                            reverse=True)[:4],
+                        "thread_count": len(active_threads),
                         "elapsed_s": round(now - started_at, 1),
                         "process_count": len(active),
                         "total_cpu_cores": round(sum(
@@ -1244,6 +1293,13 @@ def run_boz_diagnostic(report: dict) -> int:
             ]
             after = read_cgroup_cpu()
             report_cpu = {
+                "top_threads_by_sampled_cpu_s": sorted(
+                    (
+                        {"tid": tid, "sampled_cpu_s": round(total, 2)}
+                        for tid, total in thread_cpu_totals.items()
+                    ),
+                    key=lambda item: item["sampled_cpu_s"], reverse=True
+                )[:10],
                 "samples": len(host_profile_samples),
                 "mean_total_cpu_cores": (
                     round(sum(samples)/len(samples), 3) if samples else None
