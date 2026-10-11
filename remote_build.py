@@ -4931,6 +4931,11 @@ def main() -> int:
     )
 
     ACTIVE_REPORT = report
+    if os.environ.get("BOZ_EXIT_AFTER_DIAGNOSTIC", "0") == "1":
+        # GitHub Actions / one-shot CI: produce the genuine report and stop.
+        # Render web-service mode retains its original persistent HTTP server.
+        print("[RUNNER] one_shot_diagnostic_complete exit_code=" + str(rc), flush=True)
+        return rc
     # Render expects the configured start command to remain alive and listen on
     # PORT. The protected upload route accepts one user-owned BOZ .s3e payload,
     # runs the diagnostic, and deletes the temporary input after execution.
