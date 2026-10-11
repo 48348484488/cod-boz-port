@@ -532,6 +532,90 @@ static void test_cursor_position_precedes_press(void) {
     assert(g_pointer_events.y[0] == g_pointer_events.y[1]);
 }
 
+/* Verify the real S3E pointer callbacks used by the post-frontend
+ * diagnostic: motion precedes press, and both button and touch receive
+ * the same center coordinates on press/release. */
+struct diagnostic_pointer_event {
+    int type;
+    int32_t pressed;
+    int32_t x;
+    int32_t y;
+};
+
+static struct diagnostic_pointer_event g_diagnostic_pointer_events[8];
+static size_t g_diagnostic_pointer_event_count;
+
+static int32_t record_diagnostic_pointer_button(void *system_data, void *user_data) {
+    const struct s3e_pointer_button_event *event = system_data;
+    (void)user_data;
+    assert(event->button == 0);
+    assert(g_diagnostic_pointer_event_count < ARRAY_SIZE(g_diagnostic_pointer_events));
+    g_diagnostic_pointer_events[g_diagnostic_pointer_event_count++] =
+        (struct diagnostic_pointer_event){0, event->pressed, event->x, event->y};
+    return 0;
+}
+
+static int32_t record_diagnostic_pointer_motion(void *system_data, void *user_data) {
+    const struct s3e_pointer_motion_event *event = system_data;
+    (void)user_data;
+    assert(g_diagnostic_pointer_event_count < ARRAY_SIZE(g_diagnostic_pointer_events));
+    g_diagnostic_pointer_events[g_diagnostic_pointer_event_count++] =
+        (struct diagnostic_pointer_event){1, 0, event->x, event->y};
+    return 0;
+}
+
+static int32_t record_diagnostic_touch_button(void *system_data, void *user_data) {
+    const struct s3e_pointer_touch_event *event = system_data;
+    (void)user_data;
+    assert(event->touch_id == 0);
+    assert(g_diagnostic_pointer_event_count < ARRAY_SIZE(g_diagnostic_pointer_events));
+    g_diagnostic_pointer_events[g_diagnostic_pointer_event_count++] =
+        (struct diagnostic_pointer_event){2, event->pressed, event->x, event->y};
+    return 0;
+}
+
+static int32_t record_diagnostic_touch_motion(void *system_data, void *user_data) {
+    const struct s3e_pointer_touch_motion_event *event = system_data;
+    (void)user_data;
+    assert(event->touch_id == 0);
+    assert(g_diagnostic_pointer_event_count < ARRAY_SIZE(g_diagnostic_pointer_events));
+    g_diagnostic_pointer_events[g_diagnostic_pointer_event_count++] =
+        (struct diagnostic_pointer_event){3, 0, event->x, event->y};
+    return 0;
+}
+
+static void test_diagnostic_pointer_press_release_dispatch(void) {
+    reset_input();
+    g_diagnostic_pointer_event_count = 0;
+    assert(s3ePointerRegister(0, (void *)(uintptr_t)&record_diagnostic_pointer_button, NULL) == 0);
+    assert(s3ePointerRegister(1, (void *)(uintptr_t)&record_diagnostic_pointer_motion, NULL) == 0);
+    assert(s3ePointerRegister(2, (void *)(uintptr_t)&record_diagnostic_touch_button, NULL) == 0);
+    assert(s3ePointerRegister(3, (void *)(uintptr_t)&record_diagnostic_touch_motion, NULL) == 0);
+
+    input_diagnostic_tap_step(1);
+    assert(g_diagnostic_pointer_event_count == 4);
+    assert(g_pointer_down == 1);
+    assert(g_pointer_x == 320 && g_pointer_y == 240);
+    const int press_types[] = {1, 3, 0, 2};
+    for (size_t i = 0; i < 4; ++i) {
+        assert(g_diagnostic_pointer_events[i].type == press_types[i]);
+        assert(g_diagnostic_pointer_events[i].x == 320);
+        assert(g_diagnostic_pointer_events[i].y == 240);
+    }
+    assert(g_diagnostic_pointer_events[2].pressed == 1);
+    assert(g_diagnostic_pointer_events[3].pressed == 1);
+
+    input_diagnostic_tap_step(0);
+    assert(g_diagnostic_pointer_event_count == 6);
+    assert(g_pointer_down == 0);
+    assert(g_diagnostic_pointer_events[4].type == 0);
+    assert(g_diagnostic_pointer_events[5].type == 2);
+    assert(g_diagnostic_pointer_events[4].pressed == 0);
+    assert(g_diagnostic_pointer_events[5].pressed == 0);
+    assert(g_diagnostic_pointer_events[4].x == 320);
+    assert(g_diagnostic_pointer_events[5].y == 240);
+}
+
 int main(void) {
     test_skips_unmapped_joysticks();
     test_retries_controller_discovery();
@@ -543,6 +627,7 @@ int main(void) {
     test_cursor_mode_releases_and_reacquires_held_action();
     test_touchpad_initial_position_precedes_press();
     test_cursor_position_precedes_press();
+    test_diagnostic_pointer_press_release_dispatch();
     reset_input();
     input_shutdown();
     puts("s3e_input_test: ok");
