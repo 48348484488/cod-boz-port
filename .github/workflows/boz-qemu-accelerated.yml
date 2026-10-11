@@ -26,6 +26,8 @@ jobs:
       BOZ_FETCH_REFERENCE_S3E: "1"
       BOZ_FETCH_OFFICIAL_GAME_ARCHIVE: "1"
       BOZ_OFFICIAL_GAME_ARCHIVE: "blackops_gles1.dz"
+      # Historical CDN TLS hostname is invalid; strict SHA-256 validates HTTP bytes.
+      BOZ_ALLOW_LEGACY_OFFICIAL_HTTP: "1"
       BOZ_RESOURCE_PROBE_ONLY: "0"
       BOZ_FAST_NULL_PROPERTY: "1"
       BOZ_FAST_SKIP_NULL_REGISTRATION: "1"
@@ -56,7 +58,7 @@ jobs:
             git ca-certificates curl python3 make gcc libc6-dev:amd64 gcc-arm-linux-gnueabihf \
             libc6-dev-armhf-cross binutils-arm-linux-gnueabihf qemu-user \
             xvfb xauth libsdl2-2.0-0:armhf libegl1:armhf libgles2:armhf \
-            libgl1-mesa-dri:armhf libasound2:armhf
+            libgles1:armhf libgl1-mesa-dri:armhf libasound2:armhf
 
       - uses: actions/checkout@v4
 
