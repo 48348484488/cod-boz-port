@@ -1165,7 +1165,8 @@ static void install_boz_pc_sampler(void) {
         while (fgets(line, sizeof(line), maps) && emitted < 80u) {
             unsigned long lo = 0, hi = 0;
             if (sscanf(line, "%lx-%lx", &lo, &hi) != 2) continue;
-            if (lo < 0x40000000ul && hi > 0x3f000000ul) {
+            if (lo < 0x40000000ul && hi > 0x30000000ul &&
+                strstr(line, ".so")) {
                 fprintf(stderr, "[BOZ_MODULE_MAP] %s", line);
                 ++emitted;
             }
