@@ -10,6 +10,7 @@ on:
       - "src/s3e_input.c"
       - "tests/s3e_input_test.c"
       - "tools/boz_ci_summary.py"
+      - "tests/test_boz_ci_summary.py"
       - "remote_build.py"
 
 # CI only pushes a compact, asset-free status to a dedicated results branch.
@@ -70,6 +71,10 @@ jobs:
             libegl-mesa0:armhf libgl1-mesa-dri:armhf libasound2:armhf
 
       - uses: actions/checkout@v4
+
+      - name: Verify diagnostic parser regression tests
+        shell: bash
+        run: python3 -m unittest discover -s tests -p test_boz_ci_summary.py -v
 
       - name: Run actual BOZ ARM loader with SHA-256-verified game resources
         shell: bash
@@ -135,6 +140,11 @@ jobs:
               print("::error::Texture dimension diagnostics were not recorded")
               sys.exit(1)
           print("Texture dimension snapshots:", *snapshots[-3:], sep="\\n")
+          census = texture_report.get("draw_census") or []
+          if not census:
+              print("::error::Full guest GL draw census was not recorded")
+              sys.exit(1)
+          print("Guest GL draw census:", *census[-3:], sep="\\n")
           print(f"Validated genuine frame swaps: {len(swaps)}, PNG captures: {len(frames)}")
           print("BOZ diagnostic completed; visible menu and gameplay remain unverified.")
           PY
