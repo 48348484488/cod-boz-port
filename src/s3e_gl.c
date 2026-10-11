@@ -199,8 +199,11 @@ static S3E_SOFTFP void host_glDrawElements(GLenum mode, GLsizei count, GLenum ty
     ++g_boz_gl_draw_elements_count;
     void (*real)(GLenum, GLsizei, GLenum, const void *) = lookup_gl("glDrawElements");
     const char *trace = getenv("BOZ_GL_DRAW_DIAGNOSTIC");
-    const bool diagnostic = trace && strcmp(trace, "1") == 0 &&
-                            g_boz_gl_draw_elements_count <= 12u;
+    const char *late = getenv("BOZ_GL_LATE_FRAMES");
+    const bool late_diag = late && strcmp(late, "1") == 0;
+    const bool draw_sample = g_boz_gl_draw_elements_count <= 12u ||
+        (late_diag && (g_boz_gl_draw_elements_count % 25u) == 0u);
+    const bool diagnostic = trace && strcmp(trace, "1") == 0 && draw_sample;
     if (diagnostic) {
         void (*get_int)(GLenum, GLint *) = lookup_gl("glGetIntegerv");
         GLboolean (*is_enabled)(GLenum) = lookup_gl("glIsEnabled");
