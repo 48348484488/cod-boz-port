@@ -1011,8 +1011,9 @@ static void boz_capture_swap_frame(unsigned frame) {
          frame != 60u && frame != 100u && frame != 125u &&
          frame != 130u && frame != 140u && frame != 150u &&
          frame != 175u && frame != 200u && frame != 225u &&
+         frame != 185u && frame != 190u && frame != 195u &&
          frame != 250u && frame != 275u && frame != 300u &&
-         frame != 325u)) return;
+         frame != 325u && frame != 350u && frame != 375u)) return;
     void (*read_pixels)(GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, void *) =
         lookup_gl("glReadPixels");
     if (!read_pixels) {

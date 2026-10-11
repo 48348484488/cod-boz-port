@@ -27,7 +27,7 @@ jobs:
     # Debian carries armhf and amd64 packages in the same APT repositories.
     # This avoids architecture-specific Ubuntu Ports repository mismatches.
     container: debian:bookworm
-    timeout-minutes: 20
+    timeout-minutes: 22
     env:
       PYTHONUNBUFFERED: "1"
       BOZ_FETCH_REFERENCE_S3E: "1"
@@ -46,7 +46,7 @@ jobs:
       BOZ_PC_SAMPLE_INTERVAL: "4"
       BOZ_QEMU_HOST_PROFILING: "1"
       BOZ_COMPAT_PNG_INPUT_LENGTH_FIX: "1"
-      BOZ_FAST_PROPERTY_TIMEOUT: "330"
+      BOZ_FAST_PROPERTY_TIMEOUT: "660"
       BOZ_DISPLAY_SIZE: "640x480"
       BOZ_EXIT_AFTER_DIAGNOSTIC: "1"
       RUN_HOST_TESTS: "1"
@@ -84,7 +84,7 @@ jobs:
           # QEMU ending on its diagnostic deadline (rc=124) is expected.
           # Run the report assertions instead of aborting on shell -e.
           set +e
-          timeout --signal=INT --kill-after=15s 540s \
+          timeout --signal=INT --kill-after=15s 1050s \
             python3 -u remote_build.py > boz-ci-session.log 2>&1
           status=$?
           set -e
@@ -129,7 +129,8 @@ jobs:
           if 130 not in frames_by_swap:
               print("::error::No captured frame after the late frontend tap")
               sys.exit(1)
-          for index in (100, 125, 130, 140, 150, 175, 200, 225, 250, 275, 300, 325):
+          for index in (100, 125, 130, 140, 150, 175, 185, 190, 195,
+                        200, 225, 250, 275, 300, 325, 350, 375):
               image = frames_by_swap.get(index)
               print(f"BOZ_FRAME_CHECK swap={index} sha256={image['sha256'] if image else 'missing'} "
                     f"colors={image['distinct_rgb_colors'] if image else 'missing'}")
