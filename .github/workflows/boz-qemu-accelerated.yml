@@ -46,7 +46,7 @@ jobs:
       BOZ_PC_SAMPLE_INTERVAL: "4"
       BOZ_QEMU_HOST_PROFILING: "1"
       BOZ_COMPAT_PNG_INPUT_LENGTH_FIX: "1"
-      BOZ_FAST_PROPERTY_TIMEOUT: "260"
+      BOZ_FAST_PROPERTY_TIMEOUT: "330"
       BOZ_DISPLAY_SIZE: "640x480"
       BOZ_EXIT_AFTER_DIAGNOSTIC: "1"
       RUN_HOST_TESTS: "1"
@@ -118,22 +118,27 @@ jobs:
           if len(taps) != 2:
               print(f"::error::Late frontend tap did not produce press/release: {taps}")
               sys.exit(1)
-          if not any("n=130" in swap for swap in swaps):
-              print("::error::No verified frame after the late frontend tap")
-              sys.exit(1)
           print("Actual late S3E pointer events:", *taps, sep="\\n")
           import os
           frames_by_swap = {
               int(os.path.basename(item["file"]).split("-")[-1].split(".")[0]): item
               for item in frames
           }
-          for index in (100, 125, 130, 140, 150):
+          # Progress events are a bounded tail; earlier frame-130 entries are
+          # dropped when the runtime advances past 200+ frames.
+          if 130 not in frames_by_swap:
+              print("::error::No captured frame after the late frontend tap")
+              sys.exit(1)
+          for index in (100, 125, 130, 140, 150, 175, 200, 225, 250, 275, 300, 325):
               image = frames_by_swap.get(index)
               print(f"BOZ_FRAME_CHECK swap={index} sha256={image['sha256'] if image else 'missing'} "
                     f"colors={image['distinct_rgb_colors'] if image else 'missing'}")
           if 100 in frames_by_swap and 140 in frames_by_swap:
               print("BOZ_POST_TAP_FRAME_CHANGED=" +
                     str(frames_by_swap[100]["sha256"] != frames_by_swap[140]["sha256"]).lower())
+          if 150 in frames_by_swap and 250 in frames_by_swap:
+              print("BOZ_AFTER_150_FRAME_CHANGED=" +
+                    str(frames_by_swap[150]["sha256"] != frames_by_swap[250]["sha256"]).lower())
           texture_report = report.get("fast_texture_evidence") or {}
           snapshots = texture_report.get("size_totals") or []
           if not snapshots:

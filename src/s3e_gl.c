@@ -194,7 +194,9 @@ static void boz_census_swap(unsigned swap) {
     if (!boz_texture_diag_enabled()) return;
     if (swap == 1u || swap == 5u || swap == 60u || swap == 100u ||
         swap == 125u || swap == 130u || swap == 140u || swap == 150u ||
-        swap == 200u || swap == 250u || swap == 300u) {
+        swap == 175u || swap == 200u || swap == 225u ||
+        swap == 250u || swap == 275u || swap == 300u ||
+        swap == 325u) {
         unsigned large_known = 0;
         unsigned large_drawn = 0;
         for (unsigned i = 0; i < g_boz_tex_meta_count; ++i) {
@@ -1007,7 +1009,10 @@ static void boz_capture_swap_frame(unsigned frame) {
     if (!dir || !*dir ||
         (frame != 1u && frame != 5u && frame != 10u && frame != 15u &&
          frame != 60u && frame != 100u && frame != 125u &&
-         frame != 130u && frame != 140u && frame != 150u)) return;
+         frame != 130u && frame != 140u && frame != 150u &&
+         frame != 175u && frame != 200u && frame != 225u &&
+         frame != 250u && frame != 275u && frame != 300u &&
+         frame != 325u)) return;
     void (*read_pixels)(GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, void *) =
         lookup_gl("glReadPixels");
     if (!read_pixels) {
