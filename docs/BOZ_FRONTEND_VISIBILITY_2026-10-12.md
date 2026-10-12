@@ -14,19 +14,21 @@ Scope: the fork `48348484488/cod-boz-port` only. No original game assets or fram
 - Before/after overlay frame captures show identical content apart from 185 pixels of diagnostic cursor. The cursor does not occlude an existing menu.
 - All sampled glDrawElements returned GL error 0. Absence of a GL error does not guarantee visible triangles.
 
-## Current experiment
+## Completed reversible framebuffer-state experiment
 
-Commit `4e4999c46e7b2380f8027386c301695a0849e1b8` adds opt-in `BOZ_GL_VISUAL_AB_PROBE=1`:
+- [Run 38210750883](https://github.com/48348484488/cod-boz-port/actions/runs/38210750883), commit `456a5dd`, **success**, without SIGSEGV.
+- Controlled per-frame treatments: swap 300 original; 305 culling disabled; 310 blending enabled; 315 both; 320 original again. Experimental state was restored after every indexed draw.
+- `BOZ_GL_VISUAL_AB` records confirm the requested state changes were made: `changed_cull=1` at 305, `changed_blend=1` at 310, both at 315.
+- All five post-overlay PNG SHA-256 hashes match **exactly** (`81a9cd49fe4a5c13893b452d8d5e73d4ae9a547361a2712930969e72ed59b7c7`); pre-overlay hashes likewise match. Therefore neither disabled face culling nor forced alpha blending rendered additional frontend elements in this scene. **Do not ship either change** as a purported fix.
 
-- Frame 300: ordinary draw (control).
-- Frames 325–349: disable culling around guest draw, then restore.
-- Frames 350–374: enable blending around guest draw, then restore.
-- Frames 375–399: both changes, then restore.
-- Frame 400 onward: ordinary state again.
+## Current texture sampling and clear provenance experiment
 
-This is **diagnostic-only** and deliberately restores GL state after each draw. Compare actual PNG hashes, color populations and pixel differences for swaps 300/325/350/375 (and 400 when captured). Do not infer success from hash alone: changing the cursor affects hash.
-
-Workflow [38209655310](https://github.com/48348484488/cod-boz-port/actions/runs/38209655310) executes the probe under real ARM/QEMU. If the framebuffer does not change, investigate geometry winding, vertex attributes, UV scale/offset, render-target content, or missing frontend transitions rather than forcing a permanent culling/blend override.
+- Commit [5422ddd](https://github.com/48348484488/cod-boz-port/commit/5422ddd29ed1fa1a7a8ac797ba047924ded44f7f) adds read-only diagnostics for each sampled guest draw:
+  - `BOZ_GL_UV_STATE` records the *actual* `inUVScale` and `inUVOffset` values of the active shader.
+  - `BOZ_GL_TEXTURE_PARAMS` records texture unit 0's actual min/mag filtering and wrap modes, without changing sampling state.
+  - `BOZ_GL_CLEAR_CAUSE` records guest `glClear` mask, color, scissor, framebuffer and caller for frames 275/300/305/310/315/320.
+- [Run 38213011265](https://github.com/48348484488/cod-boz-port/actions/runs/38213011265) is the actual ARM/QEMU execution for this commit. Inspect the report in `boz-diagnostics/docs/boz-latest-ci.json` **only after** its provenance `run_id` becomes `38213011265`.
+- Interpret this evidence before deciding on a fix: incomplete mipmap texture, incorrect UV transform, screen-clearing overwrite, or a separate scene-transition issue. These are hypotheses, not confirmed defects.
 
 ## Acceptance
 
