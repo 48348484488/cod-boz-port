@@ -76,6 +76,7 @@ static unsigned g_boz_gl_clear_count;
 static unsigned g_boz_gl_draw_arrays_count;
 static unsigned g_boz_gl_draw_elements_count;
 static unsigned g_boz_gl_draw_command_count;
+static unsigned char g_boz_array_program_sampled[256];
 static unsigned g_boz_gl_draw_tex_count;
 static unsigned g_boz_gl_program_creates;
 static unsigned g_boz_gl_program_links;
@@ -338,10 +339,95 @@ static void boz_trace_draw_pixels(const char *kind, unsigned seq, GLsizei count)
             top[0], top[1], top[2], (int)count);
 }
 
+/* Capture a compact first-use program/attribute signature for real array
+ * draws in the late frontend, without dereferencing any guest vertex data. */
+static void boz_trace_array_geometry(GLenum mode, GLint first, GLsizei count) {
+    if (!boz_texture_diag_enabled() || g_boz_visual_probe_next_swap != 300u)
+        return;
+    void (*get_int)(GLenum, GLint *) = lookup_gl("glGetIntegerv");
+    if (!get_int) return;
+    GLint program = 0;
+    get_int(0x8b8du, &program); /* GL_CURRENT_PROGRAM */
+    if (program < 0 || program >= (GLint)sizeof(g_boz_array_program_sampled) ||
+        g_boz_array_program_sampled[program])
+        return;
+    g_boz_array_program_sampled[program] = 1;
+    GLint fbo = -1;
+    get_int(0x8ca6u, &fbo);
+    fprintf(stderr, "[BOZ_GL_ARRAY_PROGRAM] frame=300 program=%d mode=%04x "
+            "first=%d count=%d fbo=%d tex=%u order=%u\n",
+            program, (unsigned)mode, first, (int)count, fbo,
+            g_boz_tex_bound[0], g_boz_gl_draw_command_count);
+    void (*get_prog)(GLuint, GLenum, GLint *) = lookup_gl("glGetProgramiv");
+    void (*get_attr)(GLuint, GLuint, GLsizei, GLsizei *, GLint *,
+                     GLenum *, char *) = lookup_gl("glGetActiveAttrib");
+    GLint (*get_attr_loc)(GLuint, const char *) = lookup_gl("glGetAttribLocation");
+    void (*get_vertex)(GLuint, GLenum, GLint *) = lookup_gl("glGetVertexAttribiv");
+    void (*get_vertex_ptr)(GLuint, GLenum, void **) =
+        lookup_gl("glGetVertexAttribPointerv");
+    if (!get_prog || !get_attr || !get_attr_loc || !get_vertex)
+        return;
+    GLint active = 0;
+    get_prog((GLuint)program, 0x8b89u, &active); /* GL_ACTIVE_ATTRIBUTES */
+    for (GLint index = 0; index < active && index < 12; ++index) {
+        char name[96] = {0};
+        GLsizei name_len = 0;
+        GLint array_size = 0;
+        GLenum type = 0;
+        get_attr((GLuint)program, (GLuint)index, (GLsizei)sizeof(name),
+                 &name_len, &array_size, &type, name);
+        GLint location = get_attr_loc((GLuint)program, name);
+        if (location < 0) continue;
+        GLint enabled = 0, dimension = 0, vertex_type = 0, stride = 0, vbo = 0;
+        get_vertex((GLuint)location, 0x8622u, &enabled);
+        get_vertex((GLuint)location, 0x8623u, &dimension);
+        get_vertex((GLuint)location, 0x8625u, &vertex_type);
+        get_vertex((GLuint)location, 0x8624u, &stride);
+        get_vertex((GLuint)location, 0x889fu, &vbo);
+        void *ptr = NULL;
+        if (get_vertex_ptr)
+            get_vertex_ptr((GLuint)location, 0x8645u, &ptr);
+        fprintf(stderr,
+                "[BOZ_GL_ARRAY_ATTR] frame=300 program=%d name=%s loc=%d "
+                "enabled=%d size=%d type=%04x stride=%d vbo=%d ptr=%08lx\n",
+                program, name, location, enabled, dimension,
+                (unsigned)vertex_type, stride, vbo,
+                (unsigned long)(uintptr_t)ptr);
+    }
+    void (*get_uniform)(GLuint, GLuint, GLsizei, GLsizei *, GLint *,
+                        GLenum *, char *) = lookup_gl("glGetActiveUniform");
+    GLint (*get_loc)(GLuint, const char *) = lookup_gl("glGetUniformLocation");
+    void (*get_float_uniform)(GLuint, GLint, GLfloat *) =
+        lookup_gl("glGetUniformfv");
+    if (!get_uniform || !get_loc || !get_float_uniform) return;
+    GLint uniforms = 0;
+    get_prog((GLuint)program, 0x8b86u, &uniforms);
+    for (GLint i = 0; i < uniforms && i < 12; ++i) {
+        char name[96] = {0};
+        GLsizei length = 0;
+        GLint count_values = 0;
+        GLenum type = 0;
+        get_uniform((GLuint)program, (GLuint)i, (GLsizei)sizeof(name),
+                    &length, &count_values, &type, name);
+        GLint loc = get_loc((GLuint)program, name);
+        GLfloat floats[16] = {0};
+        if (loc >= 0 && count_values == 1 && type != 0x8b5eu &&
+            type != 0x8b60u)
+            get_float_uniform((GLuint)program, loc, floats);
+        fprintf(stderr,
+                "[BOZ_GL_ARRAY_UNIFORM] frame=300 program=%d name=%s "
+                "loc=%d type=%04x count=%d v=%g,%g,%g,%g\n",
+                program, name, loc, (unsigned)type, count_values,
+                (double)floats[0], (double)floats[1],
+                (double)floats[2], (double)floats[3]);
+    }
+}
+
 static S3E_SOFTFP void host_glDrawArrays(GLenum mode, GLint first, GLsizei count) {
     ++g_boz_gl_draw_arrays_count;
     ++g_boz_gl_draw_command_count;
     boz_census_draw();
+    boz_trace_array_geometry(mode, first, count);
     void (*real)(GLenum, GLint, GLsizei) = lookup_gl("glDrawArrays");
     if (real) {
         real(mode, first, count);

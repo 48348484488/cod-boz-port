@@ -79,6 +79,13 @@ class BozSummaryTests(unittest.TestCase):
                     "program=18 tex=62 bottom=1c1a19 middle=837978 "
                     "top=1c1a19 count=108"
                 ],
+                "array_geometry": [
+                    "[BOZ_GL_ARRAY_PROGRAM] frame=300 program=15 mode=0004 "
+                    "first=0 count=4 fbo=0 tex=0 order=900",
+                    "[BOZ_GL_ARRAY_ATTR] frame=300 program=15 "
+                    "name=inPosition loc=0 enabled=1 size=2 "
+                    "type=1406 stride=16 vbo=0 ptr=4a123400"
+                ],
             },
         }
         result = summarize(report)
@@ -94,6 +101,7 @@ class BozSummaryTests(unittest.TestCase):
         self.assertEqual(len(result["texture_params"]), 1)
         self.assertEqual(len(result["clear_causes"]), 1)
         self.assertEqual(len(result["pixel_trail"]), 2)
+        self.assertEqual(len(result["array_geometry"]), 2)
         self.assertFalse(result["visual_frontend_verified"])
 
 

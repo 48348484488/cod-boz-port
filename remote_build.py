@@ -1596,7 +1596,8 @@ def run_boz_diagnostic(report: dict) -> int:
                 "[BOZ_GL_SAMPLER_BIND]", "[BOZ_GL_DRAW_STATE]",
                 "[BOZ_GL_VISUAL_AB]", "[BOZ_GL_UV_STATE]",
                 "[BOZ_GL_TEXTURE_PARAMS]", "[BOZ_GL_CLEAR_CAUSE]",
-                "[BOZ_GL_PIXEL_TRAIL]",
+                "[BOZ_GL_PIXEL_TRAIL]", "[BOZ_GL_ARRAY_PROGRAM]",
+                "[BOZ_GL_ARRAY_ATTR]", "[BOZ_GL_ARRAY_UNIFORM]",
                 "[BOZ_GL_COMPRESSED_UPLOAD]", "[BOZ_GL_COMPRESSED_SUBUPLOAD]"))
         ]
         report["fast_texture_evidence"] = {
@@ -1636,6 +1637,10 @@ def run_boz_diagnostic(report: dict) -> int:
                              if ln.startswith("[BOZ_GL_CLEAR_CAUSE]")][-80:],
             "pixel_trail": [ln for ln in texture_events
                             if ln.startswith("[BOZ_GL_PIXEL_TRAIL]")][-40:],
+            "array_geometry": [ln for ln in texture_events
+                               if ln.startswith(("[BOZ_GL_ARRAY_PROGRAM]",
+                                                 "[BOZ_GL_ARRAY_ATTR]",
+                                                 "[BOZ_GL_ARRAY_UNIFORM]"))][-80:],
         }
         print("[FAST_TEXTURE_SUMMARY] " +
               json.dumps(report["fast_texture_evidence"]), flush=True)
@@ -1672,7 +1677,8 @@ def run_boz_diagnostic(report: dict) -> int:
                 "[BOZ_GL_DRAW_STATE]", "[BOZ_GL_VISUAL_AB]",
                 "[BOZ_GL_UV_STATE]", "[BOZ_GL_TEXTURE_PARAMS]",
                 "[BOZ_GL_CLEAR_CAUSE]", "[BOZ_GL_PIXEL_TRAIL]",
-                "[BOZ_RESOURCE_OPEN]", "[BOZ_RESOURCE_CLOSE]", "[BOZ_RESOURCE_PROGRESS]",
+                "[BOZ_GL_ARRAY_PROGRAM]", "[BOZ_GL_ARRAY_ATTR]",
+                "[BOZ_GL_ARRAY_UNIFORM]", "[BOZ_RESOURCE_OPEN]", "[BOZ_RESOURCE_CLOSE]", "[BOZ_RESOURCE_PROGRESS]",
                 "[BOZ_NULL_PROPERTY_ORIGIN]", "signal 11 ", "stack:",
                 "[S3E_FILE_EXISTS]",
             )) and not line.startswith("[S3E_FILE_EXISTS]"):
