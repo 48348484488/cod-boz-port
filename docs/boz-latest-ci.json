@@ -1,6 +1,27 @@
 {
   "after_tap_color_counts_identical": true,
   "after_tap_frame_changed": true,
+  "array_ab_events": [
+    "[BOZ_GL_ARRAY_AB] frame=300 draw=424 no_cull=0 force_blend=0 changed_cull=0 changed_blend=0",
+    "[BOZ_GL_ARRAY_AB] frame=305 draw=514 no_cull=1 force_blend=0 changed_cull=0 changed_blend=0",
+    "[BOZ_GL_ARRAY_AB] frame=310 draw=604 no_cull=0 force_blend=1 changed_cull=0 changed_blend=1",
+    "[BOZ_GL_ARRAY_AB] frame=315 draw=694 no_cull=1 force_blend=1 changed_cull=0 changed_blend=1",
+    "[BOZ_GL_ARRAY_AB] frame=320 draw=784 no_cull=0 force_blend=0 changed_cull=0 changed_blend=0"
+  ],
+  "array_geometry": [
+    "[BOZ_GL_ARRAY_PROGRAM] frame=300 program=12 mode=0005 first=0 count=4 fbo=0 tex=0 order=837",
+    "[BOZ_GL_ARRAY_ATTR] frame=300 program=12 name=inVert loc=0 enabled=1 size=2 type=1402 stride=0 vbo=0 ptr=2f4721e0",
+    "[BOZ_GL_ARRAY_UNIFORM] frame=300 program=12 name=inPMVMat loc=0 type=8b5c count=1 v=0.003125,0,0,0",
+    "[BOZ_GL_ARRAY_UNIFORM] frame=300 program=12 name=inMaterialAmbient loc=1 type=8b52 count=1 v=0,0,0,1",
+    "[BOZ_GL_ARRAY_PROGRAM] frame=300 program=15 mode=0005 first=0 count=4 fbo=0 tex=355 order=839",
+    "[BOZ_GL_ARRAY_ATTR] frame=300 program=15 name=inVert loc=0 enabled=1 size=2 type=1402 stride=0 vbo=0 ptr=2f472570",
+    "[BOZ_GL_ARRAY_ATTR] frame=300 program=15 name=inUV0 loc=1 enabled=1 size=2 type=1402 stride=0 vbo=0 ptr=2f472630",
+    "[BOZ_GL_ARRAY_UNIFORM] frame=300 program=15 name=inPMVMat loc=0 type=8b5c count=1 v=0.003125,0,0,0",
+    "[BOZ_GL_ARRAY_UNIFORM] frame=300 program=15 name=inUVOffset loc=1 type=8b50 count=1 v=0,0,0,0",
+    "[BOZ_GL_ARRAY_UNIFORM] frame=300 program=15 name=inUVScale loc=2 type=8b50 count=1 v=0.000244141,0.00012207,0,0",
+    "[BOZ_GL_ARRAY_UNIFORM] frame=300 program=15 name=inSampler0 loc=3 type=8b5e count=1 v=0,0,0,0",
+    "[BOZ_GL_ARRAY_UNIFORM] frame=300 program=15 name=inMaterialAmbient loc=4 type=8b52 count=1 v=1,1,1,1"
+  ],
   "before_overlay_frame_hashes": [
     {
       "distinct_rgb_colors": 1,
@@ -145,7 +166,8 @@
     "[BOZ_GL_DRAW_STATE] seq=400 program=18 blend=0 src=0302 dst=0303 depth=0 cull=1",
     "[BOZ_GL_DRAW_STATE] seq=425 program=12 blend=0 src=0302 dst=0303 depth=0 cull=1",
     "[BOZ_GL_DRAW_STATE] seq=450 program=18 blend=0 src=0302 dst=0303 depth=0 cull=1",
-    "[BOZ_GL_DRAW_STATE] seq=475 program=12 blend=0 src=0302 dst=0303 depth=0 cull=1"
+    "[BOZ_GL_DRAW_STATE] seq=475 program=12 blend=0 src=0302 dst=0303 depth=0 cull=1",
+    "[BOZ_GL_DRAW_STATE] seq=500 program=18 blend=0 src=0302 dst=0303 depth=0 cull=1"
   ],
   "frame_hashes": [
     {
@@ -669,7 +691,8 @@
     "[BOZ_GL_CALLSITE] kind=draw seq=400 caller=4a2ddf44 sampler0=62",
     "[BOZ_GL_CALLSITE] kind=draw seq=425 caller=4a2ddf44 sampler0=0",
     "[BOZ_GL_CALLSITE] kind=draw seq=450 caller=4a2ddf44 sampler0=62",
-    "[BOZ_GL_CALLSITE] kind=draw seq=475 caller=4a2ddf44 sampler0=0"
+    "[BOZ_GL_CALLSITE] kind=draw seq=475 caller=4a2ddf44 sampler0=0",
+    "[BOZ_GL_CALLSITE] kind=draw seq=500 caller=4a2ddf44 sampler0=62"
   ],
   "guest_sigsegv_count": 0,
   "last_draw_census": {
@@ -691,7 +714,6 @@
     "[BOZ_DIAGNOSTIC_TAP] pressed=0 x=320 y=240 pointer_down=0 button_callback=1 touch_callback=0 cursor_active=1"
   ],
   "late_texture_draws": [
-    "[BOZ_GL_TEXTURE_DRAW] seq=200 sampler0_tex=60 active=84c0 active_bound=60 upload_count=1 image=2x2 compressed=0 hash64=7eea891d3aca0693 first=ffffff80",
     "[BOZ_GL_TEXTURE_DRAW] seq=225 sampler0_tex=56 active=84c0 active_bound=56 upload_count=1 image=512x512 compressed=0 hash64=218035740d3f1b83 first=00000000",
     "[BOZ_GL_TEXTURE_DRAW] seq=250 sampler0_tex=60 active=84c0 active_bound=60 upload_count=1 image=2x2 compressed=0 hash64=7eea891d3aca0693 first=ffffff80",
     "[BOZ_GL_TEXTURE_DRAW] seq=275 sampler0_tex=56 active=84c0 active_bound=56 upload_count=1 image=512x512 compressed=0 hash64=218035740d3f1b83 first=00000000",
@@ -702,7 +724,8 @@
     "[BOZ_GL_TEXTURE_DRAW] seq=400 sampler0_tex=62 active=84c0 active_bound=62 upload_count=1 image=1024x512 compressed=0 hash64=218035740d3f1b83 first=00000000",
     "[BOZ_GL_TEXTURE_DRAW] seq=425 sampler0_tex=0 active=84c0 active_bound=0 upload_count=0 image=0x0 compressed=0 hash64=0000000000000000 first=00000000",
     "[BOZ_GL_TEXTURE_DRAW] seq=450 sampler0_tex=62 active=84c0 active_bound=62 upload_count=1 image=1024x512 compressed=0 hash64=218035740d3f1b83 first=00000000",
-    "[BOZ_GL_TEXTURE_DRAW] seq=475 sampler0_tex=0 active=84c0 active_bound=0 upload_count=0 image=0x0 compressed=0 hash64=0000000000000000 first=00000000"
+    "[BOZ_GL_TEXTURE_DRAW] seq=475 sampler0_tex=0 active=84c0 active_bound=0 upload_count=0 image=0x0 compressed=0 hash64=0000000000000000 first=00000000",
+    "[BOZ_GL_TEXTURE_DRAW] seq=500 sampler0_tex=62 active=84c0 active_bound=62 upload_count=1 image=1024x512 compressed=0 hash64=218035740d3f1b83 first=00000000"
   ],
   "per_frame_draw_census": [
     {
@@ -939,15 +962,15 @@
     "[BOZ_GL_PIXEL_TRAIL] frame=300 order=855 kind=arrays seq=441 program=15 tex=382 bottom=1c1a19 middle=837978 top=1c1a19 count=4"
   ],
   "provenance": {
-    "commit": "3aa034a1c6a35809dbf1575d9062a7198a0a47e4",
+    "commit": "4dda19e51683f1d30729733dc455b5c5f315a06a",
     "run_attempt": "1",
-    "run_id": "38215180010",
+    "run_id": "38216049598",
     "workflow": "BOZ ARM Runtime - CPU Unthrottled"
   },
   "qemu_return_code": 124,
   "sampled_draws_total": 28,
-  "sampled_draws_with_2x2_texture": 20,
-  "sampled_draws_with_larger_texture": 5,
+  "sampled_draws_with_2x2_texture": 19,
+  "sampled_draws_with_larger_texture": 6,
   "sampler_bindings": [
     "[BOZ_GL_SAMPLER_BIND] seq=1 program=6 name=inSampler0 type=8b5e unit=0 tex=58 image=2x2 uploads=1",
     "[BOZ_GL_SAMPLER_BIND] seq=2 program=6 name=inSampler0 type=8b5e unit=0 tex=58 image=2x2 uploads=1",
@@ -976,22 +999,23 @@
     "[BOZ_GL_SAMPLER_BIND] seq=325 program=9 name=inSampler0 type=8b5e unit=0 tex=56 image=512x512 uploads=1",
     "[BOZ_GL_SAMPLER_BIND] seq=350 program=6 name=inSampler0 type=8b5e unit=0 tex=60 image=2x2 uploads=1",
     "[BOZ_GL_SAMPLER_BIND] seq=400 program=18 name=inSampler0 type=8b5e unit=0 tex=62 image=1024x512 uploads=1",
-    "[BOZ_GL_SAMPLER_BIND] seq=450 program=18 name=inSampler0 type=8b5e unit=0 tex=62 image=1024x512 uploads=1"
+    "[BOZ_GL_SAMPLER_BIND] seq=450 program=18 name=inSampler0 type=8b5e unit=0 tex=62 image=1024x512 uploads=1",
+    "[BOZ_GL_SAMPLER_BIND] seq=500 program=18 name=inSampler0 type=8b5e unit=0 tex=62 image=1024x512 uploads=1"
   ],
   "schema": "boz-ci-summary-v1",
   "swaps": [
-    "[BOZ_SWAP_PROGRESS] n=285 ok=1 fbo=0 elapsed_ms=527482 gl_clear=286 gl_draw_arrays=171 gl_draw_elements=384 gl_draw_tex=0",
-    "[BOZ_SWAP_PROGRESS] n=290 ok=1 fbo=0 elapsed_ms=547771 gl_clear=291 gl_draw_arrays=261 gl_draw_elements=394 gl_draw_tex=0",
-    "[BOZ_SWAP_PROGRESS] n=295 ok=1 fbo=0 elapsed_ms=568042 gl_clear=296 gl_draw_arrays=351 gl_draw_elements=404 gl_draw_tex=0",
-    "[BOZ_SWAP_PROGRESS] n=300 ok=1 fbo=0 elapsed_ms=588348 gl_clear=301 gl_draw_arrays=441 gl_draw_elements=414 gl_draw_tex=0",
-    "[BOZ_SWAP_PROGRESS] n=305 ok=1 fbo=0 elapsed_ms=608649 gl_clear=306 gl_draw_arrays=531 gl_draw_elements=424 gl_draw_tex=0",
-    "[BOZ_SWAP_PROGRESS] n=310 ok=1 fbo=0 elapsed_ms=631330 gl_clear=311 gl_draw_arrays=621 gl_draw_elements=434 gl_draw_tex=0",
-    "[BOZ_SWAP_PROGRESS] n=315 ok=1 fbo=0 elapsed_ms=652278 gl_clear=316 gl_draw_arrays=711 gl_draw_elements=444 gl_draw_tex=0",
-    "[BOZ_SWAP_PROGRESS] n=320 ok=1 fbo=0 elapsed_ms=672947 gl_clear=321 gl_draw_arrays=801 gl_draw_elements=454 gl_draw_tex=0",
-    "[BOZ_SWAP_PROGRESS] n=325 ok=1 fbo=0 elapsed_ms=693214 gl_clear=326 gl_draw_arrays=891 gl_draw_elements=464 gl_draw_tex=0",
-    "[BOZ_SWAP_PROGRESS] n=330 ok=1 fbo=0 elapsed_ms=713517 gl_clear=331 gl_draw_arrays=981 gl_draw_elements=474 gl_draw_tex=0",
-    "[BOZ_SWAP_PROGRESS] n=335 ok=1 fbo=0 elapsed_ms=733803 gl_clear=336 gl_draw_arrays=1071 gl_draw_elements=484 gl_draw_tex=0",
-    "[BOZ_SWAP_PROGRESS] n=340 ok=1 fbo=0 elapsed_ms=754080 gl_clear=341 gl_draw_arrays=1161 gl_draw_elements=494 gl_draw_tex=0"
+    "[BOZ_SWAP_PROGRESS] n=290 ok=1 fbo=0 elapsed_ms=523586 gl_clear=291 gl_draw_arrays=261 gl_draw_elements=394 gl_draw_tex=0",
+    "[BOZ_SWAP_PROGRESS] n=295 ok=1 fbo=0 elapsed_ms=542960 gl_clear=296 gl_draw_arrays=351 gl_draw_elements=404 gl_draw_tex=0",
+    "[BOZ_SWAP_PROGRESS] n=300 ok=1 fbo=0 elapsed_ms=562353 gl_clear=301 gl_draw_arrays=441 gl_draw_elements=414 gl_draw_tex=0",
+    "[BOZ_SWAP_PROGRESS] n=305 ok=1 fbo=0 elapsed_ms=581813 gl_clear=306 gl_draw_arrays=531 gl_draw_elements=424 gl_draw_tex=0",
+    "[BOZ_SWAP_PROGRESS] n=310 ok=1 fbo=0 elapsed_ms=604672 gl_clear=311 gl_draw_arrays=621 gl_draw_elements=434 gl_draw_tex=0",
+    "[BOZ_SWAP_PROGRESS] n=315 ok=1 fbo=0 elapsed_ms=625854 gl_clear=316 gl_draw_arrays=711 gl_draw_elements=444 gl_draw_tex=0",
+    "[BOZ_SWAP_PROGRESS] n=320 ok=1 fbo=0 elapsed_ms=646419 gl_clear=321 gl_draw_arrays=801 gl_draw_elements=454 gl_draw_tex=0",
+    "[BOZ_SWAP_PROGRESS] n=325 ok=1 fbo=0 elapsed_ms=665816 gl_clear=326 gl_draw_arrays=891 gl_draw_elements=464 gl_draw_tex=0",
+    "[BOZ_SWAP_PROGRESS] n=330 ok=1 fbo=0 elapsed_ms=685116 gl_clear=331 gl_draw_arrays=981 gl_draw_elements=474 gl_draw_tex=0",
+    "[BOZ_SWAP_PROGRESS] n=335 ok=1 fbo=0 elapsed_ms=704437 gl_clear=336 gl_draw_arrays=1071 gl_draw_elements=484 gl_draw_tex=0",
+    "[BOZ_SWAP_PROGRESS] n=340 ok=1 fbo=0 elapsed_ms=723791 gl_clear=341 gl_draw_arrays=1161 gl_draw_elements=494 gl_draw_tex=0",
+    "[BOZ_SWAP_PROGRESS] n=345 ok=1 fbo=0 elapsed_ms=743224 gl_clear=346 gl_draw_arrays=1251 gl_draw_elements=504 gl_draw_tex=0"
   ],
   "texture_occupancy": [
     "[BOZ_GL_TEXTURE_OCCUPANCY] tex=48 size=8x128 format=1908 type=1401 sample_bytes=320 nonzero_bytes=302 alpha_pixels=80 alpha_nonzero=80 alpha_opaque=80",
@@ -1047,24 +1071,17 @@
     "[BOZ_GL_TEXTURE_PARAMS] seq=400 program=18 tex=62 min=2601 mag=2601 wrap_s=2901 wrap_t=2901",
     "[BOZ_GL_TEXTURE_PARAMS] seq=425 program=12 tex=0 min=2702 mag=2601 wrap_s=2901 wrap_t=2901",
     "[BOZ_GL_TEXTURE_PARAMS] seq=450 program=18 tex=62 min=2601 mag=2601 wrap_s=2901 wrap_t=2901",
-    "[BOZ_GL_TEXTURE_PARAMS] seq=475 program=12 tex=0 min=2702 mag=2601 wrap_s=2901 wrap_t=2901"
+    "[BOZ_GL_TEXTURE_PARAMS] seq=475 program=12 tex=0 min=2702 mag=2601 wrap_s=2901 wrap_t=2901",
+    "[BOZ_GL_TEXTURE_PARAMS] seq=500 program=18 tex=62 min=2601 mag=2601 wrap_s=2901 wrap_t=2901"
   ],
   "texture_size_totals": [
-    "[BOZ_GL_TEX_SIZE_TOTAL] swap=5 uploads=151 two_by_two=136 larger=15 other=0 subuploads=0 compressed=0 compressed_unresolved=0 max_size=1024x512 known_textures=151",
-    "[BOZ_GL_TEX_SIZE_TOTAL] swap=60 uploads=277 two_by_two=259 larger=18 other=0 subuploads=0 compressed=0 compressed_unresolved=0 max_size=1024x512 known_textures=277",
-    "[BOZ_GL_TEX_SIZE_TOTAL] swap=100 uploads=349 two_by_two=331 larger=18 other=0 subuploads=0 compressed=0 compressed_unresolved=0 max_size=1024x512 known_textures=349",
+    "[BOZ_GL_TEX_SIZE_TOTAL] swap=5 uploads=153 two_by_two=138 larger=15 other=0 subuploads=0 compressed=0 compressed_unresolved=0 max_size=1024x512 known_textures=153",
+    "[BOZ_GL_TEX_SIZE_TOTAL] swap=60 uploads=278 two_by_two=260 larger=18 other=0 subuploads=0 compressed=0 compressed_unresolved=0 max_size=1024x512 known_textures=278",
+    "[BOZ_GL_TEX_SIZE_TOTAL] swap=100 uploads=351 two_by_two=333 larger=18 other=0 subuploads=0 compressed=0 compressed_unresolved=0 max_size=1024x512 known_textures=351",
     "[BOZ_GL_TEX_SIZE_TOTAL] swap=150 uploads=382 two_by_two=359 larger=23 other=0 subuploads=0 compressed=0 compressed_unresolved=0 max_size=1024x1024 known_textures=382",
     "[BOZ_GL_TEX_SIZE_TOTAL] swap=200 uploads=382 two_by_two=359 larger=23 other=0 subuploads=0 compressed=0 compressed_unresolved=0 max_size=1024x1024 known_textures=382"
   ],
   "unit0_binding_transitions": [
-    "[BOZ_GL_UNIT0_BIND] seq=2016 draw=452 old=80 tex=79 caller=4a2b5864",
-    "[BOZ_GL_UNIT0_BIND] seq=2048 draw=454 old=80 tex=79 caller=4a2b5864",
-    "[BOZ_GL_UNIT0_BIND] seq=2080 draw=456 old=80 tex=79 caller=4a2b5864",
-    "[BOZ_GL_UNIT0_BIND] seq=2112 draw=458 old=80 tex=79 caller=4a2b5864",
-    "[BOZ_GL_UNIT0_BIND] seq=2144 draw=460 old=80 tex=79 caller=4a2b5864",
-    "[BOZ_GL_UNIT0_BIND] seq=2176 draw=462 old=80 tex=79 caller=4a2b5864",
-    "[BOZ_GL_UNIT0_BIND] seq=2208 draw=464 old=80 tex=79 caller=4a2b5864",
-    "[BOZ_GL_UNIT0_BIND] seq=2240 draw=466 old=80 tex=79 caller=4a2b5864",
     "[BOZ_GL_UNIT0_BIND] seq=2272 draw=468 old=80 tex=79 caller=4a2b5864",
     "[BOZ_GL_UNIT0_BIND] seq=2304 draw=470 old=80 tex=79 caller=4a2b5864",
     "[BOZ_GL_UNIT0_BIND] seq=2336 draw=472 old=80 tex=79 caller=4a2b5864",
@@ -1080,7 +1097,15 @@
     "[BOZ_GL_UNIT0_BIND] seq=2656 draw=492 old=80 tex=79 caller=4a2b5864",
     "[BOZ_GL_UNIT0_BIND] seq=2688 draw=494 old=80 tex=79 caller=4a2b5864",
     "[BOZ_GL_UNIT0_BIND] seq=2720 draw=496 old=80 tex=79 caller=4a2b5864",
-    "[BOZ_GL_UNIT0_BIND] seq=2752 draw=498 old=80 tex=79 caller=4a2b5864"
+    "[BOZ_GL_UNIT0_BIND] seq=2752 draw=498 old=80 tex=79 caller=4a2b5864",
+    "[BOZ_GL_UNIT0_BIND] seq=2784 draw=500 old=80 tex=79 caller=4a2b5864",
+    "[BOZ_GL_UNIT0_BIND] seq=2816 draw=502 old=80 tex=79 caller=4a2b5864",
+    "[BOZ_GL_UNIT0_BIND] seq=2848 draw=504 old=80 tex=79 caller=4a2b5864",
+    "[BOZ_GL_UNIT0_BIND] seq=2880 draw=506 old=80 tex=79 caller=4a2b5864",
+    "[BOZ_GL_UNIT0_BIND] seq=2912 draw=508 old=80 tex=79 caller=4a2b5864",
+    "[BOZ_GL_UNIT0_BIND] seq=2944 draw=510 old=80 tex=79 caller=4a2b5864",
+    "[BOZ_GL_UNIT0_BIND] seq=2976 draw=512 old=80 tex=79 caller=4a2b5864",
+    "[BOZ_GL_UNIT0_BIND] seq=3008 draw=514 old=80 tex=79 caller=4a2b5864"
   ],
   "uv_states": [
     "[BOZ_GL_UV_STATE] seq=1 program=6 scale_loc=2 scale=0.000244141,0.000244141 offset_loc=1 offset=0,0",
@@ -1113,7 +1138,8 @@
     "[BOZ_GL_UV_STATE] seq=400 program=18 scale_loc=2 scale=0.000244141,0.000244141 offset_loc=1 offset=0,0",
     "[BOZ_GL_UV_STATE] seq=425 program=12 scale_loc=-1 scale=0,0 offset_loc=-1 offset=0,0",
     "[BOZ_GL_UV_STATE] seq=450 program=18 scale_loc=2 scale=0.000244141,0.000244141 offset_loc=1 offset=0,0",
-    "[BOZ_GL_UV_STATE] seq=475 program=12 scale_loc=-1 scale=0,0 offset_loc=-1 offset=0,0"
+    "[BOZ_GL_UV_STATE] seq=475 program=12 scale_loc=-1 scale=0,0 offset_loc=-1 offset=0,0",
+    "[BOZ_GL_UV_STATE] seq=500 program=18 scale_loc=2 scale=0.000244141,0.000244141 offset_loc=1 offset=0,0"
   ],
   "visual_ab_events": [
     "[BOZ_GL_VISUAL_AB] frame=300 draw=413 no_cull=0 force_blend=0 changed_cull=0 changed_blend=0",
