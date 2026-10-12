@@ -111,6 +111,7 @@ def summarize(report: dict) -> dict:
         "uv_states": (texture.get("uv_states") or [])[-48:],
         "texture_params": (texture.get("texture_params") or [])[-48:],
         "clear_causes": (texture.get("clear_causes") or [])[-80:],
+        "pixel_trail": (texture.get("pixel_trail") or [])[-40:],
         "before_overlay_frame_hashes": [
             {"file": img.get("file"), "sha256": img.get("sha256"),
              "distinct_rgb_colors": img.get("distinct_rgb_colors"),
