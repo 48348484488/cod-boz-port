@@ -86,6 +86,10 @@ class BozSummaryTests(unittest.TestCase):
                     "name=inPosition loc=0 enabled=1 size=2 "
                     "type=1406 stride=16 vbo=0 ptr=4a123400"
                 ],
+                "array_ab_events": [
+                    "[BOZ_GL_ARRAY_AB] frame=305 draw=490 "
+                    "no_cull=1 force_blend=0 changed_cull=1 changed_blend=0"
+                ],
             },
         }
         result = summarize(report)
@@ -102,6 +106,7 @@ class BozSummaryTests(unittest.TestCase):
         self.assertEqual(len(result["clear_causes"]), 1)
         self.assertEqual(len(result["pixel_trail"]), 2)
         self.assertEqual(len(result["array_geometry"]), 2)
+        self.assertEqual(len(result["array_ab_events"]), 1)
         self.assertFalse(result["visual_frontend_verified"])
 
 

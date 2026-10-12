@@ -77,6 +77,7 @@ static unsigned g_boz_gl_draw_arrays_count;
 static unsigned g_boz_gl_draw_elements_count;
 static unsigned g_boz_gl_draw_command_count;
 static unsigned char g_boz_array_program_sampled[256];
+static unsigned g_boz_array_ab_logged_swap;
 static unsigned g_boz_gl_draw_tex_count;
 static unsigned g_boz_gl_program_creates;
 static unsigned g_boz_gl_program_links;
@@ -429,9 +430,47 @@ static S3E_SOFTFP void host_glDrawArrays(GLenum mode, GLint first, GLsizei count
     boz_census_draw();
     boz_trace_array_geometry(mode, first, count);
     void (*real)(GLenum, GLint, GLsizei) = lookup_gl("glDrawArrays");
+    unsigned frame = g_boz_visual_probe_next_swap;
+    bool compare = boz_visual_probe_enabled();
+    bool no_cull = compare && ((frame >= 301u && frame <= 306u) ||
+                               (frame >= 313u && frame <= 318u));
+    bool force_blend = compare && frame >= 307u && frame <= 318u;
+    bool restore_cull = false, restore_blend = false;
+    if (real && (no_cull || force_blend)) {
+        GLboolean (*enabled)(GLenum) = lookup_gl("glIsEnabled");
+        void (*enable)(GLenum) = lookup_gl("glEnable");
+        void (*disable)(GLenum) = lookup_gl("glDisable");
+        if (enabled && enable && disable) {
+            if (no_cull && enabled(0x0b44u)) {
+                disable(0x0b44u);
+                restore_cull = true;
+            }
+            if (force_blend && !enabled(0x0be2u)) {
+                enable(0x0be2u);
+                restore_blend = true;
+            }
+        }
+    }
     if (real) {
         real(mode, first, count);
         boz_trace_draw_pixels("arrays", g_boz_gl_draw_arrays_count, count);
+    }
+    if (restore_blend) {
+        void (*disable)(GLenum) = lookup_gl("glDisable");
+        if (disable) disable(0x0be2u);
+    }
+    if (restore_cull) {
+        void (*enable)(GLenum) = lookup_gl("glEnable");
+        if (enable) enable(0x0b44u);
+    }
+    if (compare && (frame == 300u || frame == 305u ||
+                    frame == 310u || frame == 315u || frame == 320u) &&
+        frame != g_boz_array_ab_logged_swap) {
+        g_boz_array_ab_logged_swap = frame;
+        fprintf(stderr, "[BOZ_GL_ARRAY_AB] frame=%u draw=%u "
+                "no_cull=%d force_blend=%d changed_cull=%d "
+                "changed_blend=%d\n", frame, g_boz_gl_draw_arrays_count,
+                no_cull, force_blend, restore_cull, restore_blend);
     }
 }
 
