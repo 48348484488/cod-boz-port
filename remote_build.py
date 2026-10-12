@@ -1594,6 +1594,7 @@ def run_boz_diagnostic(report: dict) -> int:
                 "[BOZ_GL_UNIT0_BIND]", "[BOZ_GL_DRAW_CENSUS]",
                 "[BOZ_GL_CALLSITE]", "[BOZ_GL_TEXTURE_OCCUPANCY]",
                 "[BOZ_GL_SAMPLER_BIND]", "[BOZ_GL_DRAW_STATE]",
+                "[BOZ_GL_VISUAL_AB]",
                 "[BOZ_GL_COMPRESSED_UPLOAD]", "[BOZ_GL_COMPRESSED_SUBUPLOAD]"))
         ]
         report["fast_texture_evidence"] = {
@@ -1623,6 +1624,8 @@ def run_boz_diagnostic(report: dict) -> int:
                                  if ln.startswith("[BOZ_GL_SAMPLER_BIND]")][-80:],
             "draw_states": [ln for ln in texture_events
                             if ln.startswith("[BOZ_GL_DRAW_STATE]")][-80:],
+            "visual_ab_events": [ln for ln in texture_events
+                                 if ln.startswith("[BOZ_GL_VISUAL_AB]")][-16:],
         }
         print("[FAST_TEXTURE_SUMMARY] " +
               json.dumps(report["fast_texture_evidence"]), flush=True)
@@ -1656,7 +1659,7 @@ def run_boz_diagnostic(report: dict) -> int:
                 "[BOZ_GL_TEXTURE_BIND]", "[BOZ_GL_UNIT0_BIND]",
                 "[BOZ_GL_DRAW_CENSUS]", "[BOZ_GL_CALLSITE]",
                 "[BOZ_GL_TEXTURE_OCCUPANCY]", "[BOZ_GL_SAMPLER_BIND]",
-                "[BOZ_GL_DRAW_STATE]",
+                "[BOZ_GL_DRAW_STATE]", "[BOZ_GL_VISUAL_AB]",
                 "[BOZ_RESOURCE_OPEN]", "[BOZ_RESOURCE_CLOSE]", "[BOZ_RESOURCE_PROGRESS]",
                 "[BOZ_NULL_PROPERTY_ORIGIN]", "signal 11 ", "stack:",
                 "[S3E_FILE_EXISTS]",

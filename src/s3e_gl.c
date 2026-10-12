@@ -81,6 +81,7 @@ static unsigned g_boz_gl_program_links;
 static unsigned g_boz_gl_program_uses;
 static GLuint g_boz_last_program;
 static unsigned g_boz_visual_probe_next_swap = 1u;
+static unsigned g_boz_visual_probe_logged_swap;
 
 static bool boz_visual_probe_enabled(void) {
     const char *flag = getenv("BOZ_GL_VISUAL_AB_PROBE");
@@ -525,18 +526,24 @@ static S3E_SOFTFP void host_glDrawElements(GLenum mode, GLsizei count, GLenum ty
             }
         }
     }
-    /* Opt-in, reversible visual experiment. 325=no cull; 350=blend;
-     * 375=both. The original driver state is restored after each draw. */
+    /* Opt-in, reversible A/B experiment on a stable late frontend scene:
+     * frame 300=control, 305=no cull, 310=blend, 315=both,
+     * frame 320=control again. Restore driver state after each draw. */
     bool compare = boz_visual_probe_enabled();
     unsigned frame = g_boz_visual_probe_next_swap;
-    bool no_cull = compare && ((frame >= 325u && frame < 350u) ||
-                               (frame >= 375u && frame < 400u));
-    bool force_blend = compare && frame >= 350u && frame < 400u;
-    GLboolean (*probe_is_enabled)(GLenum) = lookup_gl("glIsEnabled");
-    void (*probe_enable)(GLenum) = lookup_gl("glEnable");
-    void (*probe_disable)(GLenum) = lookup_gl("glDisable");
+    bool no_cull = compare && ((frame >= 301u && frame <= 306u) ||
+                               (frame >= 313u && frame <= 318u));
+    bool force_blend = compare && frame >= 307u && frame <= 318u;
+    GLboolean (*probe_is_enabled)(GLenum) = NULL;
+    void (*probe_enable)(GLenum) = NULL;
+    void (*probe_disable)(GLenum) = NULL;
+    if (real && (no_cull || force_blend)) {
+        probe_is_enabled = lookup_gl("glIsEnabled");
+        probe_enable = lookup_gl("glEnable");
+        probe_disable = lookup_gl("glDisable");
+    }
     bool restore_cull = false, restore_blend = false;
-    if (real && probe_is_enabled && probe_enable && probe_disable) {
+    if (probe_is_enabled && probe_enable && probe_disable) {
         if (no_cull && probe_is_enabled(0x0b44u)) {
             probe_disable(0x0b44u); /* GL_CULL_FACE */
             restore_cull = true;
@@ -549,14 +556,16 @@ static S3E_SOFTFP void host_glDrawElements(GLenum mode, GLsizei count, GLenum ty
     if (real) real(mode, count, type, indices);
     if (restore_blend) probe_disable(0x0be2u);
     if (restore_cull) probe_enable(0x0b44u);
-    if (compare && (frame == 300u || frame == 325u ||
-                    frame == 350u || frame == 375u || frame == 400u) &&
-        g_boz_gl_draw_elements_count % 25u == 0u)
+    if (compare && (frame == 300u || frame == 305u ||
+                    frame == 310u || frame == 315u || frame == 320u) &&
+        frame != g_boz_visual_probe_logged_swap) {
+        g_boz_visual_probe_logged_swap = frame;
         fprintf(stderr,
                 "[BOZ_GL_VISUAL_AB] frame=%u draw=%u no_cull=%d "
                 "force_blend=%d changed_cull=%d changed_blend=%d\n",
                 frame, g_boz_gl_draw_elements_count, no_cull,
                 force_blend, restore_cull, restore_blend);
+    }
     if (diagnostic) {
         GLenum (*get_error)(void) = lookup_gl("glGetError");
         if (get_error) {
@@ -1144,7 +1153,9 @@ static void frontend_overlay_gl_present(void) {
  * PPM is intentionally used here so the ARM loader needs no PNG dependency. */
 static void boz_capture_swap_frame(unsigned frame, bool pre_overlay) {
     const char *dir = getenv("BOZ_FRAME_CAPTURE_DIR");
-    if (pre_overlay && frame != 275u && frame != 300u && frame != 325u)
+    if (pre_overlay && frame != 275u && frame != 300u &&
+        frame != 305u && frame != 310u && frame != 315u &&
+        frame != 320u && frame != 325u)
         return;
     if (!dir || !*dir ||
         (frame != 1u && frame != 5u && frame != 10u && frame != 15u &&
@@ -1153,8 +1164,9 @@ static void boz_capture_swap_frame(unsigned frame, bool pre_overlay) {
          frame != 175u && frame != 200u && frame != 225u &&
          frame != 185u && frame != 190u && frame != 195u &&
          frame != 250u && frame != 275u && frame != 300u &&
-         frame != 325u && frame != 350u && frame != 375u &&
-         frame != 400u)) return;
+         frame != 305u && frame != 310u && frame != 315u &&
+         frame != 320u && frame != 325u && frame != 350u &&
+         frame != 375u && frame != 400u)) return;
     void (*read_pixels)(GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, void *) =
         lookup_gl("glReadPixels");
     if (!read_pixels) {
@@ -1240,6 +1252,8 @@ static EGLBoolean host_eglSwapBuffers(EGLDisplay display, EGLSurface surface) {
         driver_bind_framebuffer(0);
     }
     if (trace_enabled && (swap_count == 275u || swap_count == 300u ||
+                          swap_count == 305u || swap_count == 310u ||
+                          swap_count == 315u || swap_count == 320u ||
                           swap_count == 325u))
         boz_capture_swap_frame(swap_count, true);
     frontend_overlay_gl_present();

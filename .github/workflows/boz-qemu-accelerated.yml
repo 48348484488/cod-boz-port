@@ -47,7 +47,7 @@ jobs:
       BOZ_PC_SAMPLE_INTERVAL: "4"
       BOZ_QEMU_HOST_PROFILING: "1"
       BOZ_COMPAT_PNG_INPUT_LENGTH_FIX: "1"
-      BOZ_FAST_PROPERTY_TIMEOUT: "660"
+      BOZ_FAST_PROPERTY_TIMEOUT: "760"
       BOZ_DISPLAY_SIZE: "640x480"
       BOZ_EXIT_AFTER_DIAGNOSTIC: "1"
       RUN_HOST_TESTS: "1"
@@ -130,8 +130,12 @@ jobs:
           if 130 not in frames_by_swap:
               print("::error::No captured frame after the late frontend tap")
               sys.exit(1)
+          if not all(frame in frames_by_swap for frame in (300, 305, 310, 315, 320)):
+              print("::error::Diagnostic A/B frames 300/305/310/315/320 incomplete")
+              sys.exit(1)
           for index in (100, 125, 130, 140, 150, 175, 185, 190, 195,
-                        200, 225, 250, 275, 300, 325, 350, 375, 400):
+                        200, 225, 250, 275, 300, 305, 310, 315, 320,
+                        325, 350, 375, 400):
               image = frames_by_swap.get(index)
               print(f"BOZ_FRAME_CHECK swap={index} sha256={image['sha256'] if image else 'missing'} "
                     f"colors={image['distinct_rgb_colors'] if image else 'missing'}")
