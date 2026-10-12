@@ -72,8 +72,12 @@ class BozSummaryTests(unittest.TestCase):
                     "rgba=0.5,0.5,0.5,1 scissor_on=0 rect=0,0,640,480"
                 ],
                 "pixel_trail": [
-                    "[BOZ_GL_PIXEL_TRAIL] frame=300 seq=413 program=18 tex=62 "
-                    "bottom=1c1a19 middle=837978 top=1c1a19 count=108"
+                    "[BOZ_GL_PIXEL_TRAIL] frame=300 order=900 kind=arrays seq=490 "
+                    "program=12 tex=0 bottom=1c1a19 middle=837978 "
+                    "top=1c1a19 count=4",
+                    "[BOZ_GL_PIXEL_TRAIL] frame=300 order=901 kind=elements seq=413 "
+                    "program=18 tex=62 bottom=1c1a19 middle=837978 "
+                    "top=1c1a19 count=108"
                 ],
             },
         }
@@ -89,7 +93,7 @@ class BozSummaryTests(unittest.TestCase):
         self.assertEqual(len(result["uv_states"]), 1)
         self.assertEqual(len(result["texture_params"]), 1)
         self.assertEqual(len(result["clear_causes"]), 1)
-        self.assertEqual(len(result["pixel_trail"]), 1)
+        self.assertEqual(len(result["pixel_trail"]), 2)
         self.assertFalse(result["visual_frontend_verified"])
 
 

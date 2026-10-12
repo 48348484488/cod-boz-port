@@ -75,6 +75,7 @@ static GLuint g_bound_framebuffer;
 static unsigned g_boz_gl_clear_count;
 static unsigned g_boz_gl_draw_arrays_count;
 static unsigned g_boz_gl_draw_elements_count;
+static unsigned g_boz_gl_draw_command_count;
 static unsigned g_boz_gl_draw_tex_count;
 static unsigned g_boz_gl_program_creates;
 static unsigned g_boz_gl_program_links;
@@ -310,15 +311,47 @@ static S3E_SOFTFP void host_glClear(GLbitfield mask) {
     if (real) real(mask);
 }
 
+/* Capture post-draw pixels from both GL draw entry points. The original
+ * indexed-only trail missed most draws during the late frontend scene. */
+static void boz_trace_draw_pixels(const char *kind, unsigned seq, GLsizei count) {
+    if (!boz_texture_diag_enabled() ||
+        g_boz_visual_probe_next_swap != 300u || g_bound_framebuffer != 0u)
+        return;
+    void (*read_pixels)(GLint, GLint, GLsizei, GLsizei,
+                        GLenum, GLenum, void *) = lookup_gl("glReadPixels");
+    void (*get_int)(GLenum, GLint *) = lookup_gl("glGetIntegerv");
+    if (!read_pixels) return;
+    unsigned char samples[321u * 4u] = {0};
+    GLint program = -1;
+    if (get_int) get_int(0x8b8du, &program); /* GL_CURRENT_PROGRAM */
+    read_pixels(320, 80, 1, 321, 0x1908u, 0x1401u, samples);
+    const unsigned char *bottom = samples;
+    const unsigned char *middle = samples + 160u * 4u;
+    const unsigned char *top = samples + 320u * 4u;
+    fprintf(stderr,
+            "[BOZ_GL_PIXEL_TRAIL] frame=300 order=%u kind=%s seq=%u "
+            "program=%d tex=%u bottom=%02x%02x%02x "
+            "middle=%02x%02x%02x top=%02x%02x%02x count=%d\n",
+            g_boz_gl_draw_command_count, kind, seq, (int)program,
+            g_boz_tex_bound[0], bottom[0], bottom[1], bottom[2],
+            middle[0], middle[1], middle[2],
+            top[0], top[1], top[2], (int)count);
+}
+
 static S3E_SOFTFP void host_glDrawArrays(GLenum mode, GLint first, GLsizei count) {
     ++g_boz_gl_draw_arrays_count;
+    ++g_boz_gl_draw_command_count;
     boz_census_draw();
     void (*real)(GLenum, GLint, GLsizei) = lookup_gl("glDrawArrays");
-    if (real) real(mode, first, count);
+    if (real) {
+        real(mode, first, count);
+        boz_trace_draw_pixels("arrays", g_boz_gl_draw_arrays_count, count);
+    }
 }
 
 static S3E_SOFTFP void host_glDrawElements(GLenum mode, GLsizei count, GLenum type, const void *indices) {
     ++g_boz_gl_draw_elements_count;
+    ++g_boz_gl_draw_command_count;
     boz_census_draw();
     void (*real)(GLenum, GLsizei, GLenum, const void *) = lookup_gl("glDrawElements");
     const char *trace = getenv("BOZ_GL_DRAW_DIAGNOSTIC");
@@ -614,33 +647,7 @@ static S3E_SOFTFP void host_glDrawElements(GLenum mode, GLsizei count, GLenum ty
         }
     }
     if (real) real(mode, count, type, indices);
-    /* Diagnostic framebuffer attribution: one narrow readback AFTER each
-     * actual guest draw during swap 300. A single 1x321 strip samples
-     * bottom (y=80), middle (y=240), and top (y=400). No pixels are saved. */
-    if (real && boz_texture_diag_enabled() &&
-        g_boz_visual_probe_next_swap == 300u && g_bound_framebuffer == 0u) {
-        void (*read_pixels)(GLint, GLint, GLsizei, GLsizei,
-                            GLenum, GLenum, void *) = lookup_gl("glReadPixels");
-        void (*get_int)(GLenum, GLint *) = lookup_gl("glGetIntegerv");
-        if (read_pixels) {
-            unsigned char samples[321u * 4u] = {0};
-            GLint program = -1;
-            if (get_int) get_int(0x8b8du, &program); /* GL_CURRENT_PROGRAM */
-            read_pixels(320, 80, 1, 321, 0x1908u, 0x1401u, samples);
-            const unsigned char *bottom = samples;
-            const unsigned char *middle = samples + 160u * 4u;
-            const unsigned char *top = samples + 320u * 4u;
-            fprintf(stderr,
-                    "[BOZ_GL_PIXEL_TRAIL] frame=300 seq=%u program=%d tex=%u "
-                    "bottom=%02x%02x%02x middle=%02x%02x%02x "
-                    "top=%02x%02x%02x count=%d\n",
-                    g_boz_gl_draw_elements_count, (int)program,
-                    g_boz_tex_bound[0],
-                    bottom[0], bottom[1], bottom[2],
-                    middle[0], middle[1], middle[2],
-                    top[0], top[1], top[2], (int)count);
-        }
-    }
+    if (real) boz_trace_draw_pixels("elements", g_boz_gl_draw_elements_count, count);
     if (restore_blend) probe_disable(0x0be2u);
     if (restore_cull) probe_enable(0x0b44u);
     if (compare && (frame == 300u || frame == 305u ||
