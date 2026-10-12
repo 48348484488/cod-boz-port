@@ -21,14 +21,22 @@ Scope: the fork `48348484488/cod-boz-port` only. No original game assets or fram
 - `BOZ_GL_VISUAL_AB` records confirm the requested state changes were made: `changed_cull=1` at 305, `changed_blend=1` at 310, both at 315.
 - All five post-overlay PNG SHA-256 hashes match **exactly** (`81a9cd49fe4a5c13893b452d8d5e73d4ae9a547361a2712930969e72ed59b7c7`); pre-overlay hashes likewise match. Therefore neither disabled face culling nor forced alpha blending rendered additional frontend elements in this scene. **Do not ship either change** as a purported fix.
 
-## Current texture sampling and clear provenance experiment
+## Completed texture and clear state investigation
 
-- Commit [5422ddd](https://github.com/48348484488/cod-boz-port/commit/5422ddd29ed1fa1a7a8ac797ba047924ded44f7f) adds read-only diagnostics for each sampled guest draw:
-  - `BOZ_GL_UV_STATE` records the *actual* `inUVScale` and `inUVOffset` values of the active shader.
-  - `BOZ_GL_TEXTURE_PARAMS` records texture unit 0's actual min/mag filtering and wrap modes, without changing sampling state.
-  - `BOZ_GL_CLEAR_CAUSE` records guest `glClear` mask, color, scissor, framebuffer and caller for frames 275/300/305/310/315/320.
-- [Run 38213011265](https://github.com/48348484488/cod-boz-port/actions/runs/38213011265) is the actual ARM/QEMU execution for this commit. Inspect the report in `boz-diagnostics/docs/boz-latest-ci.json` **only after** its provenance `run_id` becomes `38213011265`.
-- Interpret this evidence before deciding on a fix: incomplete mipmap texture, incorrect UV transform, screen-clearing overwrite, or a separate scene-transition issue. These are hypotheses, not confirmed defects.
+- [Run 38213011265](https://github.com/48348484488/cod-boz-port/actions/runs/38213011265), commit `5422ddd`, **success**, without SIGSEGV.
+- Programs 6, 9 and 18 report `inUVScale=(0.000244141,0.000244141)` and `inUVOffset=(0,0)`. This matches a 1/4096 scaling convention, but does **not** prove each incoming UV attribute is valid.
+- Sampled texture 56 (512×512) and 62 (1024×512) have `GL_TEXTURE_MIN_FILTER=GL_LINEAR (0x2601)` and `GL_TEXTURE_MAG_FILTER=GL_LINEAR`; neither requires mipmaps. Wrap mode is `GL_REPEAT (0x2901)`.
+- Program 12 has no `inUVScale` or `inUVOffset`; its sampled texture unit 0 is texture 0 with the default min filter. Do **not** attribute its draw to a missing mipmapped texture unless it actually samples a texture.
+- Guest `glClear` at swaps 275 and 300/305/310/315/320 uses `mask=0x4100` (color+depth), framebuffer 0, no scissor and `rgba=(0.501961,0.501961,1,1)`, return address `0x4A2D9DEC`.
+- Captured framebuffer after swaps 300–350 instead consists of dark RGB(28,26,25) regions and center RGB(131,121,120). Thus **drawing after the guest clear changes the framebuffer**, despite the missing recognizable menu.
+- The remaining task is to identify which draw produces these stripes, distinguish intended flat-color geometry from missing textured geometry, and verify input UV attributes.
+
+## Current framebuffer attribution experiment
+
+- Commit [b0662c8](https://github.com/48348484488/cod-boz-port/commit/b0662c8f2ef19aacf35bd956900e0b5f563774d6) adds opt-in `BOZ_GL_PIXEL_TRAIL`.
+- On swap 300, after each actual guest `glDrawElements`, it reads a single 1×321 RGBA strip to sample x=320 at GL y=80 (bottom), y=240 (middle) and y=400 (top), and logs the current program, texture ID, draw index count and three RGB values. This is read-only.
+- [Run 38214365049](https://github.com/48348484488/cod-boz-port/actions/runs/38214365049) executes the test in real ARM/QEMU. The resulting asset-free `boz-diagnostics/docs/boz-latest-ci.json` should contain `pixel_trail` only after its provenance `run_id` becomes `38214365049`.
+- Locate the first draw whose sampled colors transition from the clear color to the final dark/gray stripes; trace its program, bound texture, and vertex geometry before modifying renderer behavior.
 
 ## Acceptance
 
