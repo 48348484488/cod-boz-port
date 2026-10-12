@@ -572,12 +572,70 @@ static void boz_trace_sprite_quad(GLint first, GLsizei count) {
             normalized[0], normalized[1], sampler_unit, actual_sampler_tex);
 }
 
+/* Read-only GL pipeline state exactly before BOZ's fullscreen sprite draw.
+ * Current active texture is checked: GL_TEXTURE_BINDING_2D is per texture unit
+ * and must not be mistaken for sampler unit zero when another unit is active. */
+static void boz_trace_sprite_pipeline(void) {
+    if (!boz_texture_diag_enabled() || g_boz_visual_probe_next_swap != 300u)
+        return;
+    GLuint tex = g_boz_tex_bound[0];
+    if (tex != 379u && tex != 380u) return;
+    void (*get_int)(GLenum, GLint *) = lookup_gl("glGetIntegerv");
+    void (*get_bool)(GLenum, GLboolean *) = lookup_gl("glGetBooleanv");
+    GLboolean (*is_enabled)(GLenum) = lookup_gl("glIsEnabled");
+    void (*get_float)(GLenum, GLfloat *) = lookup_gl("glGetFloatv");
+    void (*get_texparam)(GLenum, GLenum, GLint *) =
+        lookup_gl("glGetTexParameteriv");
+    if (!get_int) return;
+    GLint active = -1, bound = -1, program = -1;
+    GLint blend_src = -1, blend_dst = -1, blend_eq = -1;
+    GLint min_filter = -1, mag_filter = -1, wrap_s = -1, wrap_t = -1;
+    GLint viewport[4] = {0};
+    GLboolean color_mask[4] = {0};
+    GLfloat blend_color[4] = {0};
+    get_int(0x84e0u, &active); /* GL_ACTIVE_TEXTURE */
+    get_int(0x8069u, &bound); /* GL_TEXTURE_BINDING_2D */
+    get_int(0x8b8du, &program); /* GL_CURRENT_PROGRAM */
+    get_int(0x80c9u, &blend_src); /* GL_BLEND_SRC_RGB */
+    get_int(0x80c8u, &blend_dst); /* GL_BLEND_DST_RGB */
+    get_int(0x8009u, &blend_eq); /* GL_BLEND_EQUATION_RGB */
+    get_int(0x0ba2u, viewport); /* GL_VIEWPORT */
+    if (get_bool) get_bool(0x0c23u, color_mask); /* GL_COLOR_WRITEMASK */
+    if (get_float) get_float(0x8005u, blend_color); /* GL_BLEND_COLOR */
+    if (get_texparam && active == 0x84c0) {
+        get_texparam(0x0de1u, 0x2801u, &min_filter);
+        get_texparam(0x0de1u, 0x2800u, &mag_filter);
+        get_texparam(0x0de1u, 0x2802u, &wrap_s);
+        get_texparam(0x0de1u, 0x2803u, &wrap_t);
+    }
+    fprintf(stderr,
+            "[BOZ_GL_SPRITE_PIPELINE] frame=300 order=%u "
+            "program=%d tracked_tex=%u active=%04x actual_active_tex=%d "
+            "blend=%d src=%04x dst=%04x eq=%04x "
+            "blend_color=%g,%g,%g,%g mask=%d%d%d%d depth=%d scissor=%d "
+            "viewport=%d,%d,%d,%d min=%04x mag=%04x "
+            "wrap=%04x,%04x\n",
+            g_boz_gl_draw_command_count, program, tex, (unsigned)active,
+            bound, is_enabled ? (int)is_enabled(0x0be2u) : -1,
+            (unsigned)blend_src, (unsigned)blend_dst, (unsigned)blend_eq,
+            (double)blend_color[0], (double)blend_color[1],
+            (double)blend_color[2], (double)blend_color[3],
+            (int)color_mask[0], (int)color_mask[1],
+            (int)color_mask[2], (int)color_mask[3],
+            is_enabled ? (int)is_enabled(0x0b71u) : -1,
+            is_enabled ? (int)is_enabled(0x0c11u) : -1,
+            viewport[0], viewport[1], viewport[2], viewport[3],
+            (unsigned)min_filter, (unsigned)mag_filter,
+            (unsigned)wrap_s, (unsigned)wrap_t);
+}
+
 static S3E_SOFTFP void host_glDrawArrays(GLenum mode, GLint first, GLsizei count) {
     ++g_boz_gl_draw_arrays_count;
     ++g_boz_gl_draw_command_count;
     boz_census_draw();
     boz_trace_array_geometry(mode, first, count);
     boz_trace_sprite_quad(first, count);
+    boz_trace_sprite_pipeline();
     void (*real)(GLenum, GLint, GLsizei) = lookup_gl("glDrawArrays");
     unsigned frame = g_boz_visual_probe_next_swap;
     bool compare = boz_visual_probe_enabled();

@@ -111,6 +111,11 @@ class BozSummaryTests(unittest.TestCase):
                     "scale=0.000244141,0.00012207 offset=0,0 "
                     "norm=0,0 sampler_unit=0 sampler_tex=379"
                 ],
+                "sprite_pipeline": [
+                    "[BOZ_GL_SPRITE_PIPELINE] frame=300 order=850 program=15 "
+                    "tracked_tex=379 active=84c0 actual_active_tex=379 "
+                    "blend=1 src=0302 dst=0303"
+                ],
             },
         }
         result = summarize(report)
@@ -132,6 +137,7 @@ class BozSummaryTests(unittest.TestCase):
         self.assertEqual(len(result["image_grid"]), 1)
         self.assertEqual(len(result["stage_capture"]), 1)
         self.assertEqual(len(result["sprite_quads"]), 1)
+        self.assertEqual(len(result["sprite_pipeline"]), 1)
         self.assertFalse(result["visual_frontend_verified"])
 
 
