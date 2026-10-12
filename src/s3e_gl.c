@@ -99,6 +99,13 @@ static bool boz_layer_probe_enabled(void) {
     return flag && strcmp(flag, "1") == 0;
 }
 
+/* Controlled diagnostic: sample three different fixed UV locations from
+ * the verified nonuniform texture 379. All uniforms are restored per draw. */
+static bool boz_uv_probe_enabled(void) {
+    const char *flag = getenv("BOZ_GL_UV_AB_PROBE");
+    return flag && strcmp(flag, "1") == 0;
+}
+
 /* Read-only, opt-in texture provenance; no texture pixels are persisted. */
 enum { BOZ_TEX_SLOTS = 512, BOZ_TEX_UNITS = 16 };
 struct boz_tex_meta {
@@ -675,6 +682,40 @@ static S3E_SOFTFP void host_glDrawArrays(GLenum mode, GLint first, GLsizei count
     bool skip_bars = frame >= 307u && frame <= 312u && active_tex == 380u;
     bool skip_both = frame >= 313u && frame <= 318u && target_layer;
     bool skip_layer = layer_probe && (skip_gray || skip_bars || skip_both);
+    GLint uv_scale_loc = -1, uv_offset_loc = -1;
+    GLfloat saved_scale[2] = {0}, saved_offset[2] = {0};
+    void (*set_uniform2f)(GLint, GLfloat, GLfloat) = NULL;
+    bool changed_uv = false;
+    if (real && active_tex == 379u && boz_uv_probe_enabled() &&
+        frame >= 301u && frame <= 318u) {
+        GLint (*get_loc)(GLuint, const char *) = lookup_gl("glGetUniformLocation");
+        void (*get_uniform)(GLuint, GLint, GLfloat *) = lookup_gl("glGetUniformfv");
+        set_uniform2f = lookup_gl("glUniform2f");
+        GLint program = 0;
+        void (*get_int)(GLenum, GLint *) = lookup_gl("glGetIntegerv");
+        if (get_int) get_int(0x8b8du, &program);
+        if (program == 15 && get_loc && get_uniform && set_uniform2f) {
+            uv_scale_loc = get_loc((GLuint)program, "inUVScale");
+            uv_offset_loc = get_loc((GLuint)program, "inUVOffset");
+            if (uv_scale_loc >= 0 && uv_offset_loc >= 0) {
+                get_uniform((GLuint)program, uv_scale_loc, saved_scale);
+                get_uniform((GLuint)program, uv_offset_loc, saved_offset);
+                GLfloat sample = frame <= 306u ? 0.05f :
+                                 frame <= 312u ? 0.50f : 0.95f;
+                set_uniform2f(uv_scale_loc, 0.0f, 0.0f);
+                set_uniform2f(uv_offset_loc, sample, sample);
+                changed_uv = true;
+                if (frame == 305u || frame == 310u || frame == 315u)
+                    fprintf(stderr,
+                            "[BOZ_GL_UV_AB] frame=%u tex=379 program=15 "
+                            "sample=%g,%g saved_scale=%g,%g "
+                            "saved_offset=%g,%g\\n",
+                            frame, (double)sample, (double)sample,
+                            (double)saved_scale[0], (double)saved_scale[1],
+                            (double)saved_offset[0], (double)saved_offset[1]);
+            }
+        }
+    }
     if (real && !skip_layer) {
         real(mode, first, count);
         boz_trace_draw_pixels("arrays", g_boz_gl_draw_arrays_count, count);
@@ -684,6 +725,10 @@ static S3E_SOFTFP void host_glDrawArrays(GLenum mode, GLint first, GLsizei count
             boz_capture_midframe("after-380");
             g_boz_midframe_captured |= 4u;
         }
+    }
+    if (changed_uv) {
+        set_uniform2f(uv_scale_loc, saved_scale[0], saved_scale[1]);
+        set_uniform2f(uv_offset_loc, saved_offset[0], saved_offset[1]);
     }
     if (skip_layer) {
         GLint program = -1;

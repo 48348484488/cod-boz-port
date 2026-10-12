@@ -116,6 +116,11 @@ class BozSummaryTests(unittest.TestCase):
                     "tracked_tex=379 active=84c0 actual_active_tex=379 "
                     "blend=1 src=0302 dst=0303"
                 ],
+                "uv_ab_events": [
+                    "[BOZ_GL_UV_AB] frame=305 tex=379 program=15 "
+                    "sample=0.05,0.05 saved_scale=0.000244141,0.000244141 "
+                    "saved_offset=0,0"
+                ],
             },
         }
         result = summarize(report)
@@ -138,6 +143,7 @@ class BozSummaryTests(unittest.TestCase):
         self.assertEqual(len(result["stage_capture"]), 1)
         self.assertEqual(len(result["sprite_quads"]), 1)
         self.assertEqual(len(result["sprite_pipeline"]), 1)
+        self.assertEqual(len(result["uv_ab_events"]), 1)
         self.assertFalse(result["visual_frontend_verified"])
 
 
