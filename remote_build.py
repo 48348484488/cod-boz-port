@@ -1603,7 +1603,8 @@ def run_boz_diagnostic(report: dict) -> int:
                 "[BOZ_GL_IMAGE_GRID]", "[BOZ_GL_STAGE_CAPTURE]",
                 "[BOZ_GL_SPRITE_QUAD]", "[BOZ_GL_SPRITE_PIPELINE]",
                 "[BOZ_GL_UV_AB]", "[BOZ_GL_SPRITE_MATRIX]",
-                "[BOZ_GL_COMPRESSED_UPLOAD]", "[BOZ_GL_COMPRESSED_SUBUPLOAD]"))
+                "[BOZ_GL_SHADER_INSPECT]", "[BOZ_GL_QUAD_VERTICES]",
+                "[BOZ_GL_BLEND_OFF_AB]", "[BOZ_GL_COMPRESSED_UPLOAD]", "[BOZ_GL_COMPRESSED_SUBUPLOAD]"))
         ]
         report["fast_texture_evidence"] = {
             "draws": [ln for ln in texture_events
@@ -1662,6 +1663,12 @@ def run_boz_diagnostic(report: dict) -> int:
                             if ln.startswith("[BOZ_GL_UV_AB]")][-16:],
             "sprite_matrix": [ln for ln in texture_events
                               if ln.startswith("[BOZ_GL_SPRITE_MATRIX]")][-32:],
+            "shader_inspect": [ln for ln in texture_events
+                               if ln.startswith("[BOZ_GL_SHADER_INSPECT]")][-8:],
+            "quad_vertices": [ln for ln in texture_events
+                              if ln.startswith("[BOZ_GL_QUAD_VERTICES]")][-16:],
+            "blend_off_ab": [ln for ln in texture_events
+                             if ln.startswith("[BOZ_GL_BLEND_OFF_AB]")][-4:],
         }
         print("[FAST_TEXTURE_SUMMARY] " +
               json.dumps(report["fast_texture_evidence"]), flush=True)
@@ -1703,7 +1710,9 @@ def run_boz_diagnostic(report: dict) -> int:
                 "[BOZ_GL_LAYER_AB]", "[BOZ_GL_IMAGE_GRID]",
                 "[BOZ_GL_STAGE_CAPTURE]", "[BOZ_GL_SPRITE_QUAD]",
                 "[BOZ_GL_SPRITE_PIPELINE]", "[BOZ_GL_UV_AB]",
-                "[BOZ_GL_SPRITE_MATRIX]", "[BOZ_RESOURCE_OPEN]", "[BOZ_RESOURCE_CLOSE]", "[BOZ_RESOURCE_PROGRESS]",
+                "[BOZ_GL_SPRITE_MATRIX]", "[BOZ_GL_SHADER_INSPECT]",
+                "[BOZ_GL_QUAD_VERTICES]", "[BOZ_GL_BLEND_OFF_AB]",
+                "[BOZ_RESOURCE_OPEN]", "[BOZ_RESOURCE_CLOSE]", "[BOZ_RESOURCE_PROGRESS]",
                 "[BOZ_NULL_PROPERTY_ORIGIN]", "signal 11 ", "stack:",
                 "[S3E_FILE_EXISTS]",
             )) and not line.startswith("[S3E_FILE_EXISTS]"):

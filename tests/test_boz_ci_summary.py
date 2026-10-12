@@ -126,6 +126,20 @@ class BozSummaryTests(unittest.TestCase):
                     "m=0.003125,0,0,0,0,0.00416667,0,0,"
                     "0,0,1,0,-1,-1,0,1"
                 ],
+                "shader_inspect": [
+                    "[BOZ_GL_SHADER_INSPECT] program=15 shader=27 "
+                    "type=8b30 length=102 hash=0123456789abcdef "
+                    "texture2D=1 fragColor=1"
+                ],
+                "quad_vertices": [
+                    "[BOZ_GL_QUAD_VERTICES] frame=300 tex=379 order=850 "
+                    "xy=-146,-16;786,-16;-146,495;786,495 "
+                    "uv=0,0;4095,0;0,4095;4095,4095"
+                ],
+                "blend_off_ab": [
+                    "[BOZ_GL_BLEND_OFF_AB] frame=325 tex=379 "
+                    "blend_was_on=1 changed=1"
+                ],
             },
         }
         result = summarize(report)
@@ -150,6 +164,9 @@ class BozSummaryTests(unittest.TestCase):
         self.assertEqual(len(result["sprite_pipeline"]), 1)
         self.assertEqual(len(result["uv_ab_events"]), 1)
         self.assertEqual(len(result["sprite_matrix"]), 1)
+        self.assertEqual(len(result["shader_inspect"]), 1)
+        self.assertEqual(len(result["quad_vertices"]), 1)
+        self.assertEqual(len(result["blend_off_ab"]), 1)
         self.assertFalse(result["visual_frontend_verified"])
 
 

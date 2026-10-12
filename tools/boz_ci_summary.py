@@ -119,6 +119,9 @@ def summarize(report: dict) -> dict:
         "stage_capture": (texture.get("stage_capture") or [])[-16:],
         "sprite_quads": (texture.get("sprite_quads") or [])[-180:],
         "sprite_matrix": (texture.get("sprite_matrix") or [])[-32:],
+        "shader_inspect": (texture.get("shader_inspect") or [])[-8:],
+        "quad_vertices": (texture.get("quad_vertices") or [])[-16:],
+        "blend_off_ab": (texture.get("blend_off_ab") or [])[-4:],
         "sprite_pipeline": (texture.get("sprite_pipeline") or [])[-16:],
         "uv_ab_events": (texture.get("uv_ab_events") or [])[-16:],
         "midframe_image_hashes": [

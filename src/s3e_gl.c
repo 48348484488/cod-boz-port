@@ -106,6 +106,13 @@ static bool boz_uv_probe_enabled(void) {
     return flag && strcmp(flag, "1") == 0;
 }
 
+/* Controlled diagnostic: reveal unblended fragment color from the actual
+ * original fullscreen background without changing the production renderer. */
+static bool boz_blend_off_probe_enabled(void) {
+    const char *flag = getenv("BOZ_GL_BLEND_OFF_AB_PROBE");
+    return flag && strcmp(flag, "1") == 0;
+}
+
 /* Read-only, opt-in texture provenance; no texture pixels are persisted. */
 enum { BOZ_TEX_SLOTS = 512, BOZ_TEX_UNITS = 16 };
 struct boz_tex_meta {
@@ -521,6 +528,7 @@ static void boz_trace_sprite_quad(GLint first, GLsizei count) {
     const char *names[2] = {"inVert", "inUV0"};
     int min_v[2][2] = {{32767, 32767}, {32767, 32767}};
     int max_v[2][2] = {{-32768, -32768}, {-32768, -32768}};
+    int16_t corners[2][4][2] = {{{0}}};
     bool valid = true;
     GLint normalized[2] = {-1, -1};
     for (unsigned kind = 0u; kind < 2u; ++kind) {
@@ -545,6 +553,7 @@ static void boz_trace_sprite_quad(GLint first, GLsizei count) {
         for (unsigned i = 0u; i < 4u; ++i) {
             int16_t point[2] = {0, 0};
             memcpy(point, base + ((size_t)first + i) * step, sizeof(point));
+            memcpy(corners[kind][i], point, sizeof(point));
             for (unsigned axis = 0u; axis < 2u; ++axis) {
                 if ((int)point[axis] < min_v[kind][axis])
                     min_v[kind][axis] = point[axis];
@@ -588,6 +597,22 @@ static void boz_trace_sprite_quad(GLint first, GLsizei count) {
             (double)scale[0], (double)scale[1],
             (double)offset[0], (double)offset[1],
             normalized[0], normalized[1], sampler_unit, actual_sampler_tex);
+    if (valid && frame == 300u &&
+        (texture == 379u || texture == 380u || texture == 81u)) {
+        fprintf(stderr,
+                "[BOZ_GL_QUAD_VERTICES] frame=300 tex=%u order=%u "
+                "xy=%d,%d;%d,%d;%d,%d;%d,%d "
+                "uv=%d,%d;%d,%d;%d,%d;%d,%d\n",
+                texture, g_boz_gl_draw_command_count,
+                corners[0][0][0], corners[0][0][1],
+                corners[0][1][0], corners[0][1][1],
+                corners[0][2][0], corners[0][2][1],
+                corners[0][3][0], corners[0][3][1],
+                corners[1][0][0], corners[1][0][1],
+                corners[1][1][0], corners[1][1][1],
+                corners[1][2][0], corners[1][2][1],
+                corners[1][3][0], corners[1][3][1]);
+    }
     if ((texture == 81u || texture == 379u) && get_loc && get_uniform) {
         GLint mat_loc = get_loc((GLuint)program, "inPMVMat");
         GLfloat matrix[16] = {0};
@@ -612,6 +637,63 @@ static void boz_trace_sprite_quad(GLint first, GLsizei count) {
 /* Read-only GL pipeline state exactly before BOZ's fullscreen sprite draw.
  * Current active texture is checked: GL_TEXTURE_BINDING_2D is per texture unit
  * and must not be mistaken for sampler unit zero when another unit is active. */
+/* Never persist complete game shader sources. Inspect the attached shaders
+ * through GLES2 reflection, storing only content digest and feature flags. */
+static void boz_inspect_sprite_shader(GLuint program) {
+    static GLuint inspected;
+    if (inspected == program || program != 15u ||
+        !boz_texture_diag_enabled() || g_boz_visual_probe_next_swap != 300u)
+        return;
+    inspected = program;
+    void (*attached)(GLuint, GLsizei, GLsizei *, GLuint *) =
+        lookup_gl("glGetAttachedShaders");
+    void (*get_shader)(GLuint, GLenum, GLint *) = lookup_gl("glGetShaderiv");
+    void (*get_source)(GLuint, GLsizei, GLsizei *, char *) =
+        lookup_gl("glGetShaderSource");
+    if (!attached || !get_shader || !get_source) {
+        fprintf(stderr, "[BOZ_GL_SHADER_INSPECT] program=%u unavailable=1\n", program);
+        return;
+    }
+    GLuint shaders[8] = {0};
+    GLsizei count = 0;
+    attached(program, 8, &count, shaders);
+    for (GLsizei i = 0; i < count && i < 8; ++i) {
+        GLint type = 0, length = 0;
+        get_shader(shaders[i], 0x8b4fu, &type); /* GL_SHADER_TYPE */
+        get_shader(shaders[i], 0x8b88u, &length); /* GL_SHADER_SOURCE_LENGTH */
+        if (length <= 0 || length > 8192) {
+            fprintf(stderr,
+                    "[BOZ_GL_SHADER_INSPECT] program=%u shader=%u type=%04x "
+                    "length=%d unsupported=1\n",
+                    program, shaders[i], (unsigned)type, (int)length);
+            continue;
+        }
+        char *source = calloc((size_t)length + 1u, 1u);
+        if (!source) continue;
+        GLsizei copied = 0;
+        get_source(shaders[i], length, &copied, source);
+        unsigned long long hash = 1469598103934665603ULL;
+        for (GLsizei n = 0; n < copied; ++n) {
+            hash ^= (unsigned char)source[n];
+            hash *= 1099511628211ULL;
+        }
+        fprintf(stderr,
+                "[BOZ_GL_SHADER_INSPECT] program=%u shader=%u type=%04x "
+                "length=%d hash=%016llx texture2D=%d texture=%d "
+                "fragColor=%d inUV0=%d inUVScale=%d glPosition=%d "
+                "materialAmbient=%d\n",
+                program, shaders[i], (unsigned)type, (int)copied, hash,
+                strstr(source, "texture2D") != NULL,
+                strstr(source, "texture(") != NULL,
+                strstr(source, "gl_FragColor") != NULL,
+                strstr(source, "inUV0") != NULL,
+                strstr(source, "inUVScale") != NULL,
+                strstr(source, "gl_Position") != NULL,
+                strstr(source, "inMaterialAmbient") != NULL);
+        free(source);
+    }
+}
+
 static void boz_trace_sprite_pipeline(void) {
     if (!boz_texture_diag_enabled() || g_boz_visual_probe_next_swap != 300u)
         return;
@@ -633,6 +715,7 @@ static void boz_trace_sprite_pipeline(void) {
     get_int(0x84e0u, &active); /* GL_ACTIVE_TEXTURE */
     get_int(0x8069u, &bound); /* GL_TEXTURE_BINDING_2D */
     get_int(0x8b8du, &program); /* GL_CURRENT_PROGRAM */
+    if (program > 0) boz_inspect_sprite_shader((GLuint)program);
     get_int(0x80c9u, &blend_src); /* GL_BLEND_SRC_RGB */
     get_int(0x80c8u, &blend_dst); /* GL_BLEND_DST_RGB */
     get_int(0x8009u, &blend_eq); /* GL_BLEND_EQUATION_RGB */
@@ -746,6 +829,21 @@ static S3E_SOFTFP void host_glDrawArrays(GLenum mode, GLint first, GLsizei count
             }
         }
     }
+    bool unblend_tex379 = real && !skip_layer && active_tex == 379u &&
+        boz_blend_off_probe_enabled() && frame >= 325u && frame <= 330u;
+    GLboolean (*is_enabled_blend)(GLenum) = lookup_gl("glIsEnabled");
+    void (*set_blend_off)(GLenum) = lookup_gl("glDisable");
+    void (*set_blend_on)(GLenum) = lookup_gl("glEnable");
+    bool restore_original_blend = false;
+    if (unblend_tex379 && is_enabled_blend && set_blend_off &&
+        set_blend_on && is_enabled_blend(0x0be2u)) {
+        set_blend_off(0x0be2u);
+        restore_original_blend = true;
+        if (frame == 325u)
+            fprintf(stderr,
+                    "[BOZ_GL_BLEND_OFF_AB] frame=325 tex=379 "
+                    "blend_was_on=1 changed=1\n");
+    }
     if (real && !skip_layer) {
         real(mode, first, count);
         boz_trace_draw_pixels("arrays", g_boz_gl_draw_arrays_count, count);
@@ -756,6 +854,7 @@ static S3E_SOFTFP void host_glDrawArrays(GLenum mode, GLint first, GLsizei count
             g_boz_midframe_captured |= 4u;
         }
     }
+    if (restore_original_blend) set_blend_on(0x0be2u);
     if (changed_uv) {
         set_uniform2f(uv_scale_loc, saved_scale[0], saved_scale[1]);
         set_uniform2f(uv_offset_loc, saved_offset[0], saved_offset[1]);
