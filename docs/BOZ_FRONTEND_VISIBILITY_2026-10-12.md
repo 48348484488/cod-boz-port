@@ -38,6 +38,21 @@ Scope: the fork `48348484488/cod-boz-port` only. No original game assets or fram
 - [Run 38214365049](https://github.com/48348484488/cod-boz-port/actions/runs/38214365049) executes the test in real ARM/QEMU. The resulting asset-free `boz-diagnostics/docs/boz-latest-ci.json` should contain `pixel_trail` only after its provenance `run_id` becomes `38214365049`.
 - Locate the first draw whose sampled colors transition from the clear color to the final dark/gray stripes; trace its program, bound texture, and vertex geometry before modifying renderer behavior.
 
+## Draw coverage correction (verified)
+
+The full `boz-fast-property.log` from [run 38213011265](https://github.com/48348484488/cod-boz-port/actions/runs/38213011265) shows:
+
+| Counter | Swap 295 | Swap 300 | Added |
+|---|---:|---:|---:|
+| `glDrawArrays` | 351 | 441 | **90** |
+| `glDrawElements` | 404 | 414 | **10** |
+
+Therefore the late scene has roughly **18 array draws + 2 indexed draws per swap**. The initial `BOZ_GL_PIXEL_TRAIL` in commit `b0662c8` sampled only indexed draws and could miss the source of the frame's dark/gray stripes.
+
+Commit [3aa034a](https://github.com/48348484488/cod-boz-port/commit/3aa034a1c6a35809dbf1575d9062a7198a0a47e4) addresses this by sampling the framebuffer **after both real GL draw entry points** with a combined chronological `order` counter, tagged `kind=arrays` or `kind=elements`. It retains the existing asset-free three-pixel summary and changes no game pixels. Verify it in [actual QEMU run 38215180010](https://github.com/48348484488/cod-boz-port/actions/runs/38215180010).
+
+Do not interpret the original indexed-only trace as proof that an indexed draw created a stripe if an intervening array draw could have overwritten the framebuffer.
+
 ## Acceptance
 
 Visible and recognizable original frontend is required before claiming the menu works. A shader link, successful asset read, nonzero texture payload, 400 swaps, or an opaque two-tone background alone is insufficient.
