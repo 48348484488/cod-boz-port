@@ -121,6 +121,11 @@ class BozSummaryTests(unittest.TestCase):
                     "sample=0.05,0.05 saved_scale=0.000244141,0.000244141 "
                     "saved_offset=0,0"
                 ],
+                "sprite_matrix": [
+                    "[BOZ_GL_SPRITE_MATRIX] frame=300 tex=379 "
+                    "m=0.003125,0,0,0,0,0.00416667,0,0,"
+                    "0,0,1,0,-1,-1,0,1"
+                ],
             },
         }
         result = summarize(report)
@@ -144,6 +149,7 @@ class BozSummaryTests(unittest.TestCase):
         self.assertEqual(len(result["sprite_quads"]), 1)
         self.assertEqual(len(result["sprite_pipeline"]), 1)
         self.assertEqual(len(result["uv_ab_events"]), 1)
+        self.assertEqual(len(result["sprite_matrix"]), 1)
         self.assertFalse(result["visual_frontend_verified"])
 
 

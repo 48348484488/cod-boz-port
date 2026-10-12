@@ -492,9 +492,20 @@ static void boz_capture_midframe(const char *name) {
 /* Read-only quad geometry/UV evidence for every sprite in the actual late
  * frontend draw. First-use shader logging alone hides per-sprite UV changes. */
 static void boz_trace_sprite_quad(GLint first, GLsizei count) {
-    if (!boz_texture_diag_enabled() || g_boz_visual_probe_next_swap != 300u ||
+    unsigned frame = g_boz_visual_probe_next_swap;
+    bool sample_frame = frame == 125u || frame == 150u || frame == 175u ||
+                        frame == 200u || frame == 225u || frame == 250u ||
+                        frame == 275u || frame == 300u || frame == 325u ||
+                        frame == 350u || frame == 375u;
+    if (!boz_texture_diag_enabled() || !sample_frame ||
         g_bound_framebuffer != 0u || count != 4 || first < 0)
         return;
+    if (frame != 300u) {
+        GLuint bound = g_boz_tex_bound[0];
+        struct boz_tex_meta *texture = boz_find_tex(bound, false);
+        if (!texture || texture->width != 2 || texture->height != 2)
+            return;
+    }
     GLint program = 0;
     void (*get_int)(GLenum, GLint *) = lookup_gl("glGetIntegerv");
     GLint (*get_attr_loc)(GLuint, const char *) = lookup_gl("glGetAttribLocation");
@@ -563,12 +574,12 @@ static void boz_trace_sprite_quad(GLint first, GLsizei count) {
         g_boz_tex_bound[sampler_unit] : 0u;
     struct boz_tex_meta *meta = boz_find_tex(texture, false);
     fprintf(stderr,
-            "[BOZ_GL_SPRITE_QUAD] frame=300 order=%u tex=%u "
+            "[BOZ_GL_SPRITE_QUAD] frame=%u order=%u tex=%u "
             "image=%dx%d uploads=%u valid=%d "
             "rect=%d,%d,%d,%d uv=%d,%d,%d,%d "
             "scale=%g,%g offset=%g,%g norm=%d,%d "
             "sampler_unit=%d sampler_tex=%u\n",
-            g_boz_gl_draw_command_count, texture,
+            frame, g_boz_gl_draw_command_count, texture,
             meta ? (int)meta->width : 0,
             meta ? (int)meta->height : 0,
             meta ? meta->uploads : 0u, (int)valid,
@@ -577,6 +588,25 @@ static void boz_trace_sprite_quad(GLint first, GLsizei count) {
             (double)scale[0], (double)scale[1],
             (double)offset[0], (double)offset[1],
             normalized[0], normalized[1], sampler_unit, actual_sampler_tex);
+    if ((texture == 81u || texture == 379u) && get_loc && get_uniform) {
+        GLint mat_loc = get_loc((GLuint)program, "inPMVMat");
+        GLfloat matrix[16] = {0};
+        if (mat_loc >= 0) {
+            get_uniform((GLuint)program, mat_loc, matrix);
+            fprintf(stderr,
+                    "[BOZ_GL_SPRITE_MATRIX] frame=%u tex=%u "
+                    "m=%g,%g,%g,%g,%g,%g,%g,%g,"
+                    "%g,%g,%g,%g,%g,%g,%g,%g\n",
+                    frame, texture, (double)matrix[0], (double)matrix[1],
+                    (double)matrix[2], (double)matrix[3],
+                    (double)matrix[4], (double)matrix[5],
+                    (double)matrix[6], (double)matrix[7],
+                    (double)matrix[8], (double)matrix[9],
+                    (double)matrix[10], (double)matrix[11],
+                    (double)matrix[12], (double)matrix[13],
+                    (double)matrix[14], (double)matrix[15]);
+        }
+    }
 }
 
 /* Read-only GL pipeline state exactly before BOZ's fullscreen sprite draw.
