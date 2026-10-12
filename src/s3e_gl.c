@@ -482,11 +482,87 @@ static void boz_capture_midframe(const char *name) {
     free(rgba);
 }
 
+/* Read-only quad geometry/UV evidence for every sprite in the actual late
+ * frontend draw. First-use shader logging alone hides per-sprite UV changes. */
+static void boz_trace_sprite_quad(GLint first, GLsizei count) {
+    if (!boz_texture_diag_enabled() || g_boz_visual_probe_next_swap != 300u ||
+        g_bound_framebuffer != 0u || count != 4 || first < 0)
+        return;
+    GLint program = 0;
+    void (*get_int)(GLenum, GLint *) = lookup_gl("glGetIntegerv");
+    GLint (*get_attr_loc)(GLuint, const char *) = lookup_gl("glGetAttribLocation");
+    void (*get_vertex)(GLuint, GLenum, GLint *) = lookup_gl("glGetVertexAttribiv");
+    void (*get_pointer)(GLuint, GLenum, void **) =
+        lookup_gl("glGetVertexAttribPointerv");
+    GLint (*get_loc)(GLuint, const char *) = lookup_gl("glGetUniformLocation");
+    void (*get_uniform)(GLuint, GLint, GLfloat *) = lookup_gl("glGetUniformfv");
+    if (!get_int || !get_attr_loc || !get_vertex || !get_pointer)
+        return;
+    get_int(0x8b8du, &program); /* GL_CURRENT_PROGRAM */
+    if (program != 15) return;
+    const char *names[2] = {"inVert", "inUV0"};
+    int min_v[2][2] = {{32767, 32767}, {32767, 32767}};
+    int max_v[2][2] = {{-32768, -32768}, {-32768, -32768}};
+    bool valid = true;
+    for (unsigned kind = 0u; kind < 2u; ++kind) {
+        GLint loc = get_attr_loc((GLuint)program, names[kind]);
+        if (loc < 0) { valid = false; break; }
+        GLint enabled = 0, dimension = 0, type = 0, stride = 0, vbo = 0;
+        get_vertex((GLuint)loc, 0x8622u, &enabled); /* ARRAY_ENABLED */
+        get_vertex((GLuint)loc, 0x8623u, &dimension);
+        get_vertex((GLuint)loc, 0x8625u, &type);
+        get_vertex((GLuint)loc, 0x8624u, &stride);
+        get_vertex((GLuint)loc, 0x889fu, &vbo);
+        void *ptr = NULL;
+        get_pointer((GLuint)loc, 0x8645u, &ptr);
+        if (!enabled || dimension < 2 || type != 0x1402u || vbo != 0 ||
+            (uintptr_t)ptr < 0x10000u) {
+            valid = false;
+            break;
+        }
+        size_t step = stride > 0 ? (size_t)stride : (size_t)dimension * 2u;
+        const unsigned char *base = (const unsigned char *)ptr;
+        for (unsigned i = 0u; i < 4u; ++i) {
+            int16_t point[2] = {0, 0};
+            memcpy(point, base + ((size_t)first + i) * step, sizeof(point));
+            for (unsigned axis = 0u; axis < 2u; ++axis) {
+                if ((int)point[axis] < min_v[kind][axis])
+                    min_v[kind][axis] = point[axis];
+                if ((int)point[axis] > max_v[kind][axis])
+                    max_v[kind][axis] = point[axis];
+            }
+        }
+    }
+    GLfloat scale[4] = {0}, offset[4] = {0};
+    if (get_loc && get_uniform) {
+        GLint scl = get_loc((GLuint)program, "inUVScale");
+        GLint off = get_loc((GLuint)program, "inUVOffset");
+        if (scl >= 0) get_uniform((GLuint)program, scl, scale);
+        if (off >= 0) get_uniform((GLuint)program, off, offset);
+    }
+    GLuint texture = g_boz_tex_bound[0];
+    struct boz_tex_meta *meta = boz_find_tex(texture, false);
+    fprintf(stderr,
+            "[BOZ_GL_SPRITE_QUAD] frame=300 order=%u tex=%u "
+            "image=%dx%d uploads=%u valid=%d "
+            "rect=%d,%d,%d,%d uv=%d,%d,%d,%d "
+            "scale=%g,%g offset=%g,%g\n",
+            g_boz_gl_draw_command_count, texture,
+            meta ? (int)meta->width : 0,
+            meta ? (int)meta->height : 0,
+            meta ? meta->uploads : 0u, (int)valid,
+            min_v[0][0], min_v[0][1], max_v[0][0], max_v[0][1],
+            min_v[1][0], min_v[1][1], max_v[1][0], max_v[1][1],
+            (double)scale[0], (double)scale[1],
+            (double)offset[0], (double)offset[1]);
+}
+
 static S3E_SOFTFP void host_glDrawArrays(GLenum mode, GLint first, GLsizei count) {
     ++g_boz_gl_draw_arrays_count;
     ++g_boz_gl_draw_command_count;
     boz_census_draw();
     boz_trace_array_geometry(mode, first, count);
+    boz_trace_sprite_quad(first, count);
     void (*real)(GLenum, GLint, GLsizei) = lookup_gl("glDrawArrays");
     unsigned frame = g_boz_visual_probe_next_swap;
     bool compare = boz_visual_probe_enabled();

@@ -104,6 +104,12 @@ class BozSummaryTests(unittest.TestCase):
                     "[BOZ_GL_STAGE_CAPTURE] frame=300 stage=before-379 "
                     "draw=849 tex=379 bytes=921600 ok=1"
                 ],
+                "sprite_quads": [
+                    "[BOZ_GL_SPRITE_QUAD] frame=300 order=850 tex=379 "
+                    "image=1024x1024 uploads=1 valid=1 "
+                    "rect=0,0,640,480 uv=0,0,4096,8192 "
+                    "scale=0.000244141,0.00012207 offset=0,0"
+                ],
             },
         }
         result = summarize(report)
@@ -124,6 +130,7 @@ class BozSummaryTests(unittest.TestCase):
         self.assertEqual(len(result["layer_ab_events"]), 2)
         self.assertEqual(len(result["image_grid"]), 1)
         self.assertEqual(len(result["stage_capture"]), 1)
+        self.assertEqual(len(result["sprite_quads"]), 1)
         self.assertFalse(result["visual_frontend_verified"])
 
 

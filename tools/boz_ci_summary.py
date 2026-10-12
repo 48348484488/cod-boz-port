@@ -117,6 +117,7 @@ def summarize(report: dict) -> dict:
         "layer_ab_events": (texture.get("layer_ab_events") or [])[-80:],
         "image_grid": (texture.get("image_grid") or [])[-16:],
         "stage_capture": (texture.get("stage_capture") or [])[-16:],
+        "sprite_quads": (texture.get("sprite_quads") or [])[-32:],
         "midframe_image_hashes": [
             {"file": img.get("file"), "sha256": img.get("sha256"),
              "distinct_rgb_colors": img.get("distinct_rgb_colors"),
