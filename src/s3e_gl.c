@@ -709,7 +709,7 @@ static S3E_SOFTFP void host_glDrawArrays(GLenum mode, GLint first, GLsizei count
                     fprintf(stderr,
                             "[BOZ_GL_UV_AB] frame=%u tex=379 program=15 "
                             "sample=%g,%g saved_scale=%g,%g "
-                            "saved_offset=%g,%g\\n",
+                            "saved_offset=%g,%g\n",
                             frame, (double)sample, (double)sample,
                             (double)saved_scale[0], (double)saved_scale[1],
                             (double)saved_offset[0], (double)saved_offset[1]);
