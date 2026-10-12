@@ -284,6 +284,28 @@ static S3E_SOFTFP void host_glUseProgram(GLuint program) {
 /* Count actual GL commands, not merely successful window swaps. */
 static S3E_SOFTFP void host_glClear(GLbitfield mask) {
     ++g_boz_gl_clear_count;
+    unsigned frame = g_boz_visual_probe_next_swap;
+    if (boz_texture_diag_enabled() &&
+        (frame == 275u || frame == 300u || frame == 305u ||
+         frame == 310u || frame == 315u || frame == 320u)) {
+        GLfloat color[4] = {0};
+        GLint scissor[4] = {0};
+        void (*get_float)(GLenum, GLfloat *) = lookup_gl("glGetFloatv");
+        void (*get_int)(GLenum, GLint *) = lookup_gl("glGetIntegerv");
+        GLboolean (*enabled)(GLenum) = lookup_gl("glIsEnabled");
+        if (get_float) get_float(0x0c22u, color); /* GL_COLOR_CLEAR_VALUE */
+        if (get_int) get_int(0x0c10u, scissor);  /* GL_SCISSOR_BOX */
+        fprintf(stderr,
+                "[BOZ_GL_CLEAR_CAUSE] frame=%u mask=%04x fbo=%u "
+                "rgba=%g,%g,%g,%g scissor_on=%d rect=%d,%d,%d,%d "
+                "caller=%08lx\n",
+                frame, (unsigned)mask, g_bound_framebuffer,
+                (double)color[0], (double)color[1], (double)color[2],
+                (double)color[3],
+                enabled ? (int)enabled(0x0c11u) : -1,
+                scissor[0], scissor[1], scissor[2], scissor[3],
+                (unsigned long)(uintptr_t)__builtin_return_address(0));
+    }
     void (*real)(GLbitfield) = lookup_gl("glClear");
     if (real) real(mask);
 }
@@ -402,6 +424,44 @@ static S3E_SOFTFP void host_glDrawElements(GLenum mode, GLsizei count, GLenum ty
                             tex ? (int)tex->height : 0,
                             tex ? tex->uploads : 0u);
                 }
+            }
+        }
+        /* Observe the exact UV transform used by the currently linked shader
+         * and the sampling state on texture unit zero. Neither query changes GL. */
+        if (boz_texture_diag_enabled() && program > 0) {
+            GLint (*get_location)(GLuint, const char *) =
+                lookup_gl("glGetUniformLocation");
+            void (*get_uniformfv)(GLuint, GLint, GLfloat *) =
+                lookup_gl("glGetUniformfv");
+            if (get_location && get_uniformfv) {
+                GLint scale_loc = get_location((GLuint)program, "inUVScale");
+                GLint offset_loc = get_location((GLuint)program, "inUVOffset");
+                GLfloat scale[4] = {0}, offset[4] = {0};
+                if (scale_loc >= 0) get_uniformfv((GLuint)program, scale_loc, scale);
+                if (offset_loc >= 0) get_uniformfv((GLuint)program, offset_loc, offset);
+                fprintf(stderr,
+                        "[BOZ_GL_UV_STATE] seq=%u program=%d scale_loc=%d "
+                        "scale=%g,%g offset_loc=%d offset=%g,%g\n",
+                        g_boz_gl_draw_elements_count, program, scale_loc,
+                        (double)scale[0], (double)scale[1], offset_loc,
+                        (double)offset[0], (double)offset[1]);
+            }
+            GLint active_unit = -1;
+            if (get_int) get_int(0x84e0u, &active_unit);
+            void (*get_texparam)(GLenum, GLenum, GLint *) =
+                lookup_gl("glGetTexParameteriv");
+            if (active_unit == 0x84c0 && get_texparam) {
+                GLint min_filter = -1, mag_filter = -1, wrap_s = -1, wrap_t = -1;
+                get_texparam(0x0de1u, 0x2801u, &min_filter);
+                get_texparam(0x0de1u, 0x2800u, &mag_filter);
+                get_texparam(0x0de1u, 0x2802u, &wrap_s);
+                get_texparam(0x0de1u, 0x2803u, &wrap_t);
+                fprintf(stderr,
+                        "[BOZ_GL_TEXTURE_PARAMS] seq=%u program=%d tex=%u "
+                        "min=%04x mag=%04x wrap_s=%04x wrap_t=%04x\n",
+                        g_boz_gl_draw_elements_count, program,
+                        g_boz_tex_bound[0], (unsigned)min_filter,
+                        (unsigned)mag_filter, (unsigned)wrap_s, (unsigned)wrap_t);
             }
         }
         fprintf(stderr,

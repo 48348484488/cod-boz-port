@@ -1594,7 +1594,8 @@ def run_boz_diagnostic(report: dict) -> int:
                 "[BOZ_GL_UNIT0_BIND]", "[BOZ_GL_DRAW_CENSUS]",
                 "[BOZ_GL_CALLSITE]", "[BOZ_GL_TEXTURE_OCCUPANCY]",
                 "[BOZ_GL_SAMPLER_BIND]", "[BOZ_GL_DRAW_STATE]",
-                "[BOZ_GL_VISUAL_AB]",
+                "[BOZ_GL_VISUAL_AB]", "[BOZ_GL_UV_STATE]",
+                "[BOZ_GL_TEXTURE_PARAMS]", "[BOZ_GL_CLEAR_CAUSE]",
                 "[BOZ_GL_COMPRESSED_UPLOAD]", "[BOZ_GL_COMPRESSED_SUBUPLOAD]"))
         ]
         report["fast_texture_evidence"] = {
@@ -1626,6 +1627,12 @@ def run_boz_diagnostic(report: dict) -> int:
                             if ln.startswith("[BOZ_GL_DRAW_STATE]")][-80:],
             "visual_ab_events": [ln for ln in texture_events
                                  if ln.startswith("[BOZ_GL_VISUAL_AB]")][-16:],
+            "uv_states": [ln for ln in texture_events
+                          if ln.startswith("[BOZ_GL_UV_STATE]")][-48:],
+            "texture_params": [ln for ln in texture_events
+                               if ln.startswith("[BOZ_GL_TEXTURE_PARAMS]")][-48:],
+            "clear_causes": [ln for ln in texture_events
+                             if ln.startswith("[BOZ_GL_CLEAR_CAUSE]")][-80:],
         }
         print("[FAST_TEXTURE_SUMMARY] " +
               json.dumps(report["fast_texture_evidence"]), flush=True)
@@ -1660,7 +1667,8 @@ def run_boz_diagnostic(report: dict) -> int:
                 "[BOZ_GL_DRAW_CENSUS]", "[BOZ_GL_CALLSITE]",
                 "[BOZ_GL_TEXTURE_OCCUPANCY]", "[BOZ_GL_SAMPLER_BIND]",
                 "[BOZ_GL_DRAW_STATE]", "[BOZ_GL_VISUAL_AB]",
-                "[BOZ_RESOURCE_OPEN]", "[BOZ_RESOURCE_CLOSE]", "[BOZ_RESOURCE_PROGRESS]",
+                "[BOZ_GL_UV_STATE]", "[BOZ_GL_TEXTURE_PARAMS]",
+                "[BOZ_GL_CLEAR_CAUSE]", "[BOZ_RESOURCE_OPEN]", "[BOZ_RESOURCE_CLOSE]", "[BOZ_RESOURCE_PROGRESS]",
                 "[BOZ_NULL_PROPERTY_ORIGIN]", "signal 11 ", "stack:",
                 "[S3E_FILE_EXISTS]",
             )) and not line.startswith("[S3E_FILE_EXISTS]"):

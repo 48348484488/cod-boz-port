@@ -108,6 +108,9 @@ def summarize(report: dict) -> dict:
         "sampler_bindings": (texture.get("sampler_bindings") or [])[-80:],
         "draw_states": (texture.get("draw_states") or [])[-80:],
         "visual_ab_events": (texture.get("visual_ab_events") or [])[-16:],
+        "uv_states": (texture.get("uv_states") or [])[-48:],
+        "texture_params": (texture.get("texture_params") or [])[-48:],
+        "clear_causes": (texture.get("clear_causes") or [])[-80:],
         "before_overlay_frame_hashes": [
             {"file": img.get("file"), "sha256": img.get("sha256"),
              "distinct_rgb_colors": img.get("distinct_rgb_colors"),

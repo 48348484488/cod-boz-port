@@ -59,6 +59,18 @@ class BozSummaryTests(unittest.TestCase):
                     "[BOZ_GL_DRAW_STATE] seq=2 program=9 blend=1 "
                     "src=0302 dst=0303 depth=0 cull=0"
                 ],
+                "uv_states": [
+                    "[BOZ_GL_UV_STATE] seq=2 program=9 scale_loc=1 "
+                    "scale=0.000976562,0.001953125 offset_loc=2 offset=0,0"
+                ],
+                "texture_params": [
+                    "[BOZ_GL_TEXTURE_PARAMS] seq=2 program=9 tex=56 "
+                    "min=2601 mag=2601 wrap_s=812f wrap_t=812f"
+                ],
+                "clear_causes": [
+                    "[BOZ_GL_CLEAR_CAUSE] frame=300 mask=4000 fbo=0 "
+                    "rgba=0.5,0.5,0.5,1 scissor_on=0 rect=0,0,640,480"
+                ],
             },
         }
         result = summarize(report)
@@ -70,6 +82,9 @@ class BozSummaryTests(unittest.TestCase):
         self.assertEqual(len(result["unit0_binding_transitions"]), 1)
         self.assertEqual(len(result["sampler_bindings"]), 1)
         self.assertEqual(len(result["draw_states"]), 1)
+        self.assertEqual(len(result["uv_states"]), 1)
+        self.assertEqual(len(result["texture_params"]), 1)
+        self.assertEqual(len(result["clear_causes"]), 1)
         self.assertFalse(result["visual_frontend_verified"])
 
 
