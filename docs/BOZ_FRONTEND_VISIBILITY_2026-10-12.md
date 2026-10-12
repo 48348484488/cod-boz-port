@@ -53,6 +53,29 @@ Commit [3aa034a](https://github.com/48348484488/cod-boz-port/commit/3aa034a1c6a3
 
 Do not interpret the original indexed-only trace as proof that an indexed draw created a stripe if an intervening array draw could have overwritten the framebuffer.
 
+## Confirmed draw attribution and new layer-isolation experiment
+
+- [Real ARM run 38215180010](https://github.com/48348484488/cod-boz-port/actions/runs/38215180010) completed successfully with chronological post-draw pixel samples from both `glDrawArrays` and `glDrawElements`.
+- Immediately before the final screen:
+  - `order=850`, `glDrawArrays`, program 15, texture **379**, `count=4`: all three sampled pixels change from `#808080` to `#837978`.
+  - `order=851`, program 15, texture **380**: top sampled pixel becomes `#1C1A19`.
+  - `order=852`, program 15, texture **380**: bottom sampled pixel also becomes `#1C1A19`; the center remains `#837978`.
+  - `order=853..855`: subsequent draws using programs 12/15 and textures 0,381,382 do not change these three samples.
+- Texture 379 was uploaded as `1024x1024` RGB8; texture 380 as `1024x256` RGBA8. Upload samples were nonempty. Neither fact proves they are the correct menu art.
+- This is direct proof that the solid background and bands are **rendered** by late image layers, not merely the clear color. Whether these layers *incorrectly cover* earlier UI is not yet established.
+
+**New reversible experiment:** commit [ca6a5a9](https://github.com/48348484488/cod-boz-port/commit/ca6a5a99c19372fe47ec774dfd0e70e3b3f397e3) enables `BOZ_GL_LAYER_AB_PROBE=1` only in diagnostic QEMU, while disabling the prior blend/culling experiment. It compares:
+
+| Captured swap | Diagnostic action |
+|---|---|
+| 300 | Normal rendering |
+| 305 | Skip only texture 379's `glDrawArrays` |
+| 310 | Skip only texture 380's `glDrawArrays` |
+| 315 | Skip both texture 379 and 380 `glDrawArrays` |
+| 320 | Normal rendering again |
+
+[ARM run 38217634014](https://github.com/48348484488/cod-boz-port/actions/runs/38217634014) will publish the five actual captured frames and `layer_ab_events` diagnostics. The outcome needs pixel-image inspection: a visually identifiable menu would support occlusion/order as the cause; only flat alternative colors would mean these layers are not solely responsible for the missing UI. Neither result should be assumed before the run completes.
+
 ## Acceptance
 
 Visible and recognizable original frontend is required before claiming the menu works. A shader link, successful asset read, nonzero texture payload, 400 swaps, or an opaque two-tone background alone is insufficient.
