@@ -723,9 +723,9 @@
     }
   ],
   "provenance": {
-    "commit": "3a0aec6ebbc5aed2093cd272a6c5c4edac1c50f7",
+    "commit": "4e4999c46e7b2380f8027386c301695a0849e1b8",
     "run_attempt": "1",
-    "run_id": "38151413957",
+    "run_id": "38209655310",
     "workflow": "BOZ ARM Runtime - CPU Unthrottled"
   },
   "qemu_return_code": 124,
@@ -764,18 +764,18 @@
   ],
   "schema": "boz-ci-summary-v1",
   "swaps": [
-    "[BOZ_SWAP_PROGRESS] n=265 ok=1 fbo=0 elapsed_ms=445224 gl_clear=266 gl_draw_arrays=0 gl_draw_elements=345 gl_draw_tex=0",
-    "[BOZ_SWAP_PROGRESS] n=270 ok=1 fbo=0 elapsed_ms=453625 gl_clear=271 gl_draw_arrays=0 gl_draw_elements=355 gl_draw_tex=0",
-    "[BOZ_SWAP_PROGRESS] n=275 ok=1 fbo=0 elapsed_ms=462000 gl_clear=276 gl_draw_arrays=0 gl_draw_elements=365 gl_draw_tex=0",
-    "[BOZ_SWAP_PROGRESS] n=280 ok=1 fbo=0 elapsed_ms=486795 gl_clear=281 gl_draw_arrays=81 gl_draw_elements=374 gl_draw_tex=0",
-    "[BOZ_SWAP_PROGRESS] n=285 ok=1 fbo=0 elapsed_ms=506193 gl_clear=286 gl_draw_arrays=171 gl_draw_elements=384 gl_draw_tex=0",
-    "[BOZ_SWAP_PROGRESS] n=290 ok=1 fbo=0 elapsed_ms=525659 gl_clear=291 gl_draw_arrays=261 gl_draw_elements=394 gl_draw_tex=0",
-    "[BOZ_SWAP_PROGRESS] n=295 ok=1 fbo=0 elapsed_ms=545167 gl_clear=296 gl_draw_arrays=351 gl_draw_elements=404 gl_draw_tex=0",
-    "[BOZ_SWAP_PROGRESS] n=300 ok=1 fbo=0 elapsed_ms=564597 gl_clear=301 gl_draw_arrays=441 gl_draw_elements=414 gl_draw_tex=0",
-    "[BOZ_SWAP_PROGRESS] n=305 ok=1 fbo=0 elapsed_ms=584019 gl_clear=306 gl_draw_arrays=531 gl_draw_elements=424 gl_draw_tex=0",
-    "[BOZ_SWAP_PROGRESS] n=310 ok=1 fbo=0 elapsed_ms=603500 gl_clear=311 gl_draw_arrays=621 gl_draw_elements=434 gl_draw_tex=0",
-    "[BOZ_SWAP_PROGRESS] n=315 ok=1 fbo=0 elapsed_ms=622930 gl_clear=316 gl_draw_arrays=711 gl_draw_elements=444 gl_draw_tex=0",
-    "[BOZ_SWAP_PROGRESS] n=320 ok=1 fbo=0 elapsed_ms=642346 gl_clear=321 gl_draw_arrays=801 gl_draw_elements=454 gl_draw_tex=0"
+    "[BOZ_SWAP_PROGRESS] n=265 ok=1 fbo=0 elapsed_ms=444989 gl_clear=266 gl_draw_arrays=0 gl_draw_elements=345 gl_draw_tex=0",
+    "[BOZ_SWAP_PROGRESS] n=270 ok=1 fbo=0 elapsed_ms=453377 gl_clear=271 gl_draw_arrays=0 gl_draw_elements=355 gl_draw_tex=0",
+    "[BOZ_SWAP_PROGRESS] n=275 ok=1 fbo=0 elapsed_ms=461784 gl_clear=276 gl_draw_arrays=0 gl_draw_elements=365 gl_draw_tex=0",
+    "[BOZ_SWAP_PROGRESS] n=280 ok=1 fbo=0 elapsed_ms=486449 gl_clear=281 gl_draw_arrays=81 gl_draw_elements=374 gl_draw_tex=0",
+    "[BOZ_SWAP_PROGRESS] n=285 ok=1 fbo=0 elapsed_ms=505760 gl_clear=286 gl_draw_arrays=171 gl_draw_elements=384 gl_draw_tex=0",
+    "[BOZ_SWAP_PROGRESS] n=290 ok=1 fbo=0 elapsed_ms=525189 gl_clear=291 gl_draw_arrays=261 gl_draw_elements=394 gl_draw_tex=0",
+    "[BOZ_SWAP_PROGRESS] n=295 ok=1 fbo=0 elapsed_ms=544712 gl_clear=296 gl_draw_arrays=351 gl_draw_elements=404 gl_draw_tex=0",
+    "[BOZ_SWAP_PROGRESS] n=300 ok=1 fbo=0 elapsed_ms=564276 gl_clear=301 gl_draw_arrays=441 gl_draw_elements=414 gl_draw_tex=0",
+    "[BOZ_SWAP_PROGRESS] n=305 ok=1 fbo=0 elapsed_ms=583826 gl_clear=306 gl_draw_arrays=531 gl_draw_elements=424 gl_draw_tex=0",
+    "[BOZ_SWAP_PROGRESS] n=310 ok=1 fbo=0 elapsed_ms=603195 gl_clear=311 gl_draw_arrays=621 gl_draw_elements=434 gl_draw_tex=0",
+    "[BOZ_SWAP_PROGRESS] n=315 ok=1 fbo=0 elapsed_ms=622484 gl_clear=316 gl_draw_arrays=711 gl_draw_elements=444 gl_draw_tex=0",
+    "[BOZ_SWAP_PROGRESS] n=320 ok=1 fbo=0 elapsed_ms=641819 gl_clear=321 gl_draw_arrays=801 gl_draw_elements=454 gl_draw_tex=0"
   ],
   "texture_occupancy": [
     "[BOZ_GL_TEXTURE_OCCUPANCY] tex=48 size=8x128 format=1908 type=1401 sample_bytes=320 nonzero_bytes=302 alpha_pixels=80 alpha_nonzero=80 alpha_opaque=80",
@@ -801,9 +801,9 @@
     "[BOZ_GL_TEXTURE_OCCUPANCY] tex=380 size=1024x256 format=1908 type=1401 sample_bytes=320 nonzero_bytes=64 alpha_pixels=80 alpha_nonzero=64 alpha_opaque=0"
   ],
   "texture_size_totals": [
-    "[BOZ_GL_TEX_SIZE_TOTAL] swap=5 uploads=150 two_by_two=135 larger=15 other=0 subuploads=0 compressed=0 compressed_unresolved=0 max_size=1024x512 known_textures=150",
-    "[BOZ_GL_TEX_SIZE_TOTAL] swap=60 uploads=275 two_by_two=257 larger=18 other=0 subuploads=0 compressed=0 compressed_unresolved=0 max_size=1024x512 known_textures=275",
-    "[BOZ_GL_TEX_SIZE_TOTAL] swap=100 uploads=346 two_by_two=328 larger=18 other=0 subuploads=0 compressed=0 compressed_unresolved=0 max_size=1024x512 known_textures=346",
+    "[BOZ_GL_TEX_SIZE_TOTAL] swap=5 uploads=149 two_by_two=134 larger=15 other=0 subuploads=0 compressed=0 compressed_unresolved=0 max_size=1024x512 known_textures=149",
+    "[BOZ_GL_TEX_SIZE_TOTAL] swap=60 uploads=274 two_by_two=256 larger=18 other=0 subuploads=0 compressed=0 compressed_unresolved=0 max_size=1024x512 known_textures=274",
+    "[BOZ_GL_TEX_SIZE_TOTAL] swap=100 uploads=343 two_by_two=325 larger=18 other=0 subuploads=0 compressed=0 compressed_unresolved=0 max_size=1024x512 known_textures=343",
     "[BOZ_GL_TEX_SIZE_TOTAL] swap=150 uploads=382 two_by_two=359 larger=23 other=0 subuploads=0 compressed=0 compressed_unresolved=0 max_size=1024x1024 known_textures=382",
     "[BOZ_GL_TEX_SIZE_TOTAL] swap=200 uploads=382 two_by_two=359 larger=23 other=0 subuploads=0 compressed=0 compressed_unresolved=0 max_size=1024x1024 known_textures=382"
   ],
