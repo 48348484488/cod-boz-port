@@ -1977,6 +1977,25 @@ static EGLBoolean host_eglSwapBuffers(EGLDisplay display, EGLSurface surface) {
     }
     boz_census_swap(swap_count);
     g_boz_visual_probe_next_swap = swap_count + 1u;
+    /* This early exit is strictly opt-in for the one-shot ARM/QEMU
+     * diagnostic. The game and normal host runtime never exit here.
+     * Stop after the final required AB sample instead of burning
+     * additional CPU under emulation until the timeout deadline. */
+    const char *stop_swap = getenv("BOZ_DIAG_STOP_SWAP");
+    if (stop_swap && *stop_swap) {
+        char *end = NULL;
+        unsigned long limit = strtoul(stop_swap, &end, 10);
+        if (end != stop_swap && end && *end == '\0' &&
+            limit >= 325ul && limit <= 100000ul &&
+            (unsigned long)swap_count >= limit) {
+            fprintf(stderr,
+                    "[BOZ_DIAG_EARLY_EXIT] swap=%u limit=%lu "
+                    "mode=diagnostic-only\n",
+                    swap_count, limit);
+            fflush(stderr);
+            exit(EXIT_SUCCESS);
+        }
+    }
     pace_frame();
     return result;
 }
