@@ -432,6 +432,56 @@ static void boz_trace_array_geometry(GLenum mode, GLint first, GLsizei count) {
     }
 }
 
+/* Read-only snapshots at the exact guest draw boundaries. This verifies whether
+ * any menu detail exists before the late background layers cover the screen. */
+static unsigned g_boz_midframe_captured;
+static unsigned g_boz_midframe_tex380_draws;
+static void boz_capture_midframe(const char *name) {
+    const char *flag = getenv("BOZ_GL_STAGE_CAPTURE");
+    const char *dir = getenv("BOZ_FRAME_CAPTURE_DIR");
+    if (!flag || strcmp(flag, "1") != 0 || !dir || !*dir ||
+        g_boz_visual_probe_next_swap != 300u || g_bound_framebuffer != 0u)
+        return;
+    void (*read_pixels)(GLint, GLint, GLsizei, GLsizei,
+                        GLenum, GLenum, void *) = lookup_gl("glReadPixels");
+    if (!read_pixels) return;
+    const size_t w = REFERENCE_SURFACE_WIDTH;
+    const size_t h = REFERENCE_SURFACE_HEIGHT;
+    const size_t total = w * h;
+    unsigned char *rgba = malloc(total * 4u);
+    unsigned char *rgb = malloc(total * 3u);
+    if (!rgba || !rgb) {
+        free(rgba);
+        free(rgb);
+        return;
+    }
+    read_pixels(0, 0, (GLsizei)w, (GLsizei)h, 0x1908u, 0x1401u, rgba);
+    for (size_t y = 0; y < h; ++y) {
+        for (size_t x = 0; x < w; ++x) {
+            size_t from = ((h - 1u - y) * w + x) * 4u;
+            size_t into = (y * w + x) * 3u;
+            memcpy(rgb + into, rgba + from, 3u);
+        }
+    }
+    char filename[512];
+    int chars = snprintf(filename, sizeof(filename),
+                         "%s/boz-mid-%s-00300.ppm", dir, name);
+    FILE *file = chars > 0 && (size_t)chars < sizeof(filename) ?
+        fopen(filename, "wb") : NULL;
+    if (file) {
+        fprintf(file, "P6\n%zu %zu\n255\n", w, h);
+        size_t written = fwrite(rgb, 1u, total * 3u, file);
+        fclose(file);
+        fprintf(stderr,
+                "[BOZ_GL_STAGE_CAPTURE] frame=300 stage=%s draw=%u "
+                "tex=%u bytes=%zu ok=%d\n",
+                name, g_boz_gl_draw_command_count,
+                g_boz_tex_bound[0], written, written == total * 3u);
+    }
+    free(rgb);
+    free(rgba);
+}
+
 static S3E_SOFTFP void host_glDrawArrays(GLenum mode, GLint first, GLsizei count) {
     ++g_boz_gl_draw_arrays_count;
     ++g_boz_gl_draw_command_count;
@@ -461,6 +511,16 @@ static S3E_SOFTFP void host_glDrawArrays(GLenum mode, GLint first, GLsizei count
     }
     bool layer_probe = real && boz_layer_probe_enabled();
     GLuint active_tex = g_boz_tex_bound[0];
+    if (frame == 300u && active_tex == 379u &&
+        !(g_boz_midframe_captured & 1u)) {
+        boz_capture_midframe("before-379");
+        g_boz_midframe_captured |= 1u;
+    }
+    if (frame == 300u && active_tex == 380u &&
+        !(g_boz_midframe_captured & 2u)) {
+        boz_capture_midframe("after-379");
+        g_boz_midframe_captured |= 2u;
+    }
     bool target_layer = active_tex == 379u || active_tex == 380u;
     bool skip_gray = frame >= 301u && frame <= 306u && active_tex == 379u;
     bool skip_bars = frame >= 307u && frame <= 312u && active_tex == 380u;
@@ -469,6 +529,12 @@ static S3E_SOFTFP void host_glDrawArrays(GLenum mode, GLint first, GLsizei count
     if (real && !skip_layer) {
         real(mode, first, count);
         boz_trace_draw_pixels("arrays", g_boz_gl_draw_arrays_count, count);
+        if (frame == 300u && active_tex == 380u &&
+            ++g_boz_midframe_tex380_draws == 2u &&
+            !(g_boz_midframe_captured & 4u)) {
+            boz_capture_midframe("after-380");
+            g_boz_midframe_captured |= 4u;
+        }
     }
     if (skip_layer) {
         GLint program = -1;
@@ -1078,6 +1144,65 @@ static void boz_track_tex_upload(GLenum target, GLint level, GLsizei width,
         meta->sample_hash = trace_gl_hash64(pixels, sample);
         meta->first_bytes = (unsigned)(available < 16 ? available : 16);
         memcpy(meta->first_rgba, pixels, meta->first_bytes);
+    }
+    /* Sparse spatial evidence of actual CPU image pixels, not just zero/nonzero
+     * byte counts. A 5x5 grid can show whether each fullscreen texture is
+     * monochrome, patterned, or has transparent regions. */
+    if (!sub_image && pixels && width > 0 && height > 0 &&
+        type == 0x1401u && (format == 0x1907u || format == 0x1908u) &&
+        (texture == 379u || texture == 380u || texture == 355u ||
+         texture == 381u || texture == 382u)) {
+        const unsigned char *src = (const unsigned char *)pixels;
+        size_t channels = format == 0x1907u ? 3u : 4u;
+        unsigned char rgb_seen[25][3] = {{0}};
+        unsigned unique = 0u, alpha_nonzero = 0u;
+        unsigned min_rgb[3] = {255u, 255u, 255u};
+        unsigned max_rgb[3] = {0u, 0u, 0u};
+        unsigned char samples[3][4] = {{0}};
+        for (unsigned iy = 0u; iy < 5u; ++iy) {
+            size_t y = (size_t)iy * ((size_t)height - 1u) / 4u;
+            for (unsigned ix = 0u; ix < 5u; ++ix) {
+                size_t x = (size_t)ix * ((size_t)width - 1u) / 4u;
+                const unsigned char *pixel =
+                    src + (y * (size_t)width + x) * channels;
+                bool seen = false;
+                for (unsigned n = 0u; n < unique; ++n)
+                    if (memcmp(rgb_seen[n], pixel, 3u) == 0) {
+                        seen = true;
+                        break;
+                    }
+                if (!seen && unique < 25u) {
+                    memcpy(rgb_seen[unique], pixel, 3u);
+                    ++unique;
+                }
+                for (unsigned c = 0u; c < 3u; ++c) {
+                    if (pixel[c] < min_rgb[c]) min_rgb[c] = pixel[c];
+                    if (pixel[c] > max_rgb[c]) max_rgb[c] = pixel[c];
+                }
+                unsigned alpha = channels == 4u ? pixel[3] : 255u;
+                if (alpha != 0u) ++alpha_nonzero;
+                if ((iy == 0u && ix == 0u) ||
+                    (iy == 2u && ix == 2u) ||
+                    (iy == 4u && ix == 4u)) {
+                    unsigned sample_index = iy / 2u;
+                    samples[sample_index][0] = pixel[0];
+                    samples[sample_index][1] = pixel[1];
+                    samples[sample_index][2] = pixel[2];
+                    samples[sample_index][3] = (unsigned char)alpha;
+                }
+            }
+        }
+        fprintf(stderr,
+                "[BOZ_GL_IMAGE_GRID] tex=%u size=%dx%d samples=25 "
+                "unique_rgb=%u alpha_nonzero=%u min=%02x%02x%02x "
+                "max=%02x%02x%02x tl=%02x%02x%02x%02x "
+                "center=%02x%02x%02x%02x br=%02x%02x%02x%02x\n",
+                texture, (int)width, (int)height, unique, alpha_nonzero,
+                min_rgb[0], min_rgb[1], min_rgb[2],
+                max_rgb[0], max_rgb[1], max_rgb[2],
+                samples[0][0], samples[0][1], samples[0][2], samples[0][3],
+                samples[1][0], samples[1][1], samples[1][2], samples[1][3],
+                samples[2][0], samples[2][1], samples[2][2], samples[2][3]);
     }
     /* Check sparse byte samples across each large image, not just its first 512 bytes.
      * This distinguishes a genuine empty atlas from a transparent initial row.

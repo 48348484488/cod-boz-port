@@ -115,6 +115,15 @@ def summarize(report: dict) -> dict:
         "array_geometry": (texture.get("array_geometry") or [])[-80:],
         "array_ab_events": (texture.get("array_ab_events") or [])[-16:],
         "layer_ab_events": (texture.get("layer_ab_events") or [])[-80:],
+        "image_grid": (texture.get("image_grid") or [])[-16:],
+        "stage_capture": (texture.get("stage_capture") or [])[-16:],
+        "midframe_image_hashes": [
+            {"file": img.get("file"), "sha256": img.get("sha256"),
+             "distinct_rgb_colors": img.get("distinct_rgb_colors"),
+             "top_rgb": (img.get("top_rgb") or [])[:3]}
+            for img in images
+            if "boz-mid-" in str(img.get("file", ""))
+        ],
         "before_overlay_frame_hashes": [
             {"file": img.get("file"), "sha256": img.get("sha256"),
              "distinct_rgb_colors": img.get("distinct_rgb_colors"),

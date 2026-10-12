@@ -1323,7 +1323,8 @@ def run_boz_diagnostic(report: dict) -> int:
         trial_lines = trial_out.replace("\\n", "\n").splitlines()
         frame_outputs = []
         for ppm in sorted([*PUBLIC.glob("boz-swap-*.ppm"),
-                           *PUBLIC.glob("boz-pre-overlay-*.ppm")]):
+                           *PUBLIC.glob("boz-pre-overlay-*.ppm"),
+                           *PUBLIC.glob("boz-mid-*.ppm")]):
             try:
                 parts = ppm.read_bytes().split(bytes([10]), 3)
                 if len(parts) != 4 or parts[0] != b"P6" or parts[2] != b"255":
@@ -1599,6 +1600,7 @@ def run_boz_diagnostic(report: dict) -> int:
                 "[BOZ_GL_PIXEL_TRAIL]", "[BOZ_GL_ARRAY_PROGRAM]",
                 "[BOZ_GL_ARRAY_ATTR]", "[BOZ_GL_ARRAY_UNIFORM]",
                 "[BOZ_GL_ARRAY_AB]", "[BOZ_GL_LAYER_AB]",
+                "[BOZ_GL_IMAGE_GRID]", "[BOZ_GL_STAGE_CAPTURE]",
                 "[BOZ_GL_COMPRESSED_UPLOAD]", "[BOZ_GL_COMPRESSED_SUBUPLOAD]"))
         ]
         report["fast_texture_evidence"] = {
@@ -1646,6 +1648,10 @@ def run_boz_diagnostic(report: dict) -> int:
                                 if ln.startswith("[BOZ_GL_ARRAY_AB]")][-16:],
             "layer_ab_events": [ln for ln in texture_events
                                 if ln.startswith("[BOZ_GL_LAYER_AB]")][-80:],
+            "image_grid": [ln for ln in texture_events
+                           if ln.startswith("[BOZ_GL_IMAGE_GRID]")][-16:],
+            "stage_capture": [ln for ln in texture_events
+                              if ln.startswith("[BOZ_GL_STAGE_CAPTURE]")][-16:],
         }
         print("[FAST_TEXTURE_SUMMARY] " +
               json.dumps(report["fast_texture_evidence"]), flush=True)
@@ -1684,7 +1690,8 @@ def run_boz_diagnostic(report: dict) -> int:
                 "[BOZ_GL_CLEAR_CAUSE]", "[BOZ_GL_PIXEL_TRAIL]",
                 "[BOZ_GL_ARRAY_PROGRAM]", "[BOZ_GL_ARRAY_ATTR]",
                 "[BOZ_GL_ARRAY_UNIFORM]", "[BOZ_GL_ARRAY_AB]",
-                "[BOZ_GL_LAYER_AB]", "[BOZ_RESOURCE_OPEN]", "[BOZ_RESOURCE_CLOSE]", "[BOZ_RESOURCE_PROGRESS]",
+                "[BOZ_GL_LAYER_AB]", "[BOZ_GL_IMAGE_GRID]",
+                "[BOZ_GL_STAGE_CAPTURE]", "[BOZ_RESOURCE_OPEN]", "[BOZ_RESOURCE_CLOSE]", "[BOZ_RESOURCE_PROGRESS]",
                 "[BOZ_NULL_PROPERTY_ORIGIN]", "signal 11 ", "stack:",
                 "[S3E_FILE_EXISTS]",
             )) and not line.startswith("[S3E_FILE_EXISTS]"):

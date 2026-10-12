@@ -96,6 +96,14 @@ class BozSummaryTests(unittest.TestCase):
                     "[BOZ_GL_LAYER_AB] frame=315 draw=672 program=15 "
                     "tex=380 skipped=1 mode=0005 count=4"
                 ],
+                "image_grid": [
+                    "[BOZ_GL_IMAGE_GRID] tex=379 size=1024x1024 samples=25 "
+                    "unique_rgb=1 alpha_nonzero=25 min=837978 max=837978"
+                ],
+                "stage_capture": [
+                    "[BOZ_GL_STAGE_CAPTURE] frame=300 stage=before-379 "
+                    "draw=849 tex=379 bytes=921600 ok=1"
+                ],
             },
         }
         result = summarize(report)
@@ -114,6 +122,8 @@ class BozSummaryTests(unittest.TestCase):
         self.assertEqual(len(result["array_geometry"]), 2)
         self.assertEqual(len(result["array_ab_events"]), 1)
         self.assertEqual(len(result["layer_ab_events"]), 2)
+        self.assertEqual(len(result["image_grid"]), 1)
+        self.assertEqual(len(result["stage_capture"]), 1)
         self.assertFalse(result["visual_frontend_verified"])
 
 

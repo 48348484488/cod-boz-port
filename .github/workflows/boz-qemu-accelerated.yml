@@ -41,7 +41,8 @@ jobs:
       BOZ_FAST_MINIMAL_TRACE: "1"
       BOZ_FAST_LATE_GL_DIAGNOSTIC: "1"
       BOZ_GL_VISUAL_AB_PROBE: "0"
-      BOZ_GL_LAYER_AB_PROBE: "1"
+      BOZ_GL_LAYER_AB_PROBE: "0"
+      BOZ_GL_STAGE_CAPTURE: "1"
       BOZ_DIAGNOSTIC_LATE_TAP: "1"
       BOZ_RESOURCE_CONSUMPTION_TRACE: "1"
       BOZ_PC_SAMPLE_UNGUARDED: "1"
@@ -174,6 +175,7 @@ jobs:
             public/boz-fast-property.log
             public/boz-swap-*.png
             public/boz-pre-overlay-*.png
+            public/boz-mid-*.png
             public/boz_gl_upload_trace.log
 
       - name: Publish minimal results to separate diagnostics branch
