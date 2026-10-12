@@ -40,6 +40,7 @@ jobs:
       BOZ_FAST_SKIP_NULL_REGISTRATION: "1"
       BOZ_FAST_MINIMAL_TRACE: "1"
       BOZ_FAST_LATE_GL_DIAGNOSTIC: "1"
+      BOZ_GL_VISUAL_AB_PROBE: "1"
       BOZ_DIAGNOSTIC_LATE_TAP: "1"
       BOZ_RESOURCE_CONSUMPTION_TRACE: "1"
       BOZ_PC_SAMPLE_UNGUARDED: "1"
@@ -130,7 +131,7 @@ jobs:
               print("::error::No captured frame after the late frontend tap")
               sys.exit(1)
           for index in (100, 125, 130, 140, 150, 175, 185, 190, 195,
-                        200, 225, 250, 275, 300, 325, 350, 375):
+                        200, 225, 250, 275, 300, 325, 350, 375, 400):
               image = frames_by_swap.get(index)
               print(f"BOZ_FRAME_CHECK swap={index} sha256={image['sha256'] if image else 'missing'} "
                     f"colors={image['distinct_rgb_colors'] if image else 'missing'}")

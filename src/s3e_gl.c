@@ -80,6 +80,12 @@ static unsigned g_boz_gl_program_creates;
 static unsigned g_boz_gl_program_links;
 static unsigned g_boz_gl_program_uses;
 static GLuint g_boz_last_program;
+static unsigned g_boz_visual_probe_next_swap = 1u;
+
+static bool boz_visual_probe_enabled(void) {
+    const char *flag = getenv("BOZ_GL_VISUAL_AB_PROBE");
+    return flag && strcmp(flag, "1") == 0;
+}
 
 /* Read-only, opt-in texture provenance; no texture pixels are persisted. */
 enum { BOZ_TEX_SLOTS = 512, BOZ_TEX_UNITS = 16 };
@@ -519,7 +525,38 @@ static S3E_SOFTFP void host_glDrawElements(GLenum mode, GLsizei count, GLenum ty
             }
         }
     }
+    /* Opt-in, reversible visual experiment. 325=no cull; 350=blend;
+     * 375=both. The original driver state is restored after each draw. */
+    bool compare = boz_visual_probe_enabled();
+    unsigned frame = g_boz_visual_probe_next_swap;
+    bool no_cull = compare && ((frame >= 325u && frame < 350u) ||
+                               (frame >= 375u && frame < 400u));
+    bool force_blend = compare && frame >= 350u && frame < 400u;
+    GLboolean (*probe_is_enabled)(GLenum) = lookup_gl("glIsEnabled");
+    void (*probe_enable)(GLenum) = lookup_gl("glEnable");
+    void (*probe_disable)(GLenum) = lookup_gl("glDisable");
+    bool restore_cull = false, restore_blend = false;
+    if (real && probe_is_enabled && probe_enable && probe_disable) {
+        if (no_cull && probe_is_enabled(0x0b44u)) {
+            probe_disable(0x0b44u); /* GL_CULL_FACE */
+            restore_cull = true;
+        }
+        if (force_blend && !probe_is_enabled(0x0be2u)) {
+            probe_enable(0x0be2u); /* GL_BLEND */
+            restore_blend = true;
+        }
+    }
     if (real) real(mode, count, type, indices);
+    if (restore_blend) probe_disable(0x0be2u);
+    if (restore_cull) probe_enable(0x0b44u);
+    if (compare && (frame == 300u || frame == 325u ||
+                    frame == 350u || frame == 375u || frame == 400u) &&
+        g_boz_gl_draw_elements_count % 25u == 0u)
+        fprintf(stderr,
+                "[BOZ_GL_VISUAL_AB] frame=%u draw=%u no_cull=%d "
+                "force_blend=%d changed_cull=%d changed_blend=%d\n",
+                frame, g_boz_gl_draw_elements_count, no_cull,
+                force_blend, restore_cull, restore_blend);
     if (diagnostic) {
         GLenum (*get_error)(void) = lookup_gl("glGetError");
         if (get_error) {
@@ -1116,7 +1153,8 @@ static void boz_capture_swap_frame(unsigned frame, bool pre_overlay) {
          frame != 175u && frame != 200u && frame != 225u &&
          frame != 185u && frame != 190u && frame != 195u &&
          frame != 250u && frame != 275u && frame != 300u &&
-         frame != 325u && frame != 350u && frame != 375u)) return;
+         frame != 325u && frame != 350u && frame != 375u &&
+         frame != 400u)) return;
     void (*read_pixels)(GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, void *) =
         lookup_gl("glReadPixels");
     if (!read_pixels) {
@@ -1232,6 +1270,7 @@ static EGLBoolean host_eglSwapBuffers(EGLDisplay display, EGLSurface surface) {
                 g_boz_tex_max_height, g_boz_tex_meta_count);
     }
     boz_census_swap(swap_count);
+    g_boz_visual_probe_next_swap = swap_count + 1u;
     pace_frame();
     return result;
 }
