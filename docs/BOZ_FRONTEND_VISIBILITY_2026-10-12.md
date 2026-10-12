@@ -76,6 +76,24 @@ Do not interpret the original indexed-only trace as proof that an indexed draw c
 
 [ARM run 38217634014](https://github.com/48348484488/cod-boz-port/actions/runs/38217634014) will publish the five actual captured frames and `layer_ab_events` diagnostics. The outcome needs pixel-image inspection: a visually identifiable menu would support occlusion/order as the cause; only flat alternative colors would mean these layers are not solely responsible for the missing UI. Neither result should be assumed before the run completes.
 
+## Confirmed fallback texture and mid-frame visibility results (2026-10-12)
+
+**Checkerboard byte-for-byte confirmation:** the repeated FNV-1a hash `7eea891d3aca0693` of multiple 2×2 RGBA8 textures decodes exactly to four pixels, row-major: `(255,255,255,128)`, `(0,0,0,128)`, `(0,0,0,128)`, `(255,255,255,128)`. This is a standard semi-transparent checkerboard placeholder. The guest uploaded 382 textures, including 359 that are 2×2, with `glTexSubImage2D=0` in the traced period. First 36 uploads and sampled texture IDs 58/59/60 share the checkerboard hash. Do not infer that all 359 uploads necessarily share it without measuring their content individually.
+
+**Reversible layer test:** [run 38217634014](https://github.com/48348484488/cod-boz-port/actions/runs/38217634014) completed successfully. Skipping 379 alone changed the two-tone image to gray (`#808080`)/dark (`#1B1B1B`); skipping 380 alone produced a uniform `#837978`; skipping both produced uniform `#808080`. No frontend controls appeared. The original frame returns at swap 320.
+
+**Mid-frame capture and upload pixels:** [run 38226779054](https://github.com/48348484488/cod-boz-port/actions/runs/38226779054) completed successfully on commit `b31e8e0` and recorded three genuine framebuffer snapshots at swap 300:
+
+| Moment | Distinct framebuffer colors | Pixel counts |
+|---|---:|---|
+| Immediately before texture 379 | 1 | `#808080`: all 307,200 pixels |
+| Immediately after texture 379 | 1 | `#837978`: all 307,200 pixels |
+| Immediately after both texture 380 draws | 2 | `#1C1A19`: 184,960 pixels; `#837978`: 122,240 |
+
+The CPU texture-upload spatial sample for texture **379** (RGB8, 1024×1024) had **25 distinct colors in 25 sampled pixels**, ranging from `#5D3222` to `#FEE9D2`; texture 380 was black RGBA8 with different alpha levels. **Therefore texture 379 is not intrinsically monochrome, but the quad displays it as a single flat gray color.** This is evidence of a potential UV/sampler/vertex-path problem, not proof that the original image decoder failed. Texture 355 (2×2) samples the black/white 50%-alpha fallback.
+
+**Next test:** commit [2d089fc](https://github.com/48348484488/cod-boz-port/commit/2d089fc50c335245de80ecb5b62b10c0c78ddc5f) traces the actual signed-short quad bounds, texture dimensions, UV bounds and `inUVScale`/`inUVOffset` separately for each shader 15 draw at swap 300. [ARM run 38227421604](https://github.com/48348484488/cod-boz-port/actions/runs/38227421604) is the dedicated execution. A flat output despite varied image data makes correct per-draw UV geometry a priority, while sampler bindings must also be validated before shipping any fix.
+
 ## Acceptance
 
 Visible and recognizable original frontend is required before claiming the menu works. A shader link, successful asset read, nonzero texture payload, 400 swaps, or an opaque two-tone background alone is insufficient.
