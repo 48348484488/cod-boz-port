@@ -504,6 +504,7 @@ static void boz_trace_sprite_quad(GLint first, GLsizei count) {
     int min_v[2][2] = {{32767, 32767}, {32767, 32767}};
     int max_v[2][2] = {{-32768, -32768}, {-32768, -32768}};
     bool valid = true;
+    GLint normalized[2] = {-1, -1};
     for (unsigned kind = 0u; kind < 2u; ++kind) {
         GLint loc = get_attr_loc((GLuint)program, names[kind]);
         if (loc < 0) { valid = false; break; }
@@ -513,6 +514,7 @@ static void boz_trace_sprite_quad(GLint first, GLsizei count) {
         get_vertex((GLuint)loc, 0x8625u, &type);
         get_vertex((GLuint)loc, 0x8624u, &stride);
         get_vertex((GLuint)loc, 0x889fu, &vbo);
+        get_vertex((GLuint)loc, 0x886au, &normalized[kind]);
         void *ptr = NULL;
         get_pointer((GLuint)loc, 0x8645u, &ptr);
         if (!enabled || dimension < 2 || type != 0x1402u || vbo != 0 ||
@@ -540,13 +542,25 @@ static void boz_trace_sprite_quad(GLint first, GLsizei count) {
         if (scl >= 0) get_uniform((GLuint)program, scl, scale);
         if (off >= 0) get_uniform((GLuint)program, off, offset);
     }
+    GLint sampler_unit = -1;
+    GLint (*get_uniform_iv)(GLuint, GLint, GLint *) =
+        lookup_gl("glGetUniformiv");
+    if (get_loc && get_uniform_iv) {
+        GLint sampler_loc = get_loc((GLuint)program, "inSampler0");
+        if (sampler_loc >= 0)
+            get_uniform_iv((GLuint)program, sampler_loc, &sampler_unit);
+    }
     GLuint texture = g_boz_tex_bound[0];
+    GLuint actual_sampler_tex =
+        sampler_unit >= 0 && sampler_unit < BOZ_TEX_UNITS ?
+        g_boz_tex_bound[sampler_unit] : 0u;
     struct boz_tex_meta *meta = boz_find_tex(texture, false);
     fprintf(stderr,
             "[BOZ_GL_SPRITE_QUAD] frame=300 order=%u tex=%u "
             "image=%dx%d uploads=%u valid=%d "
             "rect=%d,%d,%d,%d uv=%d,%d,%d,%d "
-            "scale=%g,%g offset=%g,%g\n",
+            "scale=%g,%g offset=%g,%g norm=%d,%d "
+            "sampler_unit=%d sampler_tex=%u\n",
             g_boz_gl_draw_command_count, texture,
             meta ? (int)meta->width : 0,
             meta ? (int)meta->height : 0,
@@ -554,7 +568,8 @@ static void boz_trace_sprite_quad(GLint first, GLsizei count) {
             min_v[0][0], min_v[0][1], max_v[0][0], max_v[0][1],
             min_v[1][0], min_v[1][1], max_v[1][0], max_v[1][1],
             (double)scale[0], (double)scale[1],
-            (double)offset[0], (double)offset[1]);
+            (double)offset[0], (double)offset[1],
+            normalized[0], normalized[1], sampler_unit, actual_sampler_tex);
 }
 
 static S3E_SOFTFP void host_glDrawArrays(GLenum mode, GLint first, GLsizei count) {

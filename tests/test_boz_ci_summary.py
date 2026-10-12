@@ -108,7 +108,8 @@ class BozSummaryTests(unittest.TestCase):
                     "[BOZ_GL_SPRITE_QUAD] frame=300 order=850 tex=379 "
                     "image=1024x1024 uploads=1 valid=1 "
                     "rect=0,0,640,480 uv=0,0,4096,8192 "
-                    "scale=0.000244141,0.00012207 offset=0,0"
+                    "scale=0.000244141,0.00012207 offset=0,0 "
+                    "norm=0,0 sampler_unit=0 sampler_tex=379"
                 ],
             },
         }
