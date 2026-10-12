@@ -46,37 +46,45 @@
     {
       "distinct_rgb_colors": 2,
       "file": "/__w/cod-boz-port/cod-boz-port/public/boz-pre-overlay-00305.png",
-      "sha256": "1b1f7f64949e47b6a525a06a3db9d80f306542ec68875c8bb1efdf4d179c546f",
+      "sha256": "1f50958b5205d1fda7f5d57022790127e4deecb35e55763c4e03a8484e79c5b4",
       "top_rgb": [
         {
           "pixels": 184960,
-          "rgb": "1b1b1b"
+          "rgb": "1c1a19"
         },
         {
           "pixels": 122240,
-          "rgb": "808080"
-        }
-      ]
-    },
-    {
-      "distinct_rgb_colors": 1,
-      "file": "/__w/cod-boz-port/cod-boz-port/public/boz-pre-overlay-00310.png",
-      "sha256": "ac914a78909137b0be70f396cc668419eadb64b872f42ff4dacc0770d71f6afe",
-      "top_rgb": [
-        {
-          "pixels": 307200,
           "rgb": "837978"
         }
       ]
     },
     {
-      "distinct_rgb_colors": 1,
-      "file": "/__w/cod-boz-port/cod-boz-port/public/boz-pre-overlay-00315.png",
-      "sha256": "0636cf9bf93331e80f5599d05ad393286893ac163177eeda3398e2baa8416946",
+      "distinct_rgb_colors": 2,
+      "file": "/__w/cod-boz-port/cod-boz-port/public/boz-pre-overlay-00310.png",
+      "sha256": "1f50958b5205d1fda7f5d57022790127e4deecb35e55763c4e03a8484e79c5b4",
       "top_rgb": [
         {
-          "pixels": 307200,
-          "rgb": "808080"
+          "pixels": 184960,
+          "rgb": "1c1a19"
+        },
+        {
+          "pixels": 122240,
+          "rgb": "837978"
+        }
+      ]
+    },
+    {
+      "distinct_rgb_colors": 2,
+      "file": "/__w/cod-boz-port/cod-boz-port/public/boz-pre-overlay-00315.png",
+      "sha256": "1f50958b5205d1fda7f5d57022790127e4deecb35e55763c4e03a8484e79c5b4",
+      "top_rgb": [
+        {
+          "pixels": 184960,
+          "rgb": "1c1a19"
+        },
+        {
+          "pixels": 122240,
+          "rgb": "837978"
         }
       ]
     },
@@ -153,8 +161,7 @@
     "[BOZ_GL_DRAW_STATE] seq=425 program=12 blend=0 src=0302 dst=0303 depth=0 cull=1",
     "[BOZ_GL_DRAW_STATE] seq=450 program=18 blend=0 src=0302 dst=0303 depth=0 cull=1",
     "[BOZ_GL_DRAW_STATE] seq=475 program=12 blend=0 src=0302 dst=0303 depth=0 cull=1",
-    "[BOZ_GL_DRAW_STATE] seq=500 program=18 blend=0 src=0302 dst=0303 depth=0 cull=1",
-    "[BOZ_GL_DRAW_STATE] seq=525 program=12 blend=0 src=0302 dst=0303 depth=0 cull=1"
+    "[BOZ_GL_DRAW_STATE] seq=500 program=18 blend=0 src=0302 dst=0303 depth=0 cull=1"
   ],
   "frame_hashes": [
     {
@@ -516,58 +523,58 @@
     },
     {
       "distinct_rgb_colors": 4,
-      "sha256": "4eef76875bded9467849ed7d19072eafc3b3190894433efeedaa1d4c0d3b561c",
+      "sha256": "81a9cd49fe4a5c13893b452d8d5e73d4ae9a547361a2712930969e72ed59b7c7",
       "swap": 305,
       "top_rgb": [
         {
           "pixels": 184960,
-          "rgb": "1b1b1b"
+          "rgb": "1c1a19"
         },
         {
           "pixels": 122055,
-          "rgb": "808080"
-        },
-        {
-          "pixels": 93,
-          "rgb": "1a8cff"
-        }
-      ]
-    },
-    {
-      "distinct_rgb_colors": 3,
-      "sha256": "6c3841588655a1d0d9c48427ee11a7cb562552d5557c94b0425dfa808f9e5d8f",
-      "swap": 310,
-      "top_rgb": [
-        {
-          "pixels": 307015,
           "rgb": "837978"
         },
         {
           "pixels": 93,
           "rgb": "1a8cff"
-        },
-        {
-          "pixels": 92,
-          "rgb": "000000"
         }
       ]
     },
     {
-      "distinct_rgb_colors": 3,
-      "sha256": "2da37751ddccdf2b134ad95924d07379dc869c8ae5cd802f74149f0967901ea4",
-      "swap": 315,
+      "distinct_rgb_colors": 4,
+      "sha256": "81a9cd49fe4a5c13893b452d8d5e73d4ae9a547361a2712930969e72ed59b7c7",
+      "swap": 310,
       "top_rgb": [
         {
-          "pixels": 307015,
-          "rgb": "808080"
+          "pixels": 184960,
+          "rgb": "1c1a19"
+        },
+        {
+          "pixels": 122055,
+          "rgb": "837978"
         },
         {
           "pixels": 93,
           "rgb": "1a8cff"
+        }
+      ]
+    },
+    {
+      "distinct_rgb_colors": 4,
+      "sha256": "81a9cd49fe4a5c13893b452d8d5e73d4ae9a547361a2712930969e72ed59b7c7",
+      "swap": 315,
+      "top_rgb": [
+        {
+          "pixels": 184960,
+          "rgb": "1c1a19"
         },
         {
-          "pixels": 92,
-          "rgb": "000000"
+          "pixels": 122055,
+          "rgb": "837978"
+        },
+        {
+          "pixels": 93,
+          "rgb": "1a8cff"
         }
       ]
     },
@@ -608,25 +615,6 @@
           "rgb": "1a8cff"
         }
       ]
-    },
-    {
-      "distinct_rgb_colors": 4,
-      "sha256": "81a9cd49fe4a5c13893b452d8d5e73d4ae9a547361a2712930969e72ed59b7c7",
-      "swap": 350,
-      "top_rgb": [
-        {
-          "pixels": 184960,
-          "rgb": "1c1a19"
-        },
-        {
-          "pixels": 122055,
-          "rgb": "837978"
-        },
-        {
-          "pixels": 93,
-          "rgb": "1a8cff"
-        }
-      ]
     }
   ],
   "frontend_close": "[BOZ_RESOURCE_CLOSE] name=data-gles1/frontend/frontend.group.bin reads=12836 bytes_read=39214526 seeks=0 errors=0 max_position=39214526 eof=0",
@@ -650,6 +638,7 @@
     "[BOZ_GL_CALLSITE] kind=upload seq=7 caller=4a2d4ac0 unit=15 tex=56 size=512x512",
     "[BOZ_GL_CALLSITE] kind=upload seq=8 caller=4a2d4ac0 unit=15 tex=57 size=1024x512",
     "[BOZ_GL_CALLSITE] kind=upload seq=9 caller=4a2d4ac0 unit=15 tex=61 size=1024x512",
+    "[BOZ_GL_CALLSITE] kind=draw seq=1 caller=4a2ddf44 sampler0=58",
     "[BOZ_GL_CALLSITE] kind=upload seq=10 caller=4a2d4ac0 unit=15 tex=62 size=1024x512",
     "[BOZ_GL_CALLSITE] kind=upload seq=11 caller=4a2d4ac0 unit=15 tex=63 size=512x256",
     "[BOZ_GL_CALLSITE] kind=upload seq=12 caller=4a2d4ac0 unit=15 tex=64 size=512x256",
@@ -657,7 +646,6 @@
     "[BOZ_GL_CALLSITE] kind=upload seq=14 caller=4a2d4ac0 unit=15 tex=112 size=512x64",
     "[BOZ_GL_CALLSITE] kind=upload seq=100 caller=4a2d4ac0 unit=15 tex=114 size=2x2",
     "[BOZ_GL_CALLSITE] kind=upload seq=15 caller=4a2d4ac0 unit=15 tex=122 size=16x128",
-    "[BOZ_GL_CALLSITE] kind=draw seq=1 caller=4a2ddf44 sampler0=58",
     "[BOZ_GL_CALLSITE] kind=draw seq=2 caller=4a2ddf44 sampler0=58",
     "[BOZ_GL_CALLSITE] kind=draw seq=3 caller=4a2ddf44 sampler0=58",
     "[BOZ_GL_CALLSITE] kind=draw seq=4 caller=4a2ddf44 sampler0=58",
@@ -665,20 +653,20 @@
     "[BOZ_GL_CALLSITE] kind=draw seq=6 caller=4a2ddf44 sampler0=58",
     "[BOZ_GL_CALLSITE] kind=draw seq=7 caller=4a2ddf44 sampler0=58",
     "[BOZ_GL_CALLSITE] kind=draw seq=8 caller=4a2ddf44 sampler0=58",
-    "[BOZ_GL_CALLSITE] kind=upload seq=16 caller=4a2d4ac0 unit=15 tex=181 size=1024x128",
     "[BOZ_GL_CALLSITE] kind=draw seq=9 caller=4a2ddf44 sampler0=58",
-    "[BOZ_GL_CALLSITE] kind=upload seq=17 caller=4a2d4ac0 unit=15 tex=182 size=1024x128",
     "[BOZ_GL_CALLSITE] kind=draw seq=10 caller=4a2ddf44 sampler0=58",
     "[BOZ_GL_CALLSITE] kind=draw seq=11 caller=4a2ddf44 sampler0=58",
     "[BOZ_GL_CALLSITE] kind=draw seq=12 caller=4a2ddf44 sampler0=58",
+    "[BOZ_GL_CALLSITE] kind=upload seq=16 caller=4a2d4ac0 unit=15 tex=181 size=1024x128",
+    "[BOZ_GL_CALLSITE] kind=upload seq=17 caller=4a2d4ac0 unit=15 tex=182 size=1024x128",
     "[BOZ_GL_CALLSITE] kind=draw seq=25 caller=4a2ddf44 sampler0=58",
     "[BOZ_GL_CALLSITE] kind=upload seq=18 caller=4a2d4ac0 unit=15 tex=208 size=512x32",
     "[BOZ_GL_CALLSITE] kind=upload seq=200 caller=4a2d4ac0 unit=15 tex=218 size=2x2",
     "[BOZ_GL_CALLSITE] kind=draw seq=50 caller=4a2ddf44 sampler0=58",
-    "[BOZ_GL_CALLSITE] kind=upload seq=300 caller=4a2d4ac0 unit=15 tex=318 size=2x2",
     "[BOZ_GL_CALLSITE] kind=draw seq=75 caller=4a2ddf44 sampler0=58",
-    "[BOZ_GL_CALLSITE] kind=upload seq=19 caller=4a2d4ac0 unit=15 tex=363 size=512x64",
+    "[BOZ_GL_CALLSITE] kind=upload seq=300 caller=4a2d4ac0 unit=15 tex=318 size=2x2",
     "[BOZ_GL_CALLSITE] kind=draw seq=100 caller=4a2ddf44 sampler0=59",
+    "[BOZ_GL_CALLSITE] kind=upload seq=19 caller=4a2d4ac0 unit=15 tex=363 size=512x64",
     "[BOZ_GL_CALLSITE] kind=upload seq=20 caller=4a2d4ac0 unit=15 tex=379 size=1024x1024",
     "[BOZ_GL_CALLSITE] kind=upload seq=21 caller=4a2d4ac0 unit=15 tex=380 size=1024x256",
     "[BOZ_GL_CALLSITE] kind=upload seq=22 caller=4a2d4ac0 unit=15 tex=381 size=256x1",
@@ -698,10 +686,16 @@
     "[BOZ_GL_CALLSITE] kind=draw seq=425 caller=4a2ddf44 sampler0=0",
     "[BOZ_GL_CALLSITE] kind=draw seq=450 caller=4a2ddf44 sampler0=62",
     "[BOZ_GL_CALLSITE] kind=draw seq=475 caller=4a2ddf44 sampler0=0",
-    "[BOZ_GL_CALLSITE] kind=draw seq=500 caller=4a2ddf44 sampler0=62",
-    "[BOZ_GL_CALLSITE] kind=draw seq=525 caller=4a2ddf44 sampler0=0"
+    "[BOZ_GL_CALLSITE] kind=draw seq=500 caller=4a2ddf44 sampler0=62"
   ],
   "guest_sigsegv_count": 0,
+  "image_grid": [
+    "[BOZ_GL_IMAGE_GRID] tex=355 size=2x2 samples=25 unique_rgb=2 alpha_nonzero=25 min=000000 max=ffffff tl=ffffff80 center=ffffff80 br=ffffff80",
+    "[BOZ_GL_IMAGE_GRID] tex=379 size=1024x1024 samples=25 unique_rgb=25 alpha_nonzero=25 min=5d3222 max=fee9d2 tl=9a564dff center=7f5642ff br=5f3527ff",
+    "[BOZ_GL_IMAGE_GRID] tex=380 size=1024x256 samples=25 unique_rgb=1 alpha_nonzero=15 min=000000 max=000000 tl=000000c9 center=00000000 br=00000000",
+    "[BOZ_GL_IMAGE_GRID] tex=381 size=256x1 samples=25 unique_rgb=1 alpha_nonzero=20 min=000000 max=000000 tl=000000ff center=0000008a br=00000000",
+    "[BOZ_GL_IMAGE_GRID] tex=382 size=256x1 samples=25 unique_rgb=1 alpha_nonzero=20 min=000000 max=000000 tl=000000ff center=0000008a br=00000000"
+  ],
   "last_draw_census": {
     "frame_2x2": 10,
     "frame_draws": 20,
@@ -721,6 +715,7 @@
     "[BOZ_DIAGNOSTIC_TAP] pressed=0 x=320 y=240 pointer_down=0 button_callback=1 touch_callback=0 cursor_active=1"
   ],
   "late_texture_draws": [
+    "[BOZ_GL_TEXTURE_DRAW] seq=225 sampler0_tex=56 active=84c0 active_bound=56 upload_count=1 image=512x512 compressed=0 hash64=218035740d3f1b83 first=00000000",
     "[BOZ_GL_TEXTURE_DRAW] seq=250 sampler0_tex=60 active=84c0 active_bound=60 upload_count=1 image=2x2 compressed=0 hash64=7eea891d3aca0693 first=ffffff80",
     "[BOZ_GL_TEXTURE_DRAW] seq=275 sampler0_tex=56 active=84c0 active_bound=56 upload_count=1 image=512x512 compressed=0 hash64=218035740d3f1b83 first=00000000",
     "[BOZ_GL_TEXTURE_DRAW] seq=300 sampler0_tex=60 active=84c0 active_bound=60 upload_count=1 image=2x2 compressed=0 hash64=7eea891d3aca0693 first=ffffff80",
@@ -731,46 +726,47 @@
     "[BOZ_GL_TEXTURE_DRAW] seq=425 sampler0_tex=0 active=84c0 active_bound=0 upload_count=0 image=0x0 compressed=0 hash64=0000000000000000 first=00000000",
     "[BOZ_GL_TEXTURE_DRAW] seq=450 sampler0_tex=62 active=84c0 active_bound=62 upload_count=1 image=1024x512 compressed=0 hash64=218035740d3f1b83 first=00000000",
     "[BOZ_GL_TEXTURE_DRAW] seq=475 sampler0_tex=0 active=84c0 active_bound=0 upload_count=0 image=0x0 compressed=0 hash64=0000000000000000 first=00000000",
-    "[BOZ_GL_TEXTURE_DRAW] seq=500 sampler0_tex=62 active=84c0 active_bound=62 upload_count=1 image=1024x512 compressed=0 hash64=218035740d3f1b83 first=00000000",
-    "[BOZ_GL_TEXTURE_DRAW] seq=525 sampler0_tex=0 active=84c0 active_bound=0 upload_count=0 image=0x0 compressed=0 hash64=0000000000000000 first=00000000"
+    "[BOZ_GL_TEXTURE_DRAW] seq=500 sampler0_tex=62 active=84c0 active_bound=62 upload_count=1 image=1024x512 compressed=0 hash64=218035740d3f1b83 first=00000000"
   ],
-  "layer_ab_events": [
-    "[BOZ_GL_LAYER_AB] frame=301 draw=454 program=15 tex=379 skipped=1 mode=0005 count=4",
-    "[BOZ_GL_LAYER_AB] frame=302 draw=472 program=15 tex=379 skipped=1 mode=0005 count=4",
-    "[BOZ_GL_LAYER_AB] frame=303 draw=490 program=15 tex=379 skipped=1 mode=0005 count=4",
-    "[BOZ_GL_LAYER_AB] frame=304 draw=508 program=15 tex=379 skipped=1 mode=0005 count=4",
-    "[BOZ_GL_LAYER_AB] frame=305 draw=526 program=15 tex=379 skipped=1 mode=0005 count=4",
-    "[BOZ_GL_LAYER_AB] frame=306 draw=544 program=15 tex=379 skipped=1 mode=0005 count=4",
-    "[BOZ_GL_LAYER_AB] frame=307 draw=563 program=15 tex=380 skipped=1 mode=0005 count=4",
-    "[BOZ_GL_LAYER_AB] frame=307 draw=564 program=15 tex=380 skipped=1 mode=0005 count=4",
-    "[BOZ_GL_LAYER_AB] frame=308 draw=581 program=15 tex=380 skipped=1 mode=0005 count=4",
-    "[BOZ_GL_LAYER_AB] frame=308 draw=582 program=15 tex=380 skipped=1 mode=0005 count=4",
-    "[BOZ_GL_LAYER_AB] frame=309 draw=599 program=15 tex=380 skipped=1 mode=0005 count=4",
-    "[BOZ_GL_LAYER_AB] frame=309 draw=600 program=15 tex=380 skipped=1 mode=0005 count=4",
-    "[BOZ_GL_LAYER_AB] frame=310 draw=617 program=15 tex=380 skipped=1 mode=0005 count=4",
-    "[BOZ_GL_LAYER_AB] frame=310 draw=618 program=15 tex=380 skipped=1 mode=0005 count=4",
-    "[BOZ_GL_LAYER_AB] frame=311 draw=635 program=15 tex=380 skipped=1 mode=0005 count=4",
-    "[BOZ_GL_LAYER_AB] frame=311 draw=636 program=15 tex=380 skipped=1 mode=0005 count=4",
-    "[BOZ_GL_LAYER_AB] frame=312 draw=653 program=15 tex=380 skipped=1 mode=0005 count=4",
-    "[BOZ_GL_LAYER_AB] frame=312 draw=654 program=15 tex=380 skipped=1 mode=0005 count=4",
-    "[BOZ_GL_LAYER_AB] frame=313 draw=670 program=15 tex=379 skipped=1 mode=0005 count=4",
-    "[BOZ_GL_LAYER_AB] frame=313 draw=671 program=15 tex=380 skipped=1 mode=0005 count=4",
-    "[BOZ_GL_LAYER_AB] frame=313 draw=672 program=15 tex=380 skipped=1 mode=0005 count=4",
-    "[BOZ_GL_LAYER_AB] frame=314 draw=688 program=15 tex=379 skipped=1 mode=0005 count=4",
-    "[BOZ_GL_LAYER_AB] frame=314 draw=689 program=15 tex=380 skipped=1 mode=0005 count=4",
-    "[BOZ_GL_LAYER_AB] frame=314 draw=690 program=15 tex=380 skipped=1 mode=0005 count=4",
-    "[BOZ_GL_LAYER_AB] frame=315 draw=706 program=15 tex=379 skipped=1 mode=0005 count=4",
-    "[BOZ_GL_LAYER_AB] frame=315 draw=707 program=15 tex=380 skipped=1 mode=0005 count=4",
-    "[BOZ_GL_LAYER_AB] frame=315 draw=708 program=15 tex=380 skipped=1 mode=0005 count=4",
-    "[BOZ_GL_LAYER_AB] frame=316 draw=724 program=15 tex=379 skipped=1 mode=0005 count=4",
-    "[BOZ_GL_LAYER_AB] frame=316 draw=725 program=15 tex=380 skipped=1 mode=0005 count=4",
-    "[BOZ_GL_LAYER_AB] frame=316 draw=726 program=15 tex=380 skipped=1 mode=0005 count=4",
-    "[BOZ_GL_LAYER_AB] frame=317 draw=742 program=15 tex=379 skipped=1 mode=0005 count=4",
-    "[BOZ_GL_LAYER_AB] frame=317 draw=743 program=15 tex=380 skipped=1 mode=0005 count=4",
-    "[BOZ_GL_LAYER_AB] frame=317 draw=744 program=15 tex=380 skipped=1 mode=0005 count=4",
-    "[BOZ_GL_LAYER_AB] frame=318 draw=760 program=15 tex=379 skipped=1 mode=0005 count=4",
-    "[BOZ_GL_LAYER_AB] frame=318 draw=761 program=15 tex=380 skipped=1 mode=0005 count=4",
-    "[BOZ_GL_LAYER_AB] frame=318 draw=762 program=15 tex=380 skipped=1 mode=0005 count=4"
+  "layer_ab_events": [],
+  "midframe_image_hashes": [
+    {
+      "distinct_rgb_colors": 1,
+      "file": "/__w/cod-boz-port/cod-boz-port/public/boz-mid-after-379-00300.png",
+      "sha256": "ac914a78909137b0be70f396cc668419eadb64b872f42ff4dacc0770d71f6afe",
+      "top_rgb": [
+        {
+          "pixels": 307200,
+          "rgb": "837978"
+        }
+      ]
+    },
+    {
+      "distinct_rgb_colors": 2,
+      "file": "/__w/cod-boz-port/cod-boz-port/public/boz-mid-after-380-00300.png",
+      "sha256": "1f50958b5205d1fda7f5d57022790127e4deecb35e55763c4e03a8484e79c5b4",
+      "top_rgb": [
+        {
+          "pixels": 184960,
+          "rgb": "1c1a19"
+        },
+        {
+          "pixels": 122240,
+          "rgb": "837978"
+        }
+      ]
+    },
+    {
+      "distinct_rgb_colors": 1,
+      "file": "/__w/cod-boz-port/cod-boz-port/public/boz-mid-before-379-00300.png",
+      "sha256": "0636cf9bf93331e80f5599d05ad393286893ac163177eeda3398e2baa8416946",
+      "top_rgb": [
+        {
+          "pixels": 307200,
+          "rgb": "808080"
+        }
+      ]
+    }
   ],
   "per_frame_draw_census": [
     {
@@ -821,7 +817,7 @@
       "frame_large": 0,
       "frame_unknown": 0,
       "large_drawn": 0,
-      "large_known": 19,
+      "large_known": 18,
       "last_tex": 59,
       "swap": 100,
       "total_2x2": 99,
@@ -1007,14 +1003,14 @@
     "[BOZ_GL_PIXEL_TRAIL] frame=300 order=855 kind=arrays seq=441 program=15 tex=382 bottom=1c1a19 middle=837978 top=1c1a19 count=4"
   ],
   "provenance": {
-    "commit": "ca6a5a99c19372fe47ec774dfd0e70e3b3f397e3",
+    "commit": "b31e8e029e92189580f56393b20875b6548c8c45",
     "run_attempt": "1",
-    "run_id": "38217634014",
+    "run_id": "38226779054",
     "workflow": "BOZ ARM Runtime - CPU Unthrottled"
   },
   "qemu_return_code": 124,
   "sampled_draws_total": 28,
-  "sampled_draws_with_2x2_texture": 18,
+  "sampled_draws_with_2x2_texture": 19,
   "sampled_draws_with_larger_texture": 6,
   "sampler_bindings": [
     "[BOZ_GL_SAMPLER_BIND] seq=1 program=6 name=inSampler0 type=8b5e unit=0 tex=58 image=2x2 uploads=1",
@@ -1048,19 +1044,24 @@
     "[BOZ_GL_SAMPLER_BIND] seq=500 program=18 name=inSampler0 type=8b5e unit=0 tex=62 image=1024x512 uploads=1"
   ],
   "schema": "boz-ci-summary-v1",
+  "stage_capture": [
+    "[BOZ_GL_STAGE_CAPTURE] frame=300 stage=before-379 draw=850 tex=379 bytes=921600 ok=1",
+    "[BOZ_GL_STAGE_CAPTURE] frame=300 stage=after-379 draw=851 tex=380 bytes=921600 ok=1",
+    "[BOZ_GL_STAGE_CAPTURE] frame=300 stage=after-380 draw=852 tex=380 bytes=921600 ok=1"
+  ],
   "swaps": [
-    "[BOZ_SWAP_PROGRESS] n=305 ok=1 fbo=0 elapsed_ms=585952 gl_clear=306 gl_draw_arrays=531 gl_draw_elements=424 gl_draw_tex=0",
-    "[BOZ_SWAP_PROGRESS] n=310 ok=1 fbo=0 elapsed_ms=599519 gl_clear=311 gl_draw_arrays=621 gl_draw_elements=434 gl_draw_tex=0",
-    "[BOZ_SWAP_PROGRESS] n=315 ok=1 fbo=0 elapsed_ms=610608 gl_clear=316 gl_draw_arrays=711 gl_draw_elements=444 gl_draw_tex=0",
-    "[BOZ_SWAP_PROGRESS] n=320 ok=1 fbo=0 elapsed_ms=622926 gl_clear=321 gl_draw_arrays=801 gl_draw_elements=454 gl_draw_tex=0",
-    "[BOZ_SWAP_PROGRESS] n=325 ok=1 fbo=0 elapsed_ms=639807 gl_clear=326 gl_draw_arrays=891 gl_draw_elements=464 gl_draw_tex=0",
-    "[BOZ_SWAP_PROGRESS] n=330 ok=1 fbo=0 elapsed_ms=656683 gl_clear=331 gl_draw_arrays=981 gl_draw_elements=474 gl_draw_tex=0",
-    "[BOZ_SWAP_PROGRESS] n=335 ok=1 fbo=0 elapsed_ms=673559 gl_clear=336 gl_draw_arrays=1071 gl_draw_elements=484 gl_draw_tex=0",
-    "[BOZ_SWAP_PROGRESS] n=340 ok=1 fbo=0 elapsed_ms=690471 gl_clear=341 gl_draw_arrays=1161 gl_draw_elements=494 gl_draw_tex=0",
-    "[BOZ_SWAP_PROGRESS] n=345 ok=1 fbo=0 elapsed_ms=707431 gl_clear=346 gl_draw_arrays=1251 gl_draw_elements=504 gl_draw_tex=0",
-    "[BOZ_SWAP_PROGRESS] n=350 ok=1 fbo=0 elapsed_ms=724389 gl_clear=351 gl_draw_arrays=1341 gl_draw_elements=514 gl_draw_tex=0",
-    "[BOZ_SWAP_PROGRESS] n=355 ok=1 fbo=0 elapsed_ms=741374 gl_clear=356 gl_draw_arrays=1431 gl_draw_elements=524 gl_draw_tex=0",
-    "[BOZ_SWAP_PROGRESS] n=360 ok=1 fbo=0 elapsed_ms=758373 gl_clear=361 gl_draw_arrays=1521 gl_draw_elements=534 gl_draw_tex=0"
+    "[BOZ_SWAP_PROGRESS] n=290 ok=1 fbo=0 elapsed_ms=529300 gl_clear=291 gl_draw_arrays=261 gl_draw_elements=394 gl_draw_tex=0",
+    "[BOZ_SWAP_PROGRESS] n=295 ok=1 fbo=0 elapsed_ms=548658 gl_clear=296 gl_draw_arrays=351 gl_draw_elements=404 gl_draw_tex=0",
+    "[BOZ_SWAP_PROGRESS] n=300 ok=1 fbo=0 elapsed_ms=567994 gl_clear=301 gl_draw_arrays=441 gl_draw_elements=414 gl_draw_tex=0",
+    "[BOZ_SWAP_PROGRESS] n=305 ok=1 fbo=0 elapsed_ms=587428 gl_clear=306 gl_draw_arrays=531 gl_draw_elements=424 gl_draw_tex=0",
+    "[BOZ_SWAP_PROGRESS] n=310 ok=1 fbo=0 elapsed_ms=606863 gl_clear=311 gl_draw_arrays=621 gl_draw_elements=434 gl_draw_tex=0",
+    "[BOZ_SWAP_PROGRESS] n=315 ok=1 fbo=0 elapsed_ms=626234 gl_clear=316 gl_draw_arrays=711 gl_draw_elements=444 gl_draw_tex=0",
+    "[BOZ_SWAP_PROGRESS] n=320 ok=1 fbo=0 elapsed_ms=645652 gl_clear=321 gl_draw_arrays=801 gl_draw_elements=454 gl_draw_tex=0",
+    "[BOZ_SWAP_PROGRESS] n=325 ok=1 fbo=0 elapsed_ms=665005 gl_clear=326 gl_draw_arrays=891 gl_draw_elements=464 gl_draw_tex=0",
+    "[BOZ_SWAP_PROGRESS] n=330 ok=1 fbo=0 elapsed_ms=684493 gl_clear=331 gl_draw_arrays=981 gl_draw_elements=474 gl_draw_tex=0",
+    "[BOZ_SWAP_PROGRESS] n=335 ok=1 fbo=0 elapsed_ms=703884 gl_clear=336 gl_draw_arrays=1071 gl_draw_elements=484 gl_draw_tex=0",
+    "[BOZ_SWAP_PROGRESS] n=340 ok=1 fbo=0 elapsed_ms=723273 gl_clear=341 gl_draw_arrays=1161 gl_draw_elements=494 gl_draw_tex=0",
+    "[BOZ_SWAP_PROGRESS] n=345 ok=1 fbo=0 elapsed_ms=742690 gl_clear=346 gl_draw_arrays=1251 gl_draw_elements=504 gl_draw_tex=0"
   ],
   "texture_occupancy": [
     "[BOZ_GL_TEXTURE_OCCUPANCY] tex=48 size=8x128 format=1908 type=1401 sample_bytes=320 nonzero_bytes=302 alpha_pixels=80 alpha_nonzero=80 alpha_opaque=80",
@@ -1117,17 +1118,27 @@
     "[BOZ_GL_TEXTURE_PARAMS] seq=425 program=12 tex=0 min=2702 mag=2601 wrap_s=2901 wrap_t=2901",
     "[BOZ_GL_TEXTURE_PARAMS] seq=450 program=18 tex=62 min=2601 mag=2601 wrap_s=2901 wrap_t=2901",
     "[BOZ_GL_TEXTURE_PARAMS] seq=475 program=12 tex=0 min=2702 mag=2601 wrap_s=2901 wrap_t=2901",
-    "[BOZ_GL_TEXTURE_PARAMS] seq=500 program=18 tex=62 min=2601 mag=2601 wrap_s=2901 wrap_t=2901",
-    "[BOZ_GL_TEXTURE_PARAMS] seq=525 program=12 tex=0 min=2702 mag=2601 wrap_s=2901 wrap_t=2901"
+    "[BOZ_GL_TEXTURE_PARAMS] seq=500 program=18 tex=62 min=2601 mag=2601 wrap_s=2901 wrap_t=2901"
   ],
   "texture_size_totals": [
-    "[BOZ_GL_TEX_SIZE_TOTAL] swap=5 uploads=176 two_by_two=161 larger=15 other=0 subuploads=0 compressed=0 compressed_unresolved=0 max_size=1024x512 known_textures=176",
-    "[BOZ_GL_TEX_SIZE_TOTAL] swap=60 uploads=291 two_by_two=273 larger=18 other=0 subuploads=0 compressed=0 compressed_unresolved=0 max_size=1024x512 known_textures=291",
-    "[BOZ_GL_TEX_SIZE_TOTAL] swap=100 uploads=365 two_by_two=346 larger=19 other=0 subuploads=0 compressed=0 compressed_unresolved=0 max_size=1024x512 known_textures=365",
+    "[BOZ_GL_TEX_SIZE_TOTAL] swap=5 uploads=151 two_by_two=136 larger=15 other=0 subuploads=0 compressed=0 compressed_unresolved=0 max_size=1024x512 known_textures=151",
+    "[BOZ_GL_TEX_SIZE_TOTAL] swap=60 uploads=277 two_by_two=259 larger=18 other=0 subuploads=0 compressed=0 compressed_unresolved=0 max_size=1024x512 known_textures=277",
+    "[BOZ_GL_TEX_SIZE_TOTAL] swap=100 uploads=349 two_by_two=331 larger=18 other=0 subuploads=0 compressed=0 compressed_unresolved=0 max_size=1024x512 known_textures=349",
     "[BOZ_GL_TEX_SIZE_TOTAL] swap=150 uploads=382 two_by_two=359 larger=23 other=0 subuploads=0 compressed=0 compressed_unresolved=0 max_size=1024x1024 known_textures=382",
     "[BOZ_GL_TEX_SIZE_TOTAL] swap=200 uploads=382 two_by_two=359 larger=23 other=0 subuploads=0 compressed=0 compressed_unresolved=0 max_size=1024x1024 known_textures=382"
   ],
   "unit0_binding_transitions": [
+    "[BOZ_GL_UNIT0_BIND] seq=2272 draw=468 old=80 tex=79 caller=4a2b5864",
+    "[BOZ_GL_UNIT0_BIND] seq=2304 draw=470 old=80 tex=79 caller=4a2b5864",
+    "[BOZ_GL_UNIT0_BIND] seq=2336 draw=472 old=80 tex=79 caller=4a2b5864",
+    "[BOZ_GL_UNIT0_BIND] seq=2368 draw=474 old=80 tex=79 caller=4a2b5864",
+    "[BOZ_GL_UNIT0_BIND] seq=2400 draw=476 old=80 tex=79 caller=4a2b5864",
+    "[BOZ_GL_UNIT0_BIND] seq=2432 draw=478 old=80 tex=79 caller=4a2b5864",
+    "[BOZ_GL_UNIT0_BIND] seq=2464 draw=480 old=80 tex=79 caller=4a2b5864",
+    "[BOZ_GL_UNIT0_BIND] seq=2496 draw=482 old=80 tex=79 caller=4a2b5864",
+    "[BOZ_GL_UNIT0_BIND] seq=2528 draw=484 old=80 tex=79 caller=4a2b5864",
+    "[BOZ_GL_UNIT0_BIND] seq=2560 draw=486 old=80 tex=79 caller=4a2b5864",
+    "[BOZ_GL_UNIT0_BIND] seq=2592 draw=488 old=80 tex=79 caller=4a2b5864",
     "[BOZ_GL_UNIT0_BIND] seq=2624 draw=490 old=80 tex=79 caller=4a2b5864",
     "[BOZ_GL_UNIT0_BIND] seq=2656 draw=492 old=80 tex=79 caller=4a2b5864",
     "[BOZ_GL_UNIT0_BIND] seq=2688 draw=494 old=80 tex=79 caller=4a2b5864",
@@ -1140,18 +1151,7 @@
     "[BOZ_GL_UNIT0_BIND] seq=2912 draw=508 old=80 tex=79 caller=4a2b5864",
     "[BOZ_GL_UNIT0_BIND] seq=2944 draw=510 old=80 tex=79 caller=4a2b5864",
     "[BOZ_GL_UNIT0_BIND] seq=2976 draw=512 old=80 tex=79 caller=4a2b5864",
-    "[BOZ_GL_UNIT0_BIND] seq=3008 draw=514 old=80 tex=79 caller=4a2b5864",
-    "[BOZ_GL_UNIT0_BIND] seq=3040 draw=516 old=80 tex=79 caller=4a2b5864",
-    "[BOZ_GL_UNIT0_BIND] seq=3072 draw=518 old=80 tex=79 caller=4a2b5864",
-    "[BOZ_GL_UNIT0_BIND] seq=3104 draw=520 old=80 tex=79 caller=4a2b5864",
-    "[BOZ_GL_UNIT0_BIND] seq=3136 draw=522 old=80 tex=79 caller=4a2b5864",
-    "[BOZ_GL_UNIT0_BIND] seq=3168 draw=524 old=80 tex=79 caller=4a2b5864",
-    "[BOZ_GL_UNIT0_BIND] seq=3200 draw=526 old=80 tex=79 caller=4a2b5864",
-    "[BOZ_GL_UNIT0_BIND] seq=3232 draw=528 old=80 tex=79 caller=4a2b5864",
-    "[BOZ_GL_UNIT0_BIND] seq=3264 draw=530 old=80 tex=79 caller=4a2b5864",
-    "[BOZ_GL_UNIT0_BIND] seq=3296 draw=532 old=80 tex=79 caller=4a2b5864",
-    "[BOZ_GL_UNIT0_BIND] seq=3328 draw=534 old=80 tex=79 caller=4a2b5864",
-    "[BOZ_GL_UNIT0_BIND] seq=3360 draw=536 old=80 tex=79 caller=4a2b5864"
+    "[BOZ_GL_UNIT0_BIND] seq=3008 draw=514 old=80 tex=79 caller=4a2b5864"
   ],
   "uv_states": [
     "[BOZ_GL_UV_STATE] seq=1 program=6 scale_loc=2 scale=0.000244141,0.000244141 offset_loc=1 offset=0,0",
@@ -1185,8 +1185,7 @@
     "[BOZ_GL_UV_STATE] seq=425 program=12 scale_loc=-1 scale=0,0 offset_loc=-1 offset=0,0",
     "[BOZ_GL_UV_STATE] seq=450 program=18 scale_loc=2 scale=0.000244141,0.000244141 offset_loc=1 offset=0,0",
     "[BOZ_GL_UV_STATE] seq=475 program=12 scale_loc=-1 scale=0,0 offset_loc=-1 offset=0,0",
-    "[BOZ_GL_UV_STATE] seq=500 program=18 scale_loc=2 scale=0.000244141,0.000244141 offset_loc=1 offset=0,0",
-    "[BOZ_GL_UV_STATE] seq=525 program=12 scale_loc=-1 scale=0,0 offset_loc=-1 offset=0,0"
+    "[BOZ_GL_UV_STATE] seq=500 program=18 scale_loc=2 scale=0.000244141,0.000244141 offset_loc=1 offset=0,0"
   ],
   "visual_ab_events": [],
   "visual_frontend_verified": false
