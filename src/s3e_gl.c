@@ -91,6 +91,14 @@ static bool boz_visual_probe_enabled(void) {
     return flag && strcmp(flag, "1") == 0;
 }
 
+/* Opt-in diagnostic only. Compare removing late fullscreen image 379,
+ * framing image 380, and both against normal frame 300/320. Texture IDs
+ * are deliberately anchored to this verified QEMU resource sequence. */
+static bool boz_layer_probe_enabled(void) {
+    const char *flag = getenv("BOZ_GL_LAYER_AB_PROBE");
+    return flag && strcmp(flag, "1") == 0;
+}
+
 /* Read-only, opt-in texture provenance; no texture pixels are persisted. */
 enum { BOZ_TEX_SLOTS = 512, BOZ_TEX_UNITS = 16 };
 struct boz_tex_meta {
@@ -451,9 +459,26 @@ static S3E_SOFTFP void host_glDrawArrays(GLenum mode, GLint first, GLsizei count
             }
         }
     }
-    if (real) {
+    bool layer_probe = real && boz_layer_probe_enabled();
+    GLuint active_tex = g_boz_tex_bound[0];
+    bool target_layer = active_tex == 379u || active_tex == 380u;
+    bool skip_gray = frame >= 301u && frame <= 306u && active_tex == 379u;
+    bool skip_bars = frame >= 307u && frame <= 312u && active_tex == 380u;
+    bool skip_both = frame >= 313u && frame <= 318u && target_layer;
+    bool skip_layer = layer_probe && (skip_gray || skip_bars || skip_both);
+    if (real && !skip_layer) {
         real(mode, first, count);
         boz_trace_draw_pixels("arrays", g_boz_gl_draw_arrays_count, count);
+    }
+    if (skip_layer) {
+        GLint program = -1;
+        void (*get_int)(GLenum, GLint *) = lookup_gl("glGetIntegerv");
+        if (get_int) get_int(0x8b8du, &program);
+        fprintf(stderr,
+                "[BOZ_GL_LAYER_AB] frame=%u draw=%u program=%d "
+                "tex=%u skipped=1 mode=%04x count=%d\n",
+                frame, g_boz_gl_draw_arrays_count, (int)program,
+                active_tex, (unsigned)mode, (int)count);
     }
     if (restore_blend) {
         void (*disable)(GLenum) = lookup_gl("glDisable");

@@ -114,6 +114,7 @@ def summarize(report: dict) -> dict:
         "pixel_trail": (texture.get("pixel_trail") or [])[-40:],
         "array_geometry": (texture.get("array_geometry") or [])[-80:],
         "array_ab_events": (texture.get("array_ab_events") or [])[-16:],
+        "layer_ab_events": (texture.get("layer_ab_events") or [])[-80:],
         "before_overlay_frame_hashes": [
             {"file": img.get("file"), "sha256": img.get("sha256"),
              "distinct_rgb_colors": img.get("distinct_rgb_colors"),
